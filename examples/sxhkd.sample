@@ -1,0 +1,27 @@
+# Start terminal (urxvt)
+mod4 + Enter
+	xterm
+
+# Killing windows
+mod4 + shift + q
+	wmctrl -ic $(pfw)
+
+# Workspace
+mod4 + {1,2,3,4,5,6,7,8,9,0}
+	wmctrl -s {0,1,2,3,4,5,6,7,8,9}
+mod4 + shift + {1,2,3,4,5,6,7,8,9,0}
+	wmctrl -ir $(pfw) -t {0,1,2,3,4,5,6,7,8,9}
+
+# Resize/move windows
+mod4 + {c, v, shift + c, shift + v}
+	wrs {-25 0, 0 -25, +25 0, 0 +25} $(pfw)
+mod4 + shift + {h, j, k, l}
+	wmv {-10 0, 0 10, 0 -10, 10 0} $(pfw)
+
+# Change window status to sticky/above/below/minimized/fullscreen/maximized
+mod4 + shift + {s, a, b, z, f, m}
+	wmctrl -ir $(pfw) -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
+
+# Call the unhide.sh script
+mod4 + shift + u
+	unhide.sh

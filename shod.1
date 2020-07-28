@@ -1,6 +1,7 @@
 .TH SHOD 1
 .SH NAME
-shod \- shod window manager
+.B shod
+\- shod window manager
 .SH SYNOPSIS
 .B shod
 .RB [ \-bg ]
@@ -291,8 +292,7 @@ The display to start
 .B shod
 on.
 .SH RESOURCES
-.B
-shod
+.B shod
 understands the following X resources.
 .TP
 .B shod.borderWidth
@@ -411,6 +411,10 @@ mod4 + shift + {h, j, k, l}
 # Change window status to sticky/above/below/minimized/fullscreen/maximized
 mod4 + shift + {s, a, b, z, f, m}
 	wmctrl -ir $(pfw) -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
+
+# Call the unhide.sh script
+mod4 + shift + u
+	unhide.sh
 .EE
 .PP
 The previous example binds the following keys to the following commands:
@@ -473,6 +477,9 @@ or make it normal if it was already fullscreen.
 .B Mod4 + Shift + M
 Tile the focused window;
 or make it floating if it was already tiled.
+.TP
+.B Mod4 + Shift + U
+Call the unhide.sh script (see below).
 .PP
 The following is a sample script for
 .IR dmenu (1).

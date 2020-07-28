@@ -1,0 +1,9 @@
+shod.borderWidth:   3
+shod.gapLeft:       7
+shod.gapRight:      7
+shod.gapTop:        7
+shod.gapBottom:     7
+shod.gapInner:      7
+shod.urgent:        #cc0000
+shod.focused:       #3465a4
+shod.unfocused:     #555753

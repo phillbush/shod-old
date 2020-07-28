@@ -170,11 +170,7 @@ parsebuttons(const char *s, enum ParseButtons b)
 static void
 parsemodifier(const char *s)
 {
-	if (strcasecmp(s, "Control") == 0 || strcasecmp(s, "Ctrl") == 0)
-		modifier = ControlMask;
-	else if (strcasecmp(s, "Shift") == 0)
-		modifier = ShiftMask;
-	else if (strcasecmp(s, "Mod1") == 0)
+	if (strcasecmp(s, "Mod1") == 0)
 		modifier = Mod1Mask;
 	else if (strcasecmp(s, "Mod2") == 0)
 		modifier = Mod2Mask;
