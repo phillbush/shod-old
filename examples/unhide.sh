@@ -1,6 +1,6 @@
 #!/bin/sh
 
-lsc() {
+lsw() {
 	xprop -notype -f "_NET_CLIENT_LIST" 0x ' $0+\n' -root "_NET_CLIENT_LIST" |\
 	cut -d' ' -f2- |\
 	sed 's/, */\
@@ -24,7 +24,7 @@ printname() {
 /g'
 }
 
-for win in $(lsc)
+for win in $(lsw)
 do
 	ishidden $win && printf "%s: " $win && printname $win
 done |\
