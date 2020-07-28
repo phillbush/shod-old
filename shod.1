@@ -1,0 +1,528 @@
+.TH SHOD 1
+.SH NAME
+shod \- shod window manager
+.SH SYNOPSIS
+.B shod
+.RB [ \-bg ]
+.RB [ \-f
+.IR buttons ]
+.RB [ \-m
+.IR modifier ]
+.RB [ \-r
+.IR buttons ]
+.SH DESCRIPTION
+.B shod
+is an hybrid (tiling and floating) window manager for X11.
+.B shod
+is controlled by responding to client messages with EWMH hints and regular ICCCM events,
+and by using a specified modifier with the mouse pointer.
+.PP
+The options are as follows:
+.TP
+.B \-b
+If this option is set, shod ignores borders when a single window is maximized on the screen.
+By default, borders are always drawn, except on fullscreen windows.
+.TP
+.BI \-f " buttons"
+Specify which mouse buttons can be used to focus a window when clicking on it.
+The
+.I buttons
+string
+is a string of numbers 1 to 5 that specify the mouse buttons 1 to 5.
+For example,
+.B -f 13
+make windows be focused when clicking on them with the mouse buttons 1 and 3
+(the left and the right mouse buttons, respectively).
+Without this option, no mouse button is used to focus window,
+and Shod uses the focus-follow-cursor focusing style.
+.TP
+.B \-g
+If this option is set, shod ignores gaps when a single window is maximized on the screen.
+By default, gaps are always computed when tiling windows.
+.TP
+.BI \-m " modifier"
+Specify which modifier, from
+.B Mod1
+to
+.B Mod5
+is used to move and resize windows with the mouse pointer.
+.TP
+.BI \-r " buttons"
+Specify which mouse buttons can be used to raise a window when clicking on it.
+The
+.I buttons
+string
+is a string of numbers 1 to 5 that specify the mouse buttons 1 to 5.
+For example,
+.B -r 13
+make windows be raised when clicking on them with the mouse buttons 1 and 3
+(the left and the right mouse buttons, respectively).
+Without this option, all mouse buttons raise windows.
+.SS Desktop organization
+The desktop is made up of a set of monitors and a set of hidden windows.
+One of the monitors is the focused one, where new windows go to when they are created.
+Hidden windows do not belong to any monitor.
+When a hidden window is unhidden, it goes to the focused monitor.
+.PP
+.B shod
+maintains one monitor for each physical monitor found by
+.IR Xinerama (1).
+Each monitor is made up of a set of workspaces and a set of sticky
+windows.
+One of the workspaces of a monitor is the focused workspace for that monitor.
+Sticky windows are windows that do not belong to any workspace,
+instead, they are "sticked" to the monitor, and they appear on the
+screen no matter which workspace is shown for that monitor.
+.PP
+.B shod
+maintains one set of workspaces for each monitor.
+Each workspace is made up of a set of columns, where tiled windows
+belong to, and a set of floating windows.
+The currently focused workspace of a given monitor contains the windows
+that are shown on that monitor together with that monitor's sticky windows.
+.PP
+.B shod
+maintains a set of columns for each workspace.
+Columns are created on the fly,
+when windows are tiled or when tiled windows are moved around via configure request events.
+Each column contains a set of tiled windows that are tiled in a vertical fashion,
+one above the other.
+The columns are displayed one next to the other.
+.SH USAGE
+Shod has several ways of manipulating windows.
+See the section
+.B EXAMPLES
+for examples on how to use
+.IR wmctrl (1)
+and
+.IR wmutils (1)
+for controling shod.
+.SS Manipulating with the mouse
+The main method for controling windows is the mouse.
+.PP
+The
+.BI \-f " buttons"
+specifies which mouse buttons can be used to focus a window when clicking on it.
+If this option is not used, the focus follow the mouse pointer.
+.PP
+The
+.BI \-r " buttons"
+specifies which mouse buttons can be used to raise a window when clicking on it.
+If this option is not used, clicking on a window with any mouse button raises it.
+.PP
+Pressing the modifier key specified by the
+.B -m
+option and dragging a window with the Button 1 (the left mouse button)
+will move that window.
+By default, the modifier is Mod1 (which is normally Alt).
+.PP
+Pressing the modifier key specified by the
+.B -m
+option and dragging a window corner with the Button 3 (the right mouse button)
+will resize that window in the direction of the corner.
+By default, the modifier is Mod1 (which is normally Alt).
+Resizing windows can also be performed by dragging a window border with the Button 1.
+.SS Manipulating via window properties
+The
+.IR wmctrl (1)
+utility can be used to set window properties,
+and
+.B shod
+respects and sets those properties in different ways.
+For example, running the following command toggles the sticky option
+on the active window.
+.IP
+.EX
+$ wmctrl -r :ACTIVE: -b toggle,sticky
+.EE
+.PP
+If the
+.B sticky
+property is set on a window, this window is displayed on all workspaces
+of the monitor the window is in.
+.PP
+If the
+.BR maximize_vert " or " maximize_horz
+properties are set on a window, the window is tiled.
+For more information for manipulating tiled windows, see the section
+.B Manipulating tiled windows
+below.
+.PP
+If the
+.B hidden
+property is set on a window, the window is hidden and won't be displayed on any workspace or on any monitor.
+After unhiding a window, the window will appear on the current workspace of the current monitor.
+.PP
+If the
+.B fullscreen
+property is set on a window, the window is maximized to fit the entire screen.
+.PP
+If the
+.B above
+property is set on a window, the window is raised above all other windows.
+.PP
+If the
+.B below
+property is set on a window, the window is lowered below all other windows.
+.PP
+The
+.B shaded
+property is ignored, since
+.B shod
+does not have title bars for shading windows.
+.SS Manipulating via other client messages
+.B shod
+acts upon other client messages sent to windows and to the root window.
+Most client messages can be sent via
+.IR wmctrl (1)
+with a specific option.
+The options and the message they send are specified below.
+Note that what
+.B wmctrl
+calls \(lqdesktop\(rq
+.B shod
+calls \(lqworkspace\(rq.
+.PP
+A message sent with the
+.BI -s " NUMBER"
+option of
+.IR wmctrl (1)
+makes
+.B shod
+changes the workspace.
+That is,
+hide the windows on the current workspace and show the windows on a new workspace.
+If the workspace is on another monitor,
+.B shod
+instead move the pointer to that monitor and focus a window on it.
+.PP
+A message sent with the
+.B -k on
+or
+.B -k off
+options of
+.IR wmctrl (1)
+makes
+.B shod
+show or hide the desktop, respectively.
+.PP
+A message sent with the
+.BI -a " WINDOW"
+option of
+.IR wmctrl (1)
+makes
+.B shod
+change the active window.
+That is, focus and raise the specified window.
+.PP
+A message sent with the
+.BI -c " WINDOW"
+option of
+.IR wmctrl (1)
+makes
+.B shod
+close gently the specified window.
+.PP
+A message sent with the
+.BI -e " POSITION"
+option of
+.IR wmctrl (1)
+makes
+.B shod
+change the position and geometry of the specified window.
+.PP
+A message sent with the
+.BI -s " NUMBER"
+option of
+.IR wmctrl (1)
+makes
+.B shod
+send a specified window to a specified workspace.
+.PP
+A message sent with the
+.BI -t " NUMBER"
+option of
+.IR wmctrl (1)
+makes
+shod
+move the specified window to the specified workspace.
+.SS Manipulating via configure request
+.B shod
+acts upon configure request events sent to windows via utilities like
+wmutils'
+.IR wrs (1)
+and
+.IR wmv (1),
+by resizing and moving windows
+just as if the user have resized or moved them with the mouse.
+For more information, on how to do this, see the manual of these utilities.
+.PP
+When a window is moved from a monitor to a new monitor,
+that window moves from the workspace it is in to the focused workspace
+of the monitor it is moved to.
+.SS Manipulating tiled windows
+When a window is maximized, it is tiled by
+.BR shod .
+A tiled window behaves differently of regular windows.
+The tiled windows are organized in columns.
+Each tiled window ocupies a row in a column.
+.PP
+In order to move a tiled window from one column to another
+just move the window left or right with
+.IR wmv (1).
+This will move the window from its current column to the column to its
+left or right, or it will create a new column, if needed.
+.PP
+In order to move a tiled window up or down a column,
+just move the window up or down with
+.IR wmv (1).
+.PP
+Resizing a tiled window with
+.IR wrs (1)
+or with the Modifier plus the mouse button 3
+will change the size of the window, the size of the column it is in,
+and the size of the neighboring windows.
+.SH ENVIRONMENT
+The following environment variables affect the execution of
+.B shod
+.TP
+.B DISPLAY
+The display to start
+.B shod
+on.
+.SH RESOURCES
+.B
+shod
+understands the following X resources.
+.TP
+.B shod.borderWidth
+The size in pixels of the border around windows.
+.TP
+.B shod.gapLeft
+The gap in pixels between the left border of the monitor and the windows.
+.TP
+.B shod.gapRight
+The gap in pixels between the right border of the monitor and the windows.
+.TP
+.B shod.gapTop
+The gap in pixels between the top border of the monitor and the windows.
+.TP
+.B shod.gapBottom
+The gap in pixels between the bottom border of the monitor and the windows.
+.TP
+.B shod.gapInner
+The gap in pixels between the tiled windows.
+.TP
+.B shod.focused
+The color of the focused window.
+.TP
+.B shod.unfocused
+The color of the regular, non-focused windows.
+.TP
+.B shod.urgent
+The color of urgent windows.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B >0
+Error occurred.
+.SH EXAMPLES
+The following is a sample invokation of shod.
+It uses the Mod4 modifier as modifier key (which is normally the Windows key) for resizing and moving windows,
+uses the Button1 (left mouse button) and Button3 (right mouse button) for focusing windows,
+and the Button1 for raising them.
+It also ignores gaps and borders when there is only a single tiled window, for optimizing the space.
+.IP
+.EX
+$ shod -m Mod4 -f 13 -r 1 -g -b
+.EE
+.PP
+The following is a sample configuration for X resources.
+It must be placed in
+.B $HOME/.Xresources
+or
+.B $HOME/.Xdefaults
+or other file called by
+.IR xrdb (1).
+This example makes shod draw a 3 pixels wide border around windows,
+and a 7 pixels wide gap around and between tiled windows.
+It sets the color of the border of urgent windows to red;
+the border of the focused window to blue;
+and the border of regular windows to gray.
+.IP
+.EX
+shod.borderWidth:   3
+shod.gapLeft:       7
+shod.gapRight:      7
+shod.gapTop:        7
+shod.gapBottom:     7
+shod.gapInner:      7
+shod.urgent:        #cc0000
+shod.focused:       #3465a4
+shod.unfocused:     #555753
+.EE
+.PP
+The following is a sample configuration for
+.IR sxhkd (1),
+a program that binds keypresses (or key releases) to commands.
+This example uses
+.IR wmctrl (1)
+for sending EWMH hints to
+.BR shod.
+It uses
+.IR wmv (1)
+and
+.IR wrs (1)
+for moving and resizing windows, respectively.
+And it also uses
+.IR pfw (1)
+to obtain the numeric ID of the focused window.
+.IR wmv (1),
+.IR wrs (1),
+and
+.IR pfw (1)
+are utilities from the
+.IR wmutils (1)
+set of window manipulation utilities.
+.IP
+.EX
+# Start terminal (urxvt)
+mod4 + Enter
+	xterm
+
+# Killing windows
+mod4 + shift + q
+	wmctrl -ic $(pfw)
+
+# Workspace
+mod4 + {1,2,3,4,5,6,7,8,9,0}
+	wmctrl -s {0,1,2,3,4,5,6,7,8,9}
+mod4 + shift + {1,2,3,4,5,6,7,8,9,0}
+	wmctrl -ir $(pfw) -t {0,1,2,3,4,5,6,7,8,9}
+
+# Resize/move windows
+mod4 + {c, v, shift + c, shift + v}
+	wrs {-25 0, 0 -25, +25 0, 0 +25} $(pfw)
+mod4 + shift + {h, j, k, l}
+	wmv {-10 0, 0 10, 0 -10, 10 0} $(pfw)
+
+# Change window status to sticky/above/below/minimized/fullscreen/maximized
+mod4 + shift + {s, a, b, z, f, m}
+	wmctrl -ir $(pfw) -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
+.EE
+.PP
+The previous example binds the following keys to the following commands:
+.TP
+.B Mod4 + Enter
+Spawns a terminal emulator window.
+.TP
+.B Mod4 + Shift + Q
+Gently closes the focused windows.
+.TP
+.B Mod4 + <N>
+Go to the N-th workspace.
+.TP
+.B Mod4 + Shift + <N>
+Send focused window to the N-th workspace.
+.TP
+.B Mod4 + C
+Shrink the focused window horizontally by 25 pixels.
+.TP
+.B Mod4 + Shift + C
+Expand the focused window horizontally by 25 pixels.
+.TP
+.B Mod4 + V
+Shrink the focused window vertically by 25 pixels.
+.TP
+.B Mod4 + Shift + V
+Expand the focused window vertically by 25 pixels.
+.TP
+.B Mod4 + Shift + H
+Move the focused window 10 pixels to the left.
+.TP
+.B Mod4 + Shift + J
+Move the focused window 10 pixels down.
+.TP
+.B Mod4 + Shift + K
+Move the focused window 10 pixels up.
+.TP
+.B Mod4 + Shift + L
+Move the focused window 10 pixels to the right.
+.TP
+.B Mod4 + Shift + S
+Make the focused window sticky;
+or make it normal if it was sticky.
+.TP
+.B Mod4 + Shift + A
+Raise the focused window above the others;
+or move it to its normal place if it was already above others.
+.TP
+.B Mod4 + Shift + B
+Lower the focused window below the others;
+or move it to its normal place if it was already below others.
+.TP
+.B Mod4 + Shift + Z
+Hide the focused window.
+.TP
+.B Mod4 + Shift + F
+Make the focused window fullscreen;
+or make it normal if it was already fullscreen.
+.TP
+.B Mod4 + Shift + M
+Tile the focused window;
+or make it floating if it was already tiled.
+.PP
+The following is a sample script for
+.IR dmenu (1).
+This script lists the hidden (minimized) windows and unhides the selected one.
+This script uses
+.IR xprop (1)
+to obtain the X properties set by
+.BR shod.
+.IP
+.EX
+#!/bin/sh
+
+lsw() {
+	xprop -notype -f "_NET_CLIENT_LIST" 0x ' $0+\en' -root "_NET_CLIENT_LIST" |\e
+	cut -d' ' -f2- |\e
+	sed 's/, */\e
+/g'
+}
+
+ishidden() {
+	xprop -notype -f "_NET_WM_STATE" 32a ' $0+\en' -id "$1" "_NET_WM_STATE" |\e
+	cut -d' ' -f2- |\e
+	sed 's/, */\e
+/g' | grep -q "_NET_WM_STATE_HIDDEN"
+}
+
+printname() {
+	name="$(xprop -notype -f "_NET_WM_NAME" 8s ' $0+\en' -id "$1" "_NET_WM_NAME" 2>/dev/null)"
+	[ "$(echo $name)" = "_NET_WM_NAME: not found." ] && \e
+	name="$(xprop -notype -f "WM_NAME" 8s ' $0+\en' -id "$1" "WM_NAME" 2>/dev/null)"
+
+	echo $name |\e
+	cut -d' ' -f2- |\e
+	sed 's/, */\e
+/g'
+}
+
+for win in $(lsw)
+do
+	ishidden $win && printf "%s: " $win && printname $win
+done |\e
+dmenu -i -l 8 -p "unhide window:" |\e
+cut -d: -f1 |\e
+xargs wmctrl -b toggle,hidden -ir
+.EE
+.SH SEE ALSO
+.IR dmenu (1),
+.IR sxhkd (1),
+.IR wmctrl (1),
+.IR wmutils (1),
+.IR xprop (1)
+.SH BUGS
+Yes.

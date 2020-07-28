@@ -1,0 +1,235 @@
+                                  Shod
+
+Shod is a window manager for X.
+Shod is an hybrid (tiling and floating), non-reparenting window manager
+that draws no decoration or titlebar (other than the default X borders),
+sets no keybindings, uses no configuration (other than .Xresources), and
+works only by responding to client messages with EWMH hints.
+
+The main features of SHOD are:
+• Being controlled entirely via ICCCM events and EWMH hints.
+• Using maximized hints to implement tiled windows.
+• No configuration file.
+
+Shod's manual can be read at its Github repository wiki page.
+Read the examples on the manual.
+
+WARNING: This WM and this repository are an attempt of mine to write a
+window manager and understand better how X11 works, Shod is only meant
+for me for educational purposes.  Shod is an experimental project, and
+should be used with caution.
+
+WARNING: You must have wmctrl(1) and wmutils(1) installed in order to
+control Shod.
+
+
+§ On the name Shod
+
+“Shod” is an acronym (or abbreviation, idk) for “sheets on desk”.
+
+The window metaphor and the desktop metaphor developed independently.
+In the desktop metaphor, the computer monitor is interpreted as if it
+is the top of the user's desk, upon which objects such as documents and
+folders can be placed.  In the window metaphor, each application frame
+is interpreted as if it is a window through which you can see the
+application's content.  Both metaphors are incompatible; the window
+metaphor makes no sence in the desktop metaphor (you do not place
+windows over your desk in real life).
+
+If windows were invented as part of the desktop metaphor, windows would
+be interpreted as sheets of paper placed upon the desk, over which the
+application draws its contents.
+
+Thinking on that, I decided to call my window manager “sheets on desk”,
+or “Shod” for short; because that's what windows are on the desktop
+metaphor.
+
+
+§ Features
+
+X resources support.
+The configuration (size and color) of window borders and the size of the
+gaps are read from X Resources.
+
+Controllable by wmctrl(1) and wmutils(1).
+Shod does not have a default remote control client.  Instead, you
+should use third party tools like wmctrl(1) and wmutils(1) in order
+to manipulate windows in Shod.
+
+Docks, panels and bars.
+Shod reserves space in the edge of the screen for panels and docks.  See
+the section on limitations below, though.
+
+Dynamically created workspaces per monitor.
+Shod starts with a single workspace on each monitor.  When you open a
+window on an empty workspace, it creates a new empty workspace on that
+monitor.  When you close the last window on a workspace, this workspace
+will be deleted.  Each monitor has its own set of workspaces.
+
+Tiling windows.
+Shod do not maximize windows, it tiles them.
+By toggling or adding 'maximized_vert' or 'maximized_horz' to a window
+via wmctrl(1) this window is tiled.
+
+Columnated tiling layout.
+The only style of window tiling supported by Shod is the columnated
+style, the same used by wmii and acme.  In this style, each window
+occupies a row in a column.  In order to change the column of a window,
+just move it left or right; and to swap a window with the window above
+or below, just move the window up or down.  Use wmctrl(1) for this.
+
+Intuitively placing of new windows in unoccupied spaces.
+Shod tries to place new windows in unoccupied spaces on the screen.  The
+first window on the screen is spawned in the center of the screen, the
+other windows are spawned on an unoccupied space.
+
+Multimonitor.
+Shod supports multiple monitors.  Each monitor has a set of workspaces.
+For example, if you have two monitors you will have two workspaces being
+shown at the same time, one on each monitor.  In order to change the
+selected monitor just click on a window or on the root desktop of that
+monitor.  In order to change the monitor of a window just move this
+window to another monitor or move this window to a workspace bound to
+another monitor.
+
+Sticky windows.
+By toggling or adding 'sticky' to a window via wmctrl(1) this window is
+made sticky, that is, it will be shown on all workspaces on the monitor
+the window is in.
+
+Hidding windows.
+By toggling or adding 'hidden' to a window via wmctrl(1) this window is
+hidden, and can be unhidden by removing the 'hidden' property via
+wmctrl(1).
+
+Window gaps.
+You can control the top, left, right and bottom gaps, as well as the gap
+between tiled clients.
+
+Two focus style.
+Shod uses the focus-follow-pointer style by default.  But you can use
+the -f option to use a click-to-focus style of focus by setting which
+mouse buttons focus a window.  The related -r option specify which
+mouse buttons raise a window.
+
+Show desktop.
+Invoking `wmctrl -k on` or `wmctrl -k off` show/hide the desktop.
+
+
+§ Non-features
+
+Maximization.
+Shod uses maximization hints to implement tiling.  In order to actually
+maximize a window, tile it in a new empty workspace; a tiled window
+alone in a workspace occupies the entire screen, just like a maximized
+window.
+
+Window tags/groups.
+Shod implements workspaces rather than tags or window groups.
+
+Viewports.
+Shod does not implement viewports and ignores any viewport-related hint.
+
+Reparenting or titlebar.
+Shod does not draw borders other than the default single-color X11
+borders, and does not draw any titlebar or other kind of decoration
+around windows.
+
+Keybindings.
+Shod does not provide any way for binding keys for managing windows.
+You should use an application such as sxhkd(1) in order to bind keys
+to wmctrl(1) commands.
+
+
+§ Files
+
+The files are:
+• ./README:       This file.
+• ./Makefile:     The makefile.
+• ./config.h:     The hardcoded default configuration for Shod.
+• ./config.mk:    The setup for the makefile.
+• ./sxhkd.sample: A sample configuration for sxhkd.
+• ./shod.1:       The manual file (man page) for Shod.
+• ./shod.c:       The source code of Shod.
+• ./shod.h:       The global variables and structures of Shod.
+• ./client.*:     Routines for controlling clients.
+• ./ewmh.*:       Routines for setting ewmh hints.
+• ./init.*:       Routines for initializing Shod.
+• ./monitor.*:    Routines for manipulating monitor structures.
+• ./scan.*:       Routines that scan the display for existing windows.
+• ./winlist.*:    Routines for controlling the list of focused windows.
+• ./workspace.*:  Routines for manipulating workspace structures.
+• ./xevent.*:     Routines for handling X events.
+
+
+
+§ Installation
+
+First, edit ./config.mk to match your local setup.
+
+In order to build Shod you need the Xlib header files.
+The default configuration for Shod is specified in the file config.h,
+you can edit it, but most configuration can be changed at runtime via
+X resources and command line options.  Enter the following command to
+build Shod.  This command creates the binary file ./shod.
+
+	make
+
+By default, Shod is installed into the /usr/local prefix.  Enter the
+following command to install Shod (if necessary as root).  This command
+installs the binary file ./shod into the ${PREFIX}/bin/ directory, and
+the manual file ./shod.1 into ${MANPREFIX}/man1/ director.
+
+	make install
+
+
+§ Running Shod
+
+The following is a sample invokation of shod.  It uses the Mod4 modifier
+as modifier key (which is normally the Windows key) for resizing and moving
+windows, uses the Button1 (left mouse button) and Button3 (right mouse
+button) for focusing windows, and the Button1 for raising them.  It also
+ignores gaps and borders when there is only a single tiled window, for
+optimizing the space.
+
+	shod -m Mod4 -f 13 -r 1 -g -b
+
+See the “EXAMPLES” section of Shod's manual to see an example of how to
+set sxhkd(1) and other utilities to work together with Shod.
+
+
+§ Thanks
+
+Shod was written based on code and/or inspiration from the following
+window managers.  I'd like to thank their authors for their work that
+helped me writing Shod.
+• berry:    https://berrywm.org
+• dwm:      https://dwm.suckless.org
+• i3:       https://i3wm.org
+• katriawm: https://www.uninformativ.de/git/katriawm/file/README.html
+• sowm:     https://github.com/dylanaraps/sowm
+
+
+§ License
+
+MIT/X Consortium License
+
+© 2020 phillbush
+
+Permission is hereby granted, free of charge, to any person obtaining a
+copy of this software and associated documentation files (the "Software"),
+to deal in the Software without restriction, including without limitation
+the rights to use, copy, modify, merge, publish, distribute, sublicense,
+and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL
+THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
