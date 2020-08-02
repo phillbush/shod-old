@@ -157,7 +157,7 @@ xevent_clientmessage(XEvent *e)
 			client_maximize(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & ISMAXIMIZED))));
 		else if ((Atom) ev->data.l[1] == netatom[NetWMStateFullscreen]
 		         || (Atom) ev->data.l[2] == netatom[NetWMStateFullscreen])
-			client_fullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & ISFULLSCREEN))));
+			client_fullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !c->isfullscreen)));
 		else if ((Atom) ev->data.l[1] == netatom[NetWMStateSticky]
 		         || (Atom) ev->data.l[2] == netatom[NetWMStateSticky])
 			client_stick(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & ISSTICKY))));

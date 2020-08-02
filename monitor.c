@@ -147,7 +147,6 @@ monitor_update(void)
 	struct Client *c;
 	struct Client *cmove;   /* list of clients to be moved to selmon */
 	int delselmon = 0;      /* whether current selmon was deleted */
-
 	XineramaScreenInfo *info = NULL;
 	XineramaScreenInfo *unique = NULL;
 	int i, j, n;

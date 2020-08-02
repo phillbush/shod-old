@@ -16,9 +16,7 @@
 #define ISMAXIMIZED  (1 << 1)
 #define ISSTICKY     (1 << 2)
 #define ISMINIMIZED  (1 << 3)
-#define ISFULLSCREEN (1 << 4)
-#define ISVISIBLE    (ISNORMAL | ISMAXIMIZED | ISSTICKY | ISFULLSCREEN)
-#define ISTILED      (ISMAXIMIZED | ISFULLSCREEN) /* Window is tiled or fullscreen */
+#define ISVISIBLE    (ISNORMAL | ISMAXIMIZED | ISSTICKY)
 #define ISFLOATING   (ISNORMAL | ISSTICKY)        /* Window isn't tiled nor fullscreen */
 #define ISFREE       (ISSTICKY | ISMINIMIZED)     /* Window belongs to no workspace */
 #define ISBOUND      (ISNORMAL | ISMAXIMIZED)     /* Window belongs to a workspace */
@@ -164,10 +162,8 @@ struct Client {
 	int minw, minh;
 	int maxw, maxh;
 	int incw, inch;
-	int isfixed;
-	int isuserplaced;
+	int isfixed, isuserplaced, isfullscreen;
 	int layer;
-	unsigned char prevstate;    /* state previous to fullscreen state */
 	unsigned char state;
 	float mina, maxa;
 	Window win;

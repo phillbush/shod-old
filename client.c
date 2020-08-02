@@ -194,13 +194,13 @@ client_add(Window win, XWindowAttributes *wa)
 	c->fprev = c->fnext = NULL;
 	c->col = NULL;
 	c->state = ISNORMAL;
-	c->prevstate = ISNORMAL;
 	c->layer = 0;
 	c->win = win;
 	c->ux = wa->x;
 	c->uy = wa->y;
 	c->uw = wa->width;
 	c->uh = wa->height;
+	c->isfullscreen = 0;
 	flags = client_setsizehints(c);
 	c->isuserplaced = (flags & USPosition) ? 1 : 0;
 
@@ -225,7 +225,7 @@ client_add(Window win, XWindowAttributes *wa)
 
 	XMapWindow(dpy, c->win);
 	/* we don't want a client to steal focus when in fullscreen */
-	if (focus && (selws->focused == NULL || !(selws->focused->state & ISFULLSCREEN)))
+	if (focus && (selws->focused == NULL || !(selws->focused->isfullscreen)))
 		client_focus(c);
 }
 
@@ -239,14 +239,12 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c == NULL)
 		return;
 
-	if (dofree)
+	if (dofree && !(c->state & ISMINIMIZED))
 		focus = client_bestfocus(c);
 
 	if (c->prev) {  /* c is not at the beginning of the list */
 		c->prev->next = c->next;
 	} else {
-		if (c->state & ISFULLSCREEN)
-			c->state = c->prevstate;
 		switch (c->state) {
 		case ISMINIMIZED:
 			wm.minimized = c->next;
@@ -281,7 +279,7 @@ client_del(struct Client *c, int dofree, int delws)
 	 * the calling routine wants client's workspace to be deleted if
 	 * the client was the last client in it
 	 */
-	if (delws) {
+	if (delws && !(c->state & ISFREE)) {
 		struct WS *lastws;
 
 		/* find last workspace */
@@ -306,9 +304,10 @@ client_del(struct Client *c, int dofree, int delws)
 		struct WS *ws;
 
 		/* if other workspaces' focus is on c, change it */
-		for (ws = c->mon->ws; ws; ws = ws->next)
-			if (ws->focused == c)
-				ws->mon->focused = ws->focused = NULL;
+		if (!(c->state & ISMINIMIZED))
+			for (ws = c->mon->ws; ws; ws = ws->next)
+				if (ws->focused == c)
+					ws->mon->focused = ws->focused = NULL;
 
 		client_unfocus(c);
 
@@ -326,8 +325,8 @@ client_del(struct Client *c, int dofree, int delws)
 void
 client_above(struct Client *c, int above)
 {
-	/* maximized windows should not change layer */
-	if (c == NULL || c->state & ISTILED)
+	/* maximized and fullscreen windows should not change layer */
+	if (c == NULL || c->state & ISMAXIMIZED || c->isfullscreen)
 		return;
 
 	c->layer = (above) ? 1 : 0;
@@ -338,8 +337,8 @@ client_above(struct Client *c, int above)
 void
 client_below(struct Client *c, int below)
 {
-	/* maximized windows should not change layer */
-	if (c == NULL || c->state & ISTILED)
+	/* maximized and fullscreen windows should not change layer */
+	if (c == NULL || c->state & ISMAXIMIZED || c->isfullscreen)
 		return;
 
 	if (below) {
@@ -439,7 +438,7 @@ client_configure(struct Client *c, XWindowChanges wc, unsigned valuemask)
 {
 	int x = 0, y = 0, w = 0, h = 0;
 
-	if (c == NULL || c->state & ISMINIMIZED || c->state & ISFULLSCREEN)
+	if (c == NULL || c->state & ISMINIMIZED || c->isfullscreen)
 		return;
 
 	if (c->state & ISMAXIMIZED) {
@@ -539,19 +538,18 @@ client_fullscreen(struct Client *c, int fullscreen)
 	if (c->state & ISSTICKY)
 		client_stick(c, 0);
 
-	if (fullscreen && !(c->state & ISFULLSCREEN)) {
-		c->prevstate = c->state;
-		c->state = ISFULLSCREEN;
+	if (fullscreen && !c->isfullscreen) {
+		c->isfullscreen = 1;
 		XSetWindowBorderWidth(dpy, c->win, 0);
 		XMoveResizeWindow(dpy, c->win, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
 		XRaiseWindow(dpy, c->win);
-	} else if (!fullscreen && (c->state & ISFULLSCREEN)) {
+	} else if (!fullscreen && c->isfullscreen) {
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
-		if (c->prevstate & ISMAXIMIZED)
+		if (c->state & ISMAXIMIZED)
 			client_tile(c->ws, 0);
 		else
 			XMoveResizeWindow(dpy, c->win, c->ux, c->uy, c->uw, c->uh);
-		c->state = c->prevstate;
+		c->isfullscreen = 0;
 		client_raise(c);
 	}
 }
@@ -623,7 +621,7 @@ client_hide(struct Client *c, int hide)
 	if (c == NULL)
 		return;
 
-	if (c->state & ISFULLSCREEN) {
+	if (c->isfullscreen) {
 		x = c->mon->mx;
 		y = c->mon->my;
 		w = screenw;
@@ -650,7 +648,7 @@ client_isborder(struct Client *c, int x, int y)
 {
 	int w, h;
 
-	if (c == NULL || c->state == ISMINIMIZED || c->state & ISFULLSCREEN)
+	if (c == NULL || c->state == ISMINIMIZED || c->isfullscreen)
 		return 0;
 
 	if (c->state & ISMAXIMIZED) {
@@ -674,16 +672,12 @@ client_maximize(struct Client *c, int maximize)
 {
 	struct Column *col;
 
-	if (c == NULL || (c->state & ISMINIMIZED) || c->isfixed)
+	if (c == NULL || (c->state & ISMINIMIZED) || c->isfixed || c->isfullscreen)
 		return;
 
 	/* make client unsticky, for it to be on current workspace */
 	if (c->state & ISSTICKY)
 		client_stick(c, 0);
-
-	/* make client not fullscreen */
-	if (c->state & ISFULLSCREEN)
-		client_fullscreen(c, 0);
 
 	if (maximize && !(c->state & ISMAXIMIZED)) {
 		Window wins[2];
@@ -793,7 +787,7 @@ client_minimize(struct Client *c, int minimize)
 void
 client_move(struct Client *c, int x, int y)
 {
-	if (c == NULL || c->state & ISMINIMIZED || c->state & ISFULLSCREEN)
+	if (c == NULL || c->state & ISMINIMIZED || c->isfullscreen)
 		return;
 
 	if (c->state & ISMAXIMIZED) {
@@ -1027,7 +1021,7 @@ client_quadrant(struct Client *c, int x, int y)
 	if (c == NULL || c->state == ISMINIMIZED)
 		return SE;
 
-	if (c->state & ISFULLSCREEN) {
+	if (c->isfullscreen) {
 		midx = c->mon->mw / 2;
 		midy = c->mon->mh / 2;
 	} else if (c->state & ISMAXIMIZED) {
@@ -1072,7 +1066,7 @@ client_raise(struct Client *c)
 void
 client_resize(struct Client *c, enum Quadrant q, int x, int y)
 {
-	if (c == NULL || c->state & ISMINIMIZED || c->state & ISFULLSCREEN)
+	if (c == NULL || c->isfixed || c->state & ISMINIMIZED || c->isfullscreen)
 		return;
 
 	if (c->state & ISMAXIMIZED) {
@@ -1138,10 +1132,6 @@ client_resize(struct Client *c, enum Quadrant q, int x, int y)
 		c->uh += y;
 		XMoveResizeWindow(dpy, c->win, c->ux, c->uy, c->uw, c->uh);
 	}
-
-	(void)q;
-	(void)x;
-	(void)y;
 }
 
 /* send client to ws, delete from old ws if it isn't new and place it on scren if necessary */
@@ -1310,8 +1300,8 @@ client_stick(struct Client *c, int stick)
 	if (c == NULL || (c->state & (ISMINIMIZED)))
 		return;
 
-	/* tiled windows should not go sticky */
-	if (c->state & ISTILED)
+	/* maximized and fullscreen windows should not go sticky */
+	if (c->state & ISMAXIMIZED || c->isfullscreen)
 		return;
 
 	if (stick && !(c->state & ISSTICKY)) {
@@ -1322,8 +1312,6 @@ client_stick(struct Client *c, int stick)
 		c->mon->sticky = c;
 		c->state = ISSTICKY;
 		c->prev = NULL;
-
-		/* TODO: Make all sticky windows' ws be NULL */
 		c->ws = NULL;
 	} else if (!stick && (c->state & ISSTICKY)) {
 		struct WS *ws;
