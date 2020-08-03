@@ -803,6 +803,7 @@ client_move(struct Client *c, int x, int y)
 
 			if (!col->row)
 				colfree(col);
+			client_tile(c->ws, 1);
 		} else if (x < 0) {
 			if (c->next)
 				c->next->prev = c->prev;
@@ -830,13 +831,49 @@ client_move(struct Client *c, int x, int y)
 				colfree(col);
 			client_tile(c->ws, 1);
 		} else if (y < 0 && c->prev) {
-			client_swap(c, c->prev);
+			struct Client *pprev, *prev, *next;
+
+			if (c->col->row == c->prev)
+				c->col->row = c;
+
+			pprev = c->prev->prev;
+			prev = c->prev;
+			next = c->next;
+
+			c->prev->next = next;
+			c->prev->prev = c;
+
+			c->prev = pprev;
+			c->next = prev;
+
+			if (pprev)
+				pprev->next = c;
+			if (next)
+				next->prev = prev;
 			client_tile(c->ws, 1);
 		} else if (y > 0 && c->next) {
-			client_swap(c, c->next);
+			struct Client *prev, *next, *nnext;
+
+			if (c->col->row == c)
+				c->col->row = c->next;
+
+			prev = c->prev;
+			next = c->next;
+			nnext = c->next->next;
+
+			c->next->prev = prev;
+			c->next->next = c;
+
+			c->prev = next;
+			c->next = nnext;
+
+			if (prev)
+				prev->next = next;
+			if (nnext)
+				nnext->prev = c;
+
 			client_tile(c->ws, 1);
 		}
-		client_tile(c->ws, 1);
 	} else {
 		c->ux += x;
 		c->uy += y;
@@ -1313,28 +1350,6 @@ client_stick(struct Client *c, int stick)
 		c->state = ISNORMAL;
 		client_sendtows(c, selws, 1, 0, 0);
 	}
-}
-
-/* swap two clients */
-void
-client_swap(struct Client *a, struct Client *b)
-{
-	struct WS *ws;
-	Window tmp;
-
-	if (a->ws != b->ws)
-		return;
-
-	ws = a->ws;
-
-	tmp = a->win;
-	a->win = b->win;
-	b->win = tmp;
-
-	if (ws->focused == a)
-		ws->mon->focused = ws->focused = b;
-	else if (ws->focused == b)
-		ws->mon->focused = ws->focused = a;
 }
 
 /* retile clients */

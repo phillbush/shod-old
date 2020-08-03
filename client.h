@@ -40,7 +40,6 @@ void client_setborder(struct Client *c, unsigned long color);
 long client_setsizehints(struct Client *c);
 void client_stick(struct Client *c, int stick);
 void client_showdesktop(int n);
-void client_swap(struct Client *a, struct Client *b);
 void client_tile(struct WS *ws, int recalc);
 void client_unfocus(struct Client *c);
 
