@@ -4,6 +4,10 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
+/* minimum sizes of a client, in pixels */
+#define MINWIDTH    10
+#define MINHEIGHT   10
+
 /* macros */
 #define LEN(x) (sizeof (x) / sizeof (x[0]))
 #define MAX(x,y) ((x)>(y)?(x):(y))

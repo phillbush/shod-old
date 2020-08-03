@@ -24,6 +24,7 @@ void client_close(struct Client *c);
 void client_configure(struct Client *c, XWindowChanges wc, unsigned value);
 void client_focus(struct Client *c);
 void client_fullscreen(struct Client *c, int fullscreen);
+void client_getgeom(struct Client *c, int *x_ret, int *y_ret, int *w_ret, int *h_ret);
 void client_gotows(struct WS *ws, int wsnum);
 void client_hide(struct Client *c, int hide);
 int client_isborder(struct Client *c, int x, int y);
