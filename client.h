@@ -1,6 +1,18 @@
 #ifndef _CLIENT_H_
 #define _CLIENT_H_
 
+/* macros */
+#define ISVISIBLE(c) (!((c)->state & ISMINIMIZED) && ((c)->state & ISSTICKY || (c)->ws == (c)->ws->mon->selws))
+
+/* window states */
+#define ISNORMAL     (1 << 0)
+#define ISMAXIMIZED  (1 << 1)
+#define ISSTICKY     (1 << 2)
+#define ISMINIMIZED  (1 << 3)
+#define ISFLOATING   (ISNORMAL | ISSTICKY)        /* Window isn't tiled nor fullscreen */
+#define ISFREE       (ISSTICKY | ISMINIMIZED)     /* Window belongs to no workspace */
+#define ISBOUND      (ISNORMAL | ISMAXIMIZED)     /* Window belongs to a workspace */
+
 enum Quadrant {NW, NE, SW, SE};
 
 /* get which monitor a given coordinate is in */
@@ -42,5 +54,8 @@ void client_stick(struct Client *c, int stick);
 void client_showdesktop(int n);
 void client_tile(struct WS *ws, int recalc);
 void client_unfocus(struct Client *c);
+
+/* operations on docks */
+void dock_updategaps(void);
 
 #endif /* _CLIENT_H_ */

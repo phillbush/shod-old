@@ -10,7 +10,6 @@
 #define DIV 15      /* number to divide the screen into grids */
 
 /* function declarations */
-static void updategaps(void);
 static unsigned long *getcardinalprop(Window win, Atom atom, unsigned long size);
 static Atom getatomprop(Window win, Atom prop);
 static struct Column *colalloc(struct Column *prev, struct Column *next, struct Client *c);
@@ -130,7 +129,7 @@ dock_add(Window win)
 
 	XMapWindow(dpy, d->win);
 
-	updategaps();
+	dock_updategaps();
 }
 
 /* delete a dock */
@@ -148,7 +147,7 @@ dock_del(struct Dock *d)
 		d->next->prev = d->prev;
 	free(d);
 
-	updategaps();
+	dock_updategaps();
 }
 
 /* adopt a client */
@@ -279,7 +278,7 @@ client_del(struct Client *c, int dofree, int delws)
 	 * the calling routine wants client's workspace to be deleted if
 	 * the client was the last client in it
 	 */
-	if (delws && !(c->state & ISFREE)) {
+	if (delws) {
 		struct WS *lastws;
 
 		/* find last workspace */
@@ -451,7 +450,7 @@ client_configure(struct Client *c, XWindowChanges wc, unsigned valuemask)
 
 	if (valuemask & (CWX | CWY))
 		client_move(c, x, y);
-	else if (valuemask & (CWWidth | CWHeight))
+	if (valuemask & (CWWidth | CWHeight))
 		client_resize(c, SE, w, h);
 }
 
@@ -546,7 +545,7 @@ client_fullscreen(struct Client *c, int fullscreen)
 void
 client_getgeom(struct Client *c, int *x_ret, int *y_ret, int *w_ret, int *h_ret)
 {
-	if (c == NULL || c->state & ISMINIMIZED)
+	if (c == NULL)
 		return;
 
 	if (x_ret)
@@ -621,18 +620,15 @@ client_gotows(struct WS *ws, int wsnum)
 void
 client_hide(struct Client *c, int hide)
 {
-	int x, y, w;
+	int x, y, w, h;
 
 	if (c == NULL)
 		return;
 
-	client_getgeom(c, &x, &y, &w, NULL);
-
+	client_getgeom(c, &x, &y, &w, &h);
 	if (hide)
-		XMoveWindow(dpy, c->win, (w + 2 * config.border_width) * -2, y);
-	else
-		XMoveWindow(dpy, c->win, x, y);
-
+		x = (w + 2 * config.border_width) * -2;
+	XMoveResizeWindow(dpy, c->win, x, y, w, h);
 }
 
 /* returns 1 if position x and y are on client's border, 0 otherwise */
@@ -744,7 +740,6 @@ client_minimize(struct Client *c, int minimize)
 			wm.minimized->prev = c;
 		c->next = wm.minimized;
 		wm.minimized = c;
-		c->state = ISMINIMIZED;
 		c->prev = NULL;
 
 		/* focus another window */
@@ -756,6 +751,7 @@ client_minimize(struct Client *c, int minimize)
 
 		c->ws = NULL;
 		c->mon = NULL;
+		c->state = ISMINIMIZED;
 	} else if (!minimize && (c->state & ISMINIMIZED)) {
 		client_del(c, 0, 0);
 		c->state = ISNORMAL;
@@ -767,7 +763,6 @@ client_minimize(struct Client *c, int minimize)
 	}
 
 	client_hide(c, minimize);
-
 }
 
 /* move client x pixels to the right and y pixels down */
@@ -803,7 +798,6 @@ client_move(struct Client *c, int x, int y)
 
 			if (!col->row)
 				colfree(col);
-			client_tile(c->ws, 1);
 		} else if (x < 0) {
 			if (c->next)
 				c->next->prev = c->prev;
@@ -829,7 +823,6 @@ client_move(struct Client *c, int x, int y)
 
 			if (!col->row)
 				colfree(col);
-			client_tile(c->ws, 1);
 		} else if (y < 0 && c->prev) {
 			struct Client *pprev, *prev, *next;
 
@@ -850,7 +843,6 @@ client_move(struct Client *c, int x, int y)
 				pprev->next = c;
 			if (next)
 				next->prev = prev;
-			client_tile(c->ws, 1);
 		} else if (y > 0 && c->next) {
 			struct Client *prev, *next, *nnext;
 
@@ -872,12 +864,16 @@ client_move(struct Client *c, int x, int y)
 			if (nnext)
 				nnext->prev = c;
 
-			client_tile(c->ws, 1);
+		} else {
+			return;
 		}
+		client_tile(c->ws, 1);
 	} else {
 		c->ux += x;
 		c->uy += y;
-		XMoveWindow(dpy, c->win, c->ux, c->uy);
+
+		if (ISVISIBLE(c))
+			XMoveWindow(dpy, c->win, c->ux, c->uy);
 
 		if (c->state & ISNORMAL) {
 			struct Monitor *monto;  /* monitor to move the client to */
@@ -920,7 +916,7 @@ client_place(struct Client *c, struct WS *ws)
 	c->uw = MIN(c->uw, mon->ww - 2 * config.border_width);
 	c->uh = MIN(c->uh, mon->wh - 2 * config.border_width);
 
-	/* if the user placed the window, we should not replace it */
+	/* if the user placed the window, we should not re-place it */
 	if (c->isuserplaced)
 		return;
 
@@ -941,10 +937,10 @@ client_place(struct Client *c, struct WS *ws)
 				int ha, hb, wa, wb;
 				int ya, yb, xa, xb;
 
-				ha = (mon->wh * i)/DIV;
-				hb = (mon->wh * (i + 1))/DIV;
-				wa = (mon->ww * j)/DIV;
-				wb = (mon->ww * (j + 1))/DIV;
+				ha = mon->wy + (mon->wh * i)/DIV;
+				hb = mon->wy + (mon->wh * (i + 1))/DIV;
+				wa = mon->wx + (mon->ww * j)/DIV;
+				wb = mon->wx + (mon->ww * (j + 1))/DIV;
 
 				ya = tmp->uy;
 				yb = tmp->uy + HEIGHT(tmp);
@@ -962,7 +958,7 @@ client_place(struct Client *c, struct WS *ws)
 		}
 
 		/*
-		 * after checking the windows floatinged on the workspace,
+		 * after checking the floating windows on the workspace,
 		 * check the sticky windows
 		 */
 		if (!checkedsticky && tmp->next == NULL) {
@@ -1007,7 +1003,7 @@ client_place(struct Client *c, struct WS *ws)
 
 	/* calculate y */
 	if (posi == 0) {
-		c->uy = 0;
+		c->uy = mon->wy;
 	} else if (posi >= DIV - 1) {
 		c->uy = mon->wy + mon->wh - HEIGHT(c);
 	} else {
@@ -1023,7 +1019,7 @@ client_place(struct Client *c, struct WS *ws)
 
 	/* calculate x */
 	if (posj == 0) {
-		c->ux = 0;
+		c->ux = mon->wx;
 	} else if (posj >= DIV - 1) {
 		c->ux = mon->wx + mon->ww - WIDTH(c);
 	} else {
@@ -1042,20 +1038,20 @@ client_place(struct Client *c, struct WS *ws)
 enum Quadrant
 client_quadrant(struct Client *c, int x, int y)
 {
-	int midx, midy;
+	int midw, midh;
 
 	if (c == NULL || c->state == ISMINIMIZED)
 		return SE;
 
-	client_getgeom(c, &midx, &midy, NULL, NULL);
-	midx /= 2;
-	midy /= 2;
+	client_getgeom(c, NULL, NULL, &midw, &midh);
+	midw /= 2;
+	midh /= 2;
 
-	if (x < midx && y < midy)
+	if (x < midw && y < midh)
 		return NW;
-	if (x >= midx && y < midy)
+	if (x >= midw && y < midh)
 		return NE;
-	if (x < midx && y >= midy)
+	if (x < midw && y >= midh)
 		return SW;
 	else
 		return SE;
@@ -1155,7 +1151,8 @@ client_resize(struct Client *c, enum Quadrant q, int x, int y)
 		case SE:
 			break;
 		}
-		XMoveResizeWindow(dpy, c->win, c->ux, c->uy, c->uw, c->uh);
+		if (ISVISIBLE(c))
+			XMoveResizeWindow(dpy, c->win, c->ux, c->uy, c->uw, c->uh);
 	}
 }
 
@@ -1439,7 +1436,8 @@ client_tile(struct WS *ws, int recalc)
 				XSetWindowBorderWidth(dpy, c->win, config.border_width);
 			}
 
-			XMoveResizeWindow(dpy, c->win, c->mx, c->my, c->mw, c->mh);
+			if (ISVISIBLE(c))
+				XMoveResizeWindow(dpy, c->win, c->mx, c->my, c->mw, c->mh);
 
 			y += c->mh + config.gapinner + config.border_width * 2;
 		}
@@ -1458,6 +1456,43 @@ client_unfocus(struct Client *c)
 		c->fnext->fprev = c->fprev;
 	if (c->fprev)
 		c->fprev->fnext = c->fnext;
+}
+
+/* update the gaps of the monitor */
+void
+dock_updategaps(void)
+{
+	struct Monitor *mon;
+	struct Dock *d;
+	int left, right, top, bottom;
+
+	left = right = top = bottom = 0;
+
+	for (d = docks; d; d = d->next) {
+		if (d->left > left)
+			left = d->left;
+		if (d->right > right)
+			right = d->right;
+		if (d->top > top)
+			top = d->top;
+		if (d->bottom > bottom)
+			bottom = d->bottom;
+	}
+
+	for (mon = wm.mon; mon; mon = mon->next) {
+		mon->wx = mon->mx + (left + config.gapleft);
+		mon->ww = mon->mw - (left + config.gapleft) - (right + config.gapright);
+		mon->wy = mon->my + (top + config.gaptop);
+		mon->wh = mon->mh - (top + config.gaptop) - (bottom + config.gapbottom);
+
+		mon->dx = mon->mx + left;
+		mon->dw = mon->mw - left - right;
+		mon->dy = mon->my + top;
+		mon->dh = mon->mh - top - bottom;
+	}
+
+	if (selws)
+		client_tile(selws, 0);
 }
 
 /* return an array of a cardinal property, we have to free it after using */
@@ -1542,42 +1577,6 @@ colfree(struct Column *col)
 	}
 
 	free(col);
-}
-
-/* update the gaps at config struct */
-static void
-updategaps(void)
-{
-	struct Monitor *mon;
-	struct Dock *d;
-	int left, right, top, bottom;
-
-	left = right = top = bottom = 0;
-
-	for (d = docks; d; d = d->next) {
-		if (d->left > left)
-			left = d->left;
-		if (d->right > right)
-			right = d->right;
-		if (d->top > top)
-			top = d->top;
-		if (d->bottom > bottom)
-			bottom = d->bottom;
-	}
-
-	for (mon = wm.mon; mon; mon = mon->next) {
-		mon->wx = mon->mx + (left + config.gapleft);
-		mon->ww = mon->mw - (left + config.gapleft) - (right + config.gapright);
-		mon->wy = mon->my + (top + config.gaptop);
-		mon->wh = mon->mh - (top + config.gaptop) - (bottom + config.gapbottom);
-
-		mon->dx = mon->mx + left;
-		mon->dw = mon->mw - left - right;
-		mon->dy = mon->my + top;
-		mon->dh = mon->mh - top - bottom;
-	}
-
-	client_tile(selws, 0);
 }
 
 /* get cursor position */

@@ -14,13 +14,13 @@
 #define MIN(x,y) ((x)<(y)?(x):(y))
 #define WIDTH(x) ((x)->uw + 2 * config.border_width)
 #define HEIGHT(x) ((x)->uh + 2 * config.border_width)
+#define ISVISIBLE(c) (!((c)->state & ISMINIMIZED) && ((c)->state & ISSTICKY || (c)->ws == (c)->ws->mon->selws))
 
 /* window states */
 #define ISNORMAL     (1 << 0)
 #define ISMAXIMIZED  (1 << 1)
 #define ISSTICKY     (1 << 2)
 #define ISMINIMIZED  (1 << 3)
-#define ISVISIBLE    (ISNORMAL | ISMAXIMIZED | ISSTICKY)
 #define ISFLOATING   (ISNORMAL | ISSTICKY)        /* Window isn't tiled nor fullscreen */
 #define ISFREE       (ISSTICKY | ISMINIMIZED)     /* Window belongs to no workspace */
 #define ISBOUND      (ISNORMAL | ISMAXIMIZED)     /* Window belongs to a workspace */

@@ -1,5 +1,4 @@
 #include <err.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <X11/extensions/Xinerama.h>
@@ -75,7 +74,6 @@ monitor_del(struct Monitor *mon, struct Client *append)
 		while (c) {
 			struct Client *tmp;
 
-			fprintf(stderr, "THINGING A FLOATING WINDOW\n");
 			tmp = c->next;
 			c->next = head;
 			head = c;
@@ -110,6 +108,8 @@ monitor_del(struct Monitor *mon, struct Client *append)
 		mon->next->prev = mon->prev;
 	if (mon->prev)
 		mon->prev->next = mon->next;
+	if (wm.mon == mon)
+		wm.mon = mon->next;
 
 	free(mon);
 
@@ -191,9 +191,9 @@ monitor_update(void)
 		int add = 1;
 		for (mon = wm.mon; mon; mon = mon->next) {
 			if (unique[i].x_org == mon->mx && unique[i].y_org == mon->my &&
-			    unique[i].width == mon->mw && unique[i].height == mon->mh) {
-			    add = 0;
-			    break;
+				unique[i].width == mon->mw && unique[i].height == mon->mh) {
+				add = 0;
+				break;
 			}
 		}
 		if (add)
@@ -217,6 +217,8 @@ monitor_update(void)
 		client_sendtows(c, selmon->selws, 1, 1, 0);
 		c = tmp;
 	}
+
+	dock_updategaps();
 
 	free(unique);
 }
