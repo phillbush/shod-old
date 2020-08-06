@@ -3,15 +3,10 @@
 
 /* macros */
 #define ISVISIBLE(c) (!((c)->state & ISMINIMIZED) && ((c)->state & ISSTICKY || (c)->ws == (c)->ws->mon->selws))
-
-/* window states */
-#define ISNORMAL     (1 << 0)
-#define ISMAXIMIZED  (1 << 1)
-#define ISSTICKY     (1 << 2)
-#define ISMINIMIZED  (1 << 3)
-#define ISFLOATING   (ISNORMAL | ISSTICKY)        /* Window isn't tiled nor fullscreen */
-#define ISFREE       (ISSTICKY | ISMINIMIZED)     /* Window belongs to no workspace */
-#define ISBOUND      (ISNORMAL | ISMAXIMIZED)     /* Window belongs to a workspace */
+#define MINW(c) (MAX((c)->minw, 10))
+#define MINH(c) (MAX((c)->minh, 10))
+#define WIDTH(x) ((x)->uw + 2 * config.border_width)
+#define HEIGHT(x) ((x)->uh + 2 * config.border_width)
 
 enum Quadrant {NW, NE, SW, SE};
 
@@ -43,13 +38,13 @@ int client_isborder(struct Client *c, int x, int y);
 void client_maximize(struct Client *c, int maximize);
 void client_minimize(struct Client *c, int minimize);
 void client_move(struct Client *c, int x, int y);
+int client_oksize(struct Client *c, int x, int y);
 void client_place(struct Client *c, struct WS *ws);
 enum Quadrant client_quadrant(struct Client *c, int x, int y);
 void client_raise(struct Client *c);
 void client_resize(struct Client *c, enum Quadrant q, int x, int y);
 void client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move);
 void client_setborder(struct Client *c, unsigned long color);
-long client_setsizehints(struct Client *c);
 void client_stick(struct Client *c, int stick);
 void client_showdesktop(int n);
 void client_tile(struct WS *ws, int recalc);

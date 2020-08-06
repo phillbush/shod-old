@@ -222,7 +222,7 @@ xevent_clientmessage(XEvent *e)
 		 * dragged by their GtkHeaderBar
 		 */
 
-		/* TODO */
+		/* TODO OR IGNORE? */
 	}
 }
 
