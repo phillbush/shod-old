@@ -1286,9 +1286,11 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 	}
 	ewmh_setwmdesktop();
 
-	if (place && ws->mon->selws == ws) {
+	if (place) {
 		client_place(c, ws);
-		moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
+		if (ws->mon->selws == ws) {
+			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
+		}
 	}
 
 	client_raise(c);
