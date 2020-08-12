@@ -106,9 +106,8 @@ xevent_buttonpress(XEvent *e)
 		focus = 1;
 	else if (ev->button == Button5 && raisebuttons & 1 << 5)
 		focus = 1;
-	if (focus) if (c->state & ISFLOATING) {
-			client_raise(c);
-	}
+	if (focus && c->state & ISFLOATING)
+		client_raise(c);
 
 done:
 	XAllowEvents(dpy, ReplayPointer, CurrentTime);
@@ -177,7 +176,8 @@ xevent_clientmessage(XEvent *e)
 
 		client_gotows(c->ws, 0);
 		client_focus(c);
-		client_raise(c);
+		if (c->state & ISFLOATING)
+			client_raise(c);
 	} else if (ev->message_type == netatom[NetCloseWindow]) {
 		if (c == NULL)
 			return;
