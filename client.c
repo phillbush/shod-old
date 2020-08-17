@@ -301,6 +301,8 @@ client_del(struct Client *c, int dofree, int delws)
 			if (c->ws != lastws && c->ws->nclients == 0) {
 				if (ws_isvisible(c->ws))
 					client_gotows(lastws, 0);
+				else
+					c->mon->selws = lastws;
 				ws_del(c->ws);
 				ewmh_setnumberofdesktops();
 				ewmh_setwmdesktop();

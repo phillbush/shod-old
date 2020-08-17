@@ -299,9 +299,11 @@ xevent_enternotify(XEvent *e)
 static void
 xevent_focusin(XEvent *e)
 {
-	(void)e;
+	XFocusChangeEvent *ev = &e->xfocus;
 
-	if (selmon->focused)
+	if (selmon->focused && (selmon->focused->win != ev->window
+	                    || ev->detail == NotifyPointer
+	                    || ev->detail == NotifyPointerRoot))
 		client_focus(selmon->focused);
 }
 
