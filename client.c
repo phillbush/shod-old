@@ -299,11 +299,11 @@ client_del(struct Client *c, int dofree, int delws)
 
 			/* only the last ws can have 0 clients */
 			if (c->ws != lastws && c->ws->nclients == 0) {
-				lastws->mon->selws = NULL;
+				if (ws_isvisible(c->ws))
+					client_gotows(lastws, 0);
 				ws_del(c->ws);
 				ewmh_setnumberofdesktops();
 				ewmh_setwmdesktop();
-				client_gotows(lastws, 0);
 			}
 		}
 	}

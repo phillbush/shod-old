@@ -64,6 +64,19 @@ ws_del(struct WS *ws)
 	free(ws);
 }
 
+/* checks whether ws is visible in a monitor */
+int
+ws_isvisible(struct WS *ws)
+{
+	struct Monitor *mon;
+
+	for (mon = wm.mon; mon; mon = mon->next)
+		if (ws == mon->ws)
+			return 1;
+
+	return 0;
+}
+
 /* get a workspace from a desktop index */
 struct WS *
 getws(long desk)
