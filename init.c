@@ -71,7 +71,6 @@ init_atoms(void)
 	netatom[NetWMStrut]                 = XInternAtom(dpy, "_NET_WM_STRUT", False);
 	netatom[NetWMStrutPartial]          = XInternAtom(dpy, "_NET_WM_STRUT_PARTIAL", False);
 	netatom[NetWMUserTime]              = XInternAtom(dpy, "_NET_WM_USER_TIME", False);
-
 	netatom[NetWMStateAttention]        = XInternAtom(dpy, "_NET_WM_STATE_DEMANDS_ATTENTION", False);
 	netatom[NetWMDesktop]               = XInternAtom(dpy, "_NET_WM_DESKTOP", False);
 	netatom[NetFrameExtents]            = XInternAtom(dpy, "_NET_FRAME_EXTENTS", False);

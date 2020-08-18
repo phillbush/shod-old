@@ -287,7 +287,7 @@ client_del(struct Client *c, int dofree, int delws)
 	 * the calling routine wants client's workspace to be deleted if
 	 * the client was the last client in it
 	 */
-	if (delws) {
+	if (delws && !(c->state & ISMINIMIZED)) {
 		struct WS *lastws;
 
 		/* find last workspace */

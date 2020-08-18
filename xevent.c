@@ -389,7 +389,7 @@ xevent_run(void)
 {
 	XEvent ev;
 
-	while (!XNextEvent(dpy, &ev))
+	while (running && !XNextEvent(dpy, &ev))
 		if (xevents[ev.type])
 			xevents[ev.type](&ev);
 }

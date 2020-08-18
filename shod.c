@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 #include <unistd.h>
 #include <X11/Xutil.h>
 #include <X11/Xproto.h>
@@ -22,9 +23,10 @@ enum ParseButtons {Focus, Raise};
 /* function declarations */
 static void parsebuttons(const char *s, enum ParseButtons b);
 static void parsemodifier(const char *s);
+static void sigint(int);
 static int xerror(Display *dpy, XErrorEvent *ee);
+static void cleanup(void);
 static void usage(void);
-Cursor cursor[CursLast];
 
 /* X stuff */
 Display *dpy;
@@ -32,6 +34,7 @@ Window root, wmcheckwin;
 int (*xerrorxlib)(Display *, XErrorEvent *);
 int screen;
 int screenw, screenh;
+Cursor cursor[CursLast];
 
 /* mouse buttons and modifiers that control windows */
 unsigned int modifier = Mod1Mask;
@@ -61,6 +64,9 @@ struct WM wm = {NULL, NULL};
 /* flags */
 int gflag = 0;  /* whether to ignore outer gaps when a single window is maximized */
 int bflag = 0;  /* whether to ignore borders when a single window is maximized */
+
+/* whether shod is running */
+int running = 1;
 
 /* the config structure */
 #include "config.h"
@@ -99,6 +105,9 @@ main(int argc, char *argv[])
 	if (argc != 0)
 		usage();
 
+	if (signal(SIGINT, sigint) == SIG_ERR)
+		err(1, "signal");
+
 	/* open connection to server and set X variables */
 	if (!setlocale(LC_CTYPE, "") || !XSupportsLocale())
 		warnx("warning: no locale support");
@@ -134,12 +143,14 @@ main(int argc, char *argv[])
 	ewmh_setworkarea();
 	ewmh_setshowingdesktop(0);
 
-	///* scan existing windows and adopt them */
+	/* scan existing windows and adopt them */
 	scan();
 
 	xevent_run();
 
+	cleanup();
 	XCloseDisplay(dpy);
+	warnx("bye");
 
 	return 0;
 }
@@ -184,6 +195,14 @@ parsemodifier(const char *s)
 		errx(1, "improper modifier string %s", s);
 }
 
+/* signal-catching function */
+static void
+sigint(int signo)
+{
+	(void)signo;
+	running = 0;
+}
+
 /* error handler */
 static int
 xerror(Display *dpy, XErrorEvent *e)
@@ -208,6 +227,59 @@ xerror(Display *dpy, XErrorEvent *e)
 
 	errx(1, "Fatal request. Request code=%d, error code=%d", e->request_code, e->error_code);
 	return xerrorxlib(dpy, e);
+}
+
+/* clean up */
+static void
+cleanup(void)
+{
+	struct Monitor *mon;
+	struct Client *c;
+	struct Dock *d;
+	size_t i;
+
+	d = docks;
+	while (d) {
+		struct Dock *tmp;
+
+		tmp = d->next;
+		free(d);
+		d = tmp;
+	}
+
+	c = wm.minimized;
+	while (c) {
+		struct Client *tmp;
+
+		tmp = c->next;
+		free(c);
+		c = tmp;
+	}
+
+	mon = wm.mon;
+	while (mon) {
+		struct Monitor *tmp;
+
+		tmp = mon->next;
+		c = monitor_del(mon, NULL);
+		mon = tmp;
+
+		while (c) {
+			struct Client *tmp;
+
+			tmp = c->next;
+			free(c);
+			c = tmp;
+		}
+	}
+
+	XUngrabPointer(dpy, CurrentTime);
+
+	for (i = 0; i < CursLast; i++)
+		XFreeCursor(dpy, cursor[i]);
+
+	XDestroyWindow(dpy, wmcheckwin);
+	XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
 }
 
 /* show usage */

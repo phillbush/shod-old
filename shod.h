@@ -26,6 +26,7 @@ enum {
 	NetNumberOfDesktops,
 	NetCurrentDesktop,
 	NetActiveWindow,
+	NetWMDesktop,
 	NetWorkarea,
 	NetSupportingWMCheck,
 	NetShowingDesktop,
@@ -34,7 +35,6 @@ enum {
 	NetWMMoveresize,
 	NetRequestFrameExtents,
 	NetWMName,
-	NetWMDesktop,
 	NetWMWindowType,
 	NetWMWindowTypeDesktop,
 	NetWMWindowTypeMenu,
@@ -67,7 +67,6 @@ enum {
 	NetWMStrut,
 	NetWMStrutPartial,
 	NetWMUserTime,
-
 	NetWMStateAttention,
 	NetFrameExtents,
 	NetDesktopViewport,
@@ -213,5 +212,8 @@ extern int bflag;   /* whether to ignore borders when a single window is maximiz
 
 /* configuration */
 extern struct Config config;
+
+/* whether shod is running */
+extern int running;
 
 #endif /* _SHOD_H_ */

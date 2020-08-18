@@ -45,7 +45,7 @@ monitor_alloc(int x, int y, int w, int h)
 }
 
 /* delete monitor and return list of clients on it with append appended */
-static struct Client *
+struct Client *
 monitor_del(struct Monitor *mon, struct Client *append)
 {
 	struct WS *ws;
