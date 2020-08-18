@@ -319,9 +319,7 @@ client_del(struct Client *c, int dofree, int delws)
 				if (ws->focused == c)
 					ws->mon->focused = ws->focused = NULL;
 
-		if (focused == c)
-			client_unfocus(c);
-
+		client_unfocus(c);
 		if (focus)
 			client_focus(focus);
 
