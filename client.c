@@ -247,7 +247,7 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c == NULL)
 		return;
 
-	if (dofree && !(c->state & ISMINIMIZED) && selws == c->ws)
+	if (dofree && !(c->state & ISMINIMIZED) && c->ws->focused == c)
 		focus = client_bestfocus(c);
 
 	if (c->prev) {  /* c is not at the beginning of the list */
@@ -287,26 +287,31 @@ client_del(struct Client *c, int dofree, int delws)
 	 * the calling routine wants client's workspace to be deleted if
 	 * the client was the last client in it
 	 */
-	if (delws && !(c->state & ISMINIMIZED)) {
+	if (delws && c->state & ISBOUND) {
 		struct WS *lastws;
 
 		/* find last workspace */
-		for (lastws = c->mon->ws; lastws->next; lastws = lastws->next)
+		for (lastws = c->ws->mon->ws; lastws->next; lastws = lastws->next)
 			;
 
-		if (c->state & ISBOUND) {
-			c->ws->nclients--;
+		c->ws->nclients--;
 
-			/* only the last ws can have 0 clients */
-			if (c->ws != lastws && c->ws->nclients == 0) {
-				if (ws_isvisible(c->ws))
-					client_gotows(lastws, 0);
-				else
-					c->mon->selws = lastws;
-				ws_del(c->ws);
-				ewmh_setnumberofdesktops();
-				ewmh_setwmdesktop();
+		/* only the last ws can have 0 clients */
+		if (c->ws->nclients == 0) {
+			int changedesk = 0;
+
+			if (ws_isvisible(c->ws)) {
+				c->mon->selws = lastws;
+				if (c->mon == selmon) {
+					selws = lastws;
+					changedesk = 1;
+				}
 			}
+			ws_del(c->ws);
+			ewmh_setnumberofdesktops();
+			ewmh_setwmdesktop();
+			if (changedesk)
+				ewmh_setcurrentdesktop(getwsnum(lastws));
 		}
 	}
 
@@ -388,7 +393,7 @@ client_bestfocus(struct Client *c)
 			for (tmp = focused; tmp; tmp = tmp->fnext) {
 				if (tmp == c)
 					continue;
-				if (tmp->state & ISMAXIMIZED)
+				if (tmp->state & ISMAXIMIZED && tmp->mon == c->mon)
 					break;
 			}
 		}
@@ -584,21 +589,23 @@ client_gotows(struct WS *ws, int wsnum)
 	if (ws == NULL || ws == selws)
 		return;
 
-	/* hide clients of previous current workspace */
-	if (ws->mon->selws) {
-		for (c = ws->mon->selws->floating; c; c = c->next)
-			client_hide(c, 1);
-		for (col = ws->mon->selws->col; col; col = col->next)
-			for (c = col->row; c; c = c->next)
+	if (!ws_isvisible(ws)) {
+		/* hide clients of previous current workspace */
+		if (ws->mon->selws) {
+			for (c = ws->mon->selws->floating; c; c = c->next)
 				client_hide(c, 1);
-	}
+			for (col = ws->mon->selws->col; col; col = col->next)
+				for (c = col->row; c; c = c->next)
+					client_hide(c, 1);
+		}
 
-	/* unhide clients of new current workspace */
-	for (c = ws->floating; c; c = c->next)
-		client_hide(c, 0);
-	for (col = ws->col; col; col = col->next)
-		for (c = col->row; c; c = c->next)
+		/* unhide clients of new current workspace */
+		for (c = ws->floating; c; c = c->next)
 			client_hide(c, 0);
+		for (col = ws->col; col; col = col->next)
+			for (c = col->row; c; c = c->next)
+				client_hide(c, 0);
+	}
 
 	/* if changing focus to a new monitor and the cursor isn't there, warp it */
 	querypointer(&cursorx, &cursory);

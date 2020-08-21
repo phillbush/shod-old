@@ -68,13 +68,7 @@ ws_del(struct WS *ws)
 int
 ws_isvisible(struct WS *ws)
 {
-	struct Monitor *mon;
-
-	for (mon = wm.mon; mon; mon = mon->next)
-		if (ws == mon->ws)
-			return 1;
-
-	return 0;
+	return ws->mon->selws == ws;
 }
 
 /* get a workspace from a desktop index */
