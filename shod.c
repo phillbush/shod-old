@@ -124,6 +124,9 @@ main(int argc, char *argv[])
 	             | SubstructureNotifyMask | PropertyChangeMask
 	             | StructureNotifyMask | ButtonPressMask);
 
+	/* Set focus to root window */
+	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
+
 	/* setup */
 	init_resources();
 	init_colors();
@@ -145,6 +148,7 @@ main(int argc, char *argv[])
 	ewmh_setclients();
 	ewmh_setclientsstacking();
 	ewmh_setwmdesktop();
+	ewmh_setactivewindow(None);
 
 	/* scan existing windows and adopt them */
 	scan();
