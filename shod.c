@@ -142,6 +142,9 @@ main(int argc, char *argv[])
 	ewmh_setcurrentdesktop(0);
 	ewmh_setworkarea();
 	ewmh_setshowingdesktop(0);
+	ewmh_setclients();
+	ewmh_setclientsstacking();
+	ewmh_setwmdesktop();
 
 	/* scan existing windows and adopt them */
 	scan();
