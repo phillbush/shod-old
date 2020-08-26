@@ -174,10 +174,13 @@ xevent_clientmessage(XEvent *e)
 		if (c == NULL)
 			return;
 
-		client_gotows(c->ws, 0);
-		client_focus(c);
-		if (c->state & ISFLOATING)
+		if (c->state & ISMINIMIZED) {
+			client_minimize(c, 0);
+		} else {
+			client_gotows(c->ws, 0);
+			client_focus(c);
 			client_raise(c);
+		}
 	} else if (ev->message_type == netatom[NetCloseWindow]) {
 		if (c == NULL)
 			return;
