@@ -546,12 +546,12 @@ client_fullscreen(struct Client *c, int fullscreen)
 			moveresize(c, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh, NOTINCSIZE);
 		XRaiseWindow(dpy, c->win);
 	} else if (!fullscreen && c->isfullscreen) {
+		c->isfullscreen = 0;
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
 		if (c->state & ISMAXIMIZED)
 			client_tile(c->ws, 0);
 		else if (ISVISIBLE(c))
 			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
-		c->isfullscreen = 0;
 		client_raise(c);
 	}
 }
@@ -1028,7 +1028,7 @@ client_place(struct Client *c, struct WS *ws)
 			}
 			if (k < w)
 				h--;
-			if (w * h >= lw * lh) {
+			if (h > lh && w * h > lw * lh) {
 				lw = w;
 				lh = h;
 				posi = i;
