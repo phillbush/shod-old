@@ -122,6 +122,19 @@ xevent_buttonrelease(XEvent *e)
 	motionaction = NoAction;
 }
 
+#define _NET_WM_MOVERESIZE_SIZE_TOPLEFT      0
+#define _NET_WM_MOVERESIZE_SIZE_TOP          1
+#define _NET_WM_MOVERESIZE_SIZE_TOPRIGHT     2
+#define _NET_WM_MOVERESIZE_SIZE_RIGHT        3
+#define _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT  4
+#define _NET_WM_MOVERESIZE_SIZE_BOTTOM       5
+#define _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT   6
+#define _NET_WM_MOVERESIZE_SIZE_LEFT         7
+#define _NET_WM_MOVERESIZE_MOVE              8   /* movement only */
+#define _NET_WM_MOVERESIZE_SIZE_KEYBOARD     9   /* size via keyboard */
+#define _NET_WM_MOVERESIZE_MOVE_KEYBOARD    10   /* move via keyboard */
+#define _NET_WM_MOVERESIZE_CANCEL           11   /* cancel operation */
+
 /* handle client message event */
 static void
 xevent_clientmessage(XEvent *e)
@@ -224,8 +237,54 @@ xevent_clientmessage(XEvent *e)
 		 * Client-side decorated Gtk3 windows emit this signal when being
 		 * dragged by their GtkHeaderBar
 		 */
+		if (c == NULL)
+			return;
 
-		/* TODO OR IGNORE? */
+		if (ev->data.l[2] == _NET_WM_MOVERESIZE_CANCEL) {
+			XUngrabPointer(dpy, CurrentTime);
+			motionaction = NoAction;
+		} else {
+			Cursor curs = None;
+			Window dw;          /* dummy variable */
+
+			switch (ev->data.l[2]) {
+			case _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT:
+				quadrant = SE;
+				curs = cursor[CursSE];
+				motionaction = Resizing;
+				break;
+			case _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT:
+				quadrant = SW;
+				curs = cursor[CursSW];
+				motionaction = Resizing;
+				break;
+			case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
+				quadrant = NW;
+				curs = cursor[CursNW];
+				motionaction = Resizing;
+				break;
+			case _NET_WM_MOVERESIZE_SIZE_TOPRIGHT:
+				quadrant = NE;
+				curs = cursor[CursNE];
+				motionaction = Resizing;
+				break;
+			case _NET_WM_MOVERESIZE_MOVE:
+				curs = cursor[CursMove];
+				motionaction = Moving;
+				break;
+			default:
+				return;
+			}
+			if (XTranslateCoordinates(dpy, root, c->win,
+			                          ev->data.l[0], ev->data.l[1],
+			                          &motionx, &motiony, &dw) == False) {
+				motionx = 0;
+				motiony = 0;
+			}
+			XGrabPointer(dpy, c->win, False,
+			             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
+			             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+		}
 	}
 }
 
