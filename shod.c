@@ -285,6 +285,8 @@ cleanup(void)
 	for (i = 0; i < CursLast; i++)
 		XFreeCursor(dpy, cursor[i]);
 
+	for (i = 0; i < LayerLast; i++)
+		XDestroyWindow(dpy, layerwin[i]);
 	XDestroyWindow(dpy, wmcheckwin);
 	XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
 }

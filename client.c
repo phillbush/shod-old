@@ -247,7 +247,7 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c == NULL)
 		return;
 
-	if (dofree && !(c->state & ISMINIMIZED) && c->ws->focused == c)
+	if (dofree && c->ws == selws && !(c->state & ISMINIMIZED) && c->ws->focused == c)
 		focus = client_bestfocus(c);
 
 	if (c->prev) {  /* c is not at the beginning of the list */
@@ -288,11 +288,11 @@ client_del(struct Client *c, int dofree, int delws)
 	 * the client was the last client in it
 	 */
 	if (delws && c->state & ISBOUND) {
-		struct WS *lastws;
+		struct WS *ws, *lastws;
 
 		/* find last workspace */
-		for (lastws = c->ws->mon->ws; lastws->next; lastws = lastws->next)
-			;
+		for (ws = c->ws->mon->ws; ws; ws = ws->next)
+			lastws = ws;
 
 		c->ws->nclients--;
 
@@ -393,7 +393,7 @@ client_bestfocus(struct Client *c)
 			for (tmp = focused; tmp; tmp = tmp->fnext) {
 				if (tmp == c)
 					continue;
-				if (tmp->state & ISMAXIMIZED && tmp->mon == c->mon)
+				if (tmp->state & ISMAXIMIZED && tmp->ws == c->ws)
 					break;
 			}
 		}
@@ -589,6 +589,8 @@ client_gotows(struct WS *ws, int wsnum)
 	if (ws == NULL || ws == selws)
 		return;
 
+	client_tile(ws, 0);
+
 	if (!ws_isvisible(ws)) {
 		/* hide clients of previous current workspace */
 		if (ws->mon->selws) {
@@ -682,8 +684,6 @@ client_maximize(struct Client *c, int maximize)
 		client_stick(c, 0);
 
 	if (maximize && !(c->state & ISMAXIMIZED)) {
-		Window wins[2];
-
 		c->layer = 0;
 
 		client_del(c, 0, 0);
@@ -716,10 +716,6 @@ client_maximize(struct Client *c, int maximize)
 		c->next = NULL;
 		c->col = col;
 
-		wins[0] = layerwin[LayerTiled];
-		wins[1] = c->win;
-		XRestackWindows(dpy, wins, 2);
-
 		c->state = ISMAXIMIZED;
 	} else if (!maximize && (c->state & ISMAXIMIZED)) {
 		client_del(c, 0, 0);
@@ -734,13 +730,13 @@ client_maximize(struct Client *c, int maximize)
 
 		/* restore client's border width and stacking order (maximizing may change them) */
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
-		client_raise(c);
 
 		if (ISVISIBLE(c))
 			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
 
 		c->state = ISNORMAL;
 	}
+	client_raise(c);
 	client_tile(c->ws, 1);
 }
 
@@ -1102,10 +1098,12 @@ client_raise(struct Client *c)
 {
 	Window wins[2];
 
-	if (c == NULL)
+	if (c == NULL || c->state & ISMINIMIZED || c->isfullscreen)
 		return;
 
-	if (c->layer < 0)
+	if (c->state & ISMAXIMIZED)
+		wins[0] = layerwin[LayerTiled];
+	else if (c->layer < 0)
 		wins[0] = layerwin[LayerBelow];
 	else if (c->layer > 0)
 		wins[0] = layerwin[LayerAbove];
@@ -1437,6 +1435,9 @@ client_tile(struct WS *ws, int recalc)
 		h = (mon->wh - config.gapinner * (nrow - 1) - config.border_width * 2 * nrow) / nrow;
 		y = mon->wy;
 		for (c = col->row; c; c = c->next) {
+			if (c->isfullscreen)
+				continue;
+
 			/* the last client gets the remaining height */
 			if (!c->next)
 				h = mon->wh + mon->wy - y - 2 * config.border_width;
@@ -1467,7 +1468,7 @@ client_tile(struct WS *ws, int recalc)
 				XSetWindowBorderWidth(dpy, c->win, config.border_width);
 			}
 
-			if (ISVISIBLE(c) && !c->isfullscreen)
+			if (ISVISIBLE(c))
 				moveresize(c, c->mx, c->my, c->mw, c->mh, NOTINCSIZE);
 
 			y += c->mh + config.gapinner + config.border_width * 2;
