@@ -4,13 +4,13 @@ mod1 + Return
 
 # Killing windows
 mod1 + shift + q
-	wmctrl -ic $(pfw)
+	wmctrl -c :ACTIVE:
 
 # Workspace
 mod1 + {1,2,3,4,5,6,7,8,9,0}
 	wmctrl -s {0,1,2,3,4,5,6,7,8,9}
 mod1 + shift + {1,2,3,4,5,6,7,8,9,0}
-	wmctrl -ir $(pfw) -t {0,1,2,3,4,5,6,7,8,9}
+	wmctrl -r :ACITVE: -t {0,1,2,3,4,5,6,7,8,9}
 
 # Resize/move windows
 mod1 + {c, v, shift + c, shift + v}
@@ -20,7 +20,7 @@ mod1 + shift + {h, j, k, l}
 
 # Change window status to sticky/above/below/minimized/fullscreen/maximized
 mod1 + shift + {s, a, b, z, f, m}
-	wmctrl -ir $(pfw) -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
+	wmctrl -r :ACTIVE: -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
 
 # Call the unhide.sh script
 mod1 + shift + u
