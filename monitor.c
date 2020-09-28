@@ -288,7 +288,7 @@ monitor_updatearea(void)
 		mon->dh = mon->mh - top - bottom;
 	}
 
-	if (selmon->selws)
+	if (selmon && selmon->selws)
 		client_tile(selmon->selws, 0);
 	dockapp_redock();
 }
