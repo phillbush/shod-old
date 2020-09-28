@@ -151,7 +151,7 @@ xevent_clientmessage(XEvent *e)
 		if (ev->data.l[0])
 			client_showdesktop(1);
 		else
-			client_focus(selws->focused);
+			client_focus(selmon->selws->focused);
 	} else if (ev->message_type == netatom[NetRequestFrameExtents]) {
 		ewmh_setframeextents(ev->window);
 	} else if (ev->message_type == netatom[NetWMState]) {

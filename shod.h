@@ -231,7 +231,6 @@ extern int screenw, screenh;
 
 /* focused client, selected workspace, selected monitor, etc */
 extern struct Client *focused;
-extern struct WS *selws;
 extern struct Monitor *selmon;
 
 /* clients */

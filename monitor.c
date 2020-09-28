@@ -203,7 +203,7 @@ monitor_update(void)
 
 	if (delselmon) {
 		selmon = wm.mon;
-		selws = selmon->selws;
+		selmon->selws = selmon->selws;
 	}
 
 	c = cmove;
@@ -288,7 +288,7 @@ monitor_updatearea(void)
 		mon->dh = mon->mh - top - bottom;
 	}
 
-	if (selws)
-		client_tile(selws, 0);
+	if (selmon->selws)
+		client_tile(selmon->selws, 0);
 	dockapp_redock();
 }
