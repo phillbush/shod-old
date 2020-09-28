@@ -3,6 +3,7 @@
 #include "ewmh.h"
 #include "monitor.h"
 #include "workspace.h"
+#include "manage.h"
 
 enum MotionAction {NoAction, Moving, Resizing};
 
@@ -57,7 +58,7 @@ xevent_buttonpress(XEvent *e)
 
 	/* initiate motion action */
 	isborder = client_isborder(c, ev->x, ev->y);
-	if ((ev->state == modifier || isborder)
+	if ((ev->state == config.modifier || isborder)
 	    && (ev->button == Button1 || ev->button == Button3)) {
 		Cursor curs = None;
 		if (isborder || ev->button == Button3) {
@@ -81,30 +82,30 @@ xevent_buttonpress(XEvent *e)
 	}
 
 	/* focus client */
-	if (ev->button == Button1 && focusbuttons & 1 << 1)
+	if (ev->button == Button1 && config.focusbuttons & 1 << 1)
 		focus = 1;
-	else if (ev->button == Button2 && focusbuttons & 1 << 2)
+	else if (ev->button == Button2 && config.focusbuttons & 1 << 2)
 		focus = 1;
-	else if (ev->button == Button3 && focusbuttons & 1 << 3)
+	else if (ev->button == Button3 && config.focusbuttons & 1 << 3)
 		focus = 1;
-	else if (ev->button == Button4 && focusbuttons & 1 << 4)
+	else if (ev->button == Button4 && config.focusbuttons & 1 << 4)
 		focus = 1;
-	else if (ev->button == Button5 && focusbuttons & 1 << 5)
+	else if (ev->button == Button5 && config.focusbuttons & 1 << 5)
 		focus = 1;
 	if (focus) {
 		client_focus(c);
 	}
 
 	/* raise client */
-	if (ev->button == Button1 && raisebuttons & 1 << 1)
+	if (ev->button == Button1 && config.raisebuttons & 1 << 1)
 		focus = 1;
-	else if (ev->button == Button2 && raisebuttons & 1 << 2)
+	else if (ev->button == Button2 && config.raisebuttons & 1 << 2)
 		focus = 1;
-	else if (ev->button == Button3 && raisebuttons & 1 << 3)
+	else if (ev->button == Button3 && config.raisebuttons & 1 << 3)
 		focus = 1;
-	else if (ev->button == Button4 && raisebuttons & 1 << 4)
+	else if (ev->button == Button4 && config.raisebuttons & 1 << 4)
 		focus = 1;
-	else if (ev->button == Button5 && raisebuttons & 1 << 5)
+	else if (ev->button == Button5 && config.raisebuttons & 1 << 5)
 		focus = 1;
 	if (focus && c->state & ISFLOATING)
 		client_raise(c);
@@ -330,16 +331,8 @@ static void
 xevent_destroynotify(XEvent *e)
 {
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
-	struct Client *c;
-	struct Dock *d;
 
-	if ((c = getclient(ev->window)) == NULL) {
-		if ((d = getdock(ev->window)))
-			dock_del(d);
-		return;
-	}
-
-	client_del(c, 1, 1);
+	unmanage(ev->window);
 }
 
 /* focus window when cursor enter it, if fflag is set */
@@ -348,7 +341,7 @@ xevent_enternotify(XEvent *e)
 {
 	struct Client *c;
 
-	if (focusbuttons)
+	if (config.focusbuttons)
 		return;
 
 	while(XCheckTypedEvent(dpy, EnterNotify, e))
@@ -374,14 +367,8 @@ static void
 xevent_maprequest(XEvent *e)
 {
 	XMapRequestEvent *ev = &e->xmaprequest;
-	XWindowAttributes wa;
 
-	if (!XGetWindowAttributes(dpy, ev->window, &wa))
-		return;
-	if (wa.override_redirect)
-		return;
-
-	client_add(ev->window, &wa);
+	manage(ev->window);
 }
 
 /* run moving/resizing action */
@@ -433,16 +420,8 @@ static void
 xevent_unmapnotify(XEvent *e)
 {
 	XUnmapEvent *ev = &e->xunmap;
-	struct Client *c;
-	struct Dock *d;
 
-	if ((c = getclient(ev->window)) == NULL) {
-		if ((d = getdock(ev->window)))
-			dock_del(d);
-		return;
-	}
-
-	client_del(c, 1, 1);
+	unmanage(ev->window);
 }
 
 /* the main event loop */
@@ -451,6 +430,8 @@ xevent_run(void)
 {
 	XEvent ev;
 
+	XMoveWindow(dpy, focuswin, -1, 0);
+	XMapWindow(dpy, focuswin);
 	while (running && !XNextEvent(dpy, &ev))
 		if (xevents[ev.type])
 			xevents[ev.type](&ev);

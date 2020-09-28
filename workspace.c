@@ -30,7 +30,7 @@ ws_add(struct Monitor *mon)
 	struct WS *ws, *lastws;
 
 	ws = ws_alloc();
-	wscount++;
+	wm.wscount++;
 
 	for (lastws = mon->ws; lastws && lastws->next; lastws = lastws->next)
 		;
@@ -59,7 +59,7 @@ ws_del(struct WS *ws)
 	if (ws->next)
 		ws->next->prev = ws->prev;
 
-	wscount--;
+	wm.wscount--;
 
 	free(ws);
 }
@@ -78,7 +78,7 @@ getws(long desk)
 	struct Monitor *mon;
 	struct WS *ws;
 
-	if (desk < 0 || desk >= wscount)
+	if (desk < 0 || desk >= wm.wscount)
 		return NULL;
 
 	for (mon = wm.mon; mon; mon = mon->next) {

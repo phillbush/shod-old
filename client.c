@@ -6,6 +6,7 @@
 #include "winlist.h"
 #include "workspace.h"
 #include "ewmh.h"
+#include "util.h"
 
 #define DIV 15      /* number to divide the screen into grids */
 
@@ -17,8 +18,6 @@
 /* function declarations */
 static void applyaspectsize(struct Client *c);
 static void applyincsize(struct Client *c, int *w, int *h);
-static unsigned long *getcardinalprop(Window win, Atom atom, unsigned long size);
-static Atom getatomprop(Window win, Atom prop);
 static struct Column *colalloc(struct Column *prev, struct Column *next, struct Client *c);
 static void colfree(struct Column *col);
 static void moveresize(struct Client *c, int x, int y, int w, int h, int incsize);
@@ -27,20 +26,6 @@ static long setsizehints(struct Client *c);
 
 /* global variables */
 static int showingdesk = 0;     /* whether the wm is showing the desktop */
-
-/* get which monitor a given coordinate is in */
-struct Monitor *
-getmon(int x, int y)
-{
-	struct Monitor *mon;
-
-	for (mon = wm.mon; mon; mon = mon->next)
-		if (x >= mon->mx && x <= mon->mx + mon->mw &&
-		    y >= mon->my && y <= mon->my + mon->mh)
-			return mon;
-
-	return NULL;
-}
 
 /* get client given a window */
 struct Client *
@@ -80,113 +65,14 @@ getclient(Window w)
 	return NULL;
 }
 
-/* get dock given a window */
-struct Dock *
-getdock(Window win)
-{
-	struct Dock *d;
-
-	for (d = docks; d; d = d->next)
-		if (d->win == win)
-			return d;
-	return NULL;
-}
-
-/* adopt a dock (aka panel or bar) */
-void
-dock_add(Window win)
-{
-	unsigned long *values;
-	struct Dock *d;
-
-	if ((d = malloc(sizeof *d)) == NULL)
-		err(1, "malloc");
-
-	d->left = 0;
-	d->right = 0;
-	d->top = 0;
-	d->bottom = 0;
-
-	/* get the space the dock reserves for itself on screen edges */
-	if ((values = getcardinalprop(win, netatom[NetWMStrut], 4)) != NULL) {
-		d->left = values[0];
-		d->right = values[1];
-		d->top = values[2];
-		d->bottom = values[3];
-		XFree(values);
-	}
-
-	if (docks == NULL) {
-		d->prev = NULL;
-		docks = d;
-	} else {
-		struct Dock *lastdock;
-
-		for (lastdock = docks; lastdock->next; lastdock = lastdock->next)
-			;
-		d->prev = lastdock;
-		lastdock->next = d;
-	}
-	d->next = NULL;
-
-	d->win = win;
-
-	XSelectInput(dpy, d->win, EnterWindowMask | StructureNotifyMask
-	             | PropertyChangeMask | FocusChangeMask);
-	XGrabButton(dpy, Button1, AnyModifier, win, False, ButtonPressMask,
-	            GrabModeSync, GrabModeSync, None, None);
-
-	XMapWindow(dpy, d->win);
-
-	dock_updategaps();
-}
-
-/* delete a dock */
-void
-dock_del(struct Dock *d)
-{
-	if (d == NULL)
-		return;
-
-	if (d->prev)    /* d is not at the beginning of the list */
-		d->prev->next = d->next;
-	else            /* d is at the beginning of the list */
-		docks = d->next;
-	if (d->next)
-		d->next->prev = d->prev;
-	free(d);
-
-	dock_updategaps();
-}
-
 /* adopt a client */
 void
 client_add(Window win, XWindowAttributes *wa)
 {
 	struct Client *c;
-	Atom prop;
 	long flags;
 	int focus = 1;
 	unsigned long *values;
-
-	/* check whether window is a dock, toolbar, menu, etc */
-	if ((prop = getatomprop(win, netatom[NetWMWindowType])) != None) {
-		if (prop == netatom[NetWMWindowTypeToolbar] ||
-			prop == netatom[NetWMWindowTypeUtility] ||
-			prop == netatom[NetWMWindowTypeMenu]) {
-			XMapWindow(dpy, win);
-			return;
-		}
-		if (prop == netatom[NetWMWindowTypeDesktop]) {
-			XMapWindow(dpy, win);
-			XLowerWindow(dpy, win);
-			return;
-		}
-		if (prop == netatom[NetWMWindowTypeDock]) {
-			dock_add(win);
-			return;
-		}
-	}
 
 	if ((c = malloc(sizeof *c)) == NULL)
 		err(1, "malloc");
@@ -241,14 +127,17 @@ client_add(Window win, XWindowAttributes *wa)
 void
 client_del(struct Client *c, int dofree, int delws)
 {
-	struct Client *focus = NULL;
 	struct Column *col;
+	struct Client *bestfocus = NULL;
+	int focus = 0;
 
 	if (c == NULL)
 		return;
 
-	if (dofree && c->ws == selws && !(c->state & ISMINIMIZED) && c->ws->focused == c)
-		focus = client_bestfocus(c);
+	if (dofree && !(c->state & ISMINIMIZED) && focused == c) {
+		bestfocus = client_bestfocus(c);
+		focus = 1;
+	}
 
 	if (c->prev) {  /* c is not at the beginning of the list */
 		c->prev->next = c->next;
@@ -309,7 +198,6 @@ client_del(struct Client *c, int dofree, int delws)
 			}
 			ws_del(c->ws);
 			ewmh_setnumberofdesktops();
-			ewmh_setwmdesktop();
 			if (changedesk)
 				ewmh_setcurrentdesktop(getwsnum(lastws));
 		}
@@ -326,11 +214,12 @@ client_del(struct Client *c, int dofree, int delws)
 
 		client_unfocus(c);
 		if (focus)
-			client_focus(focus);
+			client_focus(bestfocus);
 
 		winlist_del(c->win);
 		ewmh_setclients();
 		ewmh_setclientsstacking();
+		ewmh_setwmdesktop();
 		free(c);
 	}
 }
@@ -355,17 +244,8 @@ client_below(struct Client *c, int below)
 	if (c == NULL || c->state & ISMAXIMIZED || c->isfullscreen)
 		return;
 
-	if (below) {
-		c->layer = -1;
-		client_raise(c);
-	} else {
-		Window wins[2];
-		c->layer = 0;
-
-		wins[0] = layerwin[LayerBottom];
-		wins[1] = c->win;
-		XRestackWindows(dpy, wins, 2);
-	}
+	c->layer = (below) ? -1 : 0;
+	client_raise(c);
 }
 
 /* find the best client to focus after deleting c */
@@ -481,7 +361,7 @@ client_focus(struct Client *c)
 		client_showdesktop(0);
 
 	if (c == NULL || c->state & ISMINIMIZED) {
-		XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
+		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmh_setactivewindow(None);
 		return;
 	}
@@ -744,8 +624,13 @@ client_maximize(struct Client *c, int maximize)
 void
 client_minimize(struct Client *c, int minimize)
 {
+	int focus = 0;
+
 	if (c == NULL)
 		return;
+
+	if (selmon->selws == c->ws)
+		focus = 1;
 
 	if (c->state & ISMAXIMIZED)
 		client_maximize(c, 0);
@@ -761,13 +646,14 @@ client_minimize(struct Client *c, int minimize)
 		/* focus another window */
 		if (c->ws) {
 			c->mon->focused = c->ws->focused = client_bestfocus(c);
-			if (selws == c->ws)
+			if (focus)
 				client_focus(c->ws->focused);
 		}
 
 		c->ws = NULL;
 		c->mon = NULL;
 		c->state = ISMINIMIZED;
+		ewmh_setwmdesktop();
 	} else if (!minimize && (c->state & ISMINIMIZED)) {
 		client_del(c, 0, 0);
 		c->state = ISNORMAL;
@@ -1111,7 +997,7 @@ client_raise(struct Client *c)
 		wins[0] = layerwin[LayerTop];
 
 	wins[1] = c->win;
-	XRestackWindows(dpy, wins, 2);
+	XRestackWindows(dpy, wins, sizeof wins);
 }
 
 /* resize client x and y pixels out of quadrant q */
@@ -1242,9 +1128,13 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 	//struct Monitor *mon;
 	struct WS *lastws;
 	int createnewws = 0;    /* whether to create a new workspace */
+	int focus = 0;
 
 	if (c == NULL || ws == NULL || (c->state & ISFREE))
 		return;
+
+	if (focused == c)
+		focus = 1;
 
 	/* find last workspace in this monitor */
 	for (lastws = ws->mon->ws; lastws->next; lastws = lastws->next)
@@ -1276,11 +1166,13 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 		ws->floating->prev = c;
 	c->next = ws->floating;
 	c->prev = NULL;
-	ws->floating = c;
 
+	ws->floating = c;
 	if (ws->nclients == 0)
 		createnewws = 1;
 	ws->nclients++;
+	if (focus)
+		ws->focused = c;
 
 	c->ws = ws;
 	c->mon = ws->mon;
@@ -1348,6 +1240,8 @@ client_showdesktop(int n)
 void
 client_stick(struct Client *c, int stick)
 {
+	struct WS *ws;
+
 	if (c == NULL || (c->state & (ISMINIMIZED)))
 		return;
 
@@ -1364,6 +1258,10 @@ client_stick(struct Client *c, int stick)
 		c->state = ISSTICKY;
 		c->prev = NULL;
 		c->ws = NULL;
+		if (focused == c)
+			for (ws = c->mon->ws; ws; ws = ws->next)
+				ws->focused = c;
+		ewmh_setwmdesktop();
 	} else if (!stick && (c->state & ISSTICKY)) {
 		struct WS *ws;
 
@@ -1461,8 +1359,8 @@ client_tile(struct WS *ws, int recalc)
 				if (gflag) {
 					c->mx = mon->dx;
 					c->my = mon->dy;
-					c->mw = mon->dw;
-					c->mh = mon->dh;
+					c->mw = mon->dw - ((!bflag) ? 2 * config.border_width : 0);
+					c->mh = mon->dh - ((!bflag) ? 2 * config.border_width : 0);
 				}
 			} else {
 				XSetWindowBorderWidth(dpy, c->win, config.border_width);
@@ -1488,43 +1386,6 @@ client_unfocus(struct Client *c)
 		c->fnext->fprev = c->fprev;
 	if (c->fprev)
 		c->fprev->fnext = c->fnext;
-}
-
-/* update the gaps of the monitor */
-void
-dock_updategaps(void)
-{
-	struct Monitor *mon;
-	struct Dock *d;
-	int left, right, top, bottom;
-
-	left = right = top = bottom = 0;
-
-	for (d = docks; d; d = d->next) {
-		if (d->left > left)
-			left = d->left;
-		if (d->right > right)
-			right = d->right;
-		if (d->top > top)
-			top = d->top;
-		if (d->bottom > bottom)
-			bottom = d->bottom;
-	}
-
-	for (mon = wm.mon; mon; mon = mon->next) {
-		mon->wx = mon->mx + (left + config.gapleft);
-		mon->ww = mon->mw - (left + config.gapleft) - (right + config.gapright);
-		mon->wy = mon->my + (top + config.gaptop);
-		mon->wh = mon->mh - (top + config.gaptop) - (bottom + config.gapbottom);
-
-		mon->dx = mon->mx + left;
-		mon->dw = mon->mw - left - right;
-		mon->dy = mon->my + top;
-		mon->dh = mon->mh - top - bottom;
-	}
-
-	if (selws)
-		client_tile(selws, 0);
 }
 
 /* apply size hints for unmaximized window */
@@ -1567,44 +1428,6 @@ applyincsize(struct Client *c, int *w, int *h)
 		*h *= c->inch;
 		*h += c->baseh;
 	}
-}
-
-/* return an array of a cardinal property, we have to free it after using */
-static unsigned long *
-getcardinalprop(Window win, Atom atom, unsigned long size)
-{
-	unsigned char *prop_ret = NULL;
-	unsigned long *values = NULL;
-	Atom da;            /* dummy */
-	int di;             /* dummy */
-	unsigned long dl;   /* dummy */
-	int status; 
-
-	status = XGetWindowProperty(dpy, win, atom, 0, size, False,
-	                            XA_CARDINAL, &da, &di, &dl, &dl,
-	                            (unsigned char **)&prop_ret);
-
-	if (status == Success && prop_ret)
-		values = (unsigned long *)prop_ret;
-
-	return values;
-}
-
-/* return an atom of a atom property */
-static Atom
-getatomprop(Window win, Atom prop)
-{
-	int di;
-	unsigned long dl;
-	unsigned char *p = NULL;
-	Atom da, atom = None;
-
-	if (XGetWindowProperty(dpy, win, prop, 0L, sizeof atom, False, XA_ATOM,
-	                       &da, &di, &dl, &dl, &p) == Success && p) {
-		atom = *(Atom *)p;
-		XFree(p);
-	}
-	return atom;
 }
 
 /* create a column */

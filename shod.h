@@ -85,6 +85,7 @@ enum {
 /* window layers */
 enum {
 	LayerDesktop,
+	LayerDockapps,
 	LayerTiled,
 	LayerBelow,
 	LayerBottom,
@@ -96,6 +97,12 @@ enum {
 /* cursor types */
 enum {CursMove, CursNW, CursNE, CursSW, CursSE, CursLast};
 
+/* dock positions */
+enum {DockTop, DockBottom, DockLeft, DockRight};
+
+/* dock mode */
+enum {DockBelow, DockAside};
+
 /* configuration structure */
 struct Config {
 	const char *urgent_color;
@@ -106,14 +113,21 @@ struct Config {
 	unsigned long focused;
 	unsigned long unfocused;
 
+	unsigned int modifier;
+	unsigned int focusbuttons;
+	unsigned int raisebuttons;
+
 	int gapinner, gaptop, gapbottom, gapleft, gapright;
 	int border_width;
 };
 
 /* contains a list of monitors and of minimized clients */
 struct WM {
-	struct Monitor *mon;        /* growable array of monitors */
-	struct Client *minimized;   /* list of minimized clients */
+	struct Monitor *mon;            /* growable array of monitors */
+	struct Client *minimized;       /* list of minimized clients */
+
+	int moncount;                   /* number of connected monitors */
+	int wscount;                    /* number of workspaces in each monitor */
 };
 
 /* contains a list of workspaces and of sticky clients*/
@@ -123,9 +137,10 @@ struct Monitor {
 	struct WS *selws;
 	struct Client *sticky;
 	struct Client *focused;
-    int mx, my, mw, mh;         /* Actual monitor size */
-    int wx, wy, ww, wh;         /* Logical size, i.e. where we can place windows */
-    int dx, dy, dw, dh;         /* dockless size, for maximized windows */
+	int mx, my, mw, mh;         /* Actual monitor size */
+	int wx, wy, ww, wh;         /* Size considering gaps, panels and docks */
+	int dx, dy, dw, dh;         /* Size considering panels and docks */
+	int bl, br, bt, bb;         /* Size of bar on left, right, top and bottom */
 };
 
 /* contains a list of columns and of floating clients */
@@ -165,34 +180,54 @@ struct Client {
 	Window win;
 };
 
-/* dock client structure */
-struct Dock {
-	struct Dock *prev, *next;
+/* panel client structure */
+struct Panel {
+	struct Panel *prev, *next;
 	struct Monitor *mon;
 	Window win;
 	int left, right, top, bottom;
 };
 
+/* dockapp client structure */
+struct Dockapp {
+	struct Dockapp *prev, *next;
+	Window parent;
+	Window win;
+	int w, h;
+	unsigned pos;
+};
+
+/* dock whither dockapps are mapped */
+struct Dock {
+	char *xpmfile;
+	Pixmap xpm;
+
+	char **dockapps;
+	size_t ndockapps;
+
+	int mode;
+	int position;
+	int orientation;
+	int size;
+	int gapsides;
+	int gapback;
+
+	struct Dockapp *beg;
+	struct Dockapp *end;
+};
+
 /* X stuff */
 extern Display *dpy;
 extern Window root, wmcheckwin;
-extern int (*xerrorxlib)(Display *, XErrorEvent *);
-extern int screen;
-extern int screenw, screenh;
 extern Cursor cursor[CursLast];
-
-/* mouse buttons and modifiers that control windows */
-extern unsigned int modifier;
-extern unsigned int focusbuttons;
-extern unsigned int raisebuttons;
-
-/* atoms */
 extern Atom utf8string;
 extern Atom wmatom[WMLast];
 extern Atom netatom[NetLast];
-
-/* dummy windows used to restack clients */
 extern Window layerwin[LayerLast];
+extern Window focuswin;
+extern int (*xerrorxlib)(Display *, XErrorEvent *);
+extern int screen;
+extern int screenw, screenh;
 
 /* focused client, selected workspace, selected monitor, etc */
 extern struct Client *focused;
@@ -200,15 +235,16 @@ extern struct WS *selws;
 extern struct Monitor *selmon;
 
 /* clients */
-extern struct Dock *docks;
+extern struct Panel *panels;
 extern struct WM wm;
 
-/* counters (number of monitors, workspaces, etc) */
-extern int moncount, wscount;
+/* The dock */
+extern struct Dock dock;
 
-/* flags */
+/* flags and arguments */
 extern int gflag;   /* whether to ignore outer gaps when a single window is maximized */
 extern int bflag;   /* whether to ignore borders when a single window is maximized */
+extern char *darg;  /* string of dockapps to be ordered in the dock */
 
 /* configuration */
 extern struct Config config;

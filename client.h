@@ -13,15 +13,15 @@ enum Quadrant {NW, NE, SW, SE};
 /* get which monitor a given coordinate is in */
 struct Monitor *getmon(int x, int y);
 
-/* These functions get a client or dock from a given window */
+/* These functions get a client or panel from a given window */
 struct Client *getclient(Window w);
-struct Dock *getdock(Window win);
+struct Panel *getpanel(Window win);
 
-/* add or delete client/dock */
-void dock_add(Window win);
+/* add or delete client/panel */
+void panel_add(Window win);
 void client_add(Window w, XWindowAttributes *wa);
 void client_del(struct Client *c, int free, int delws);
-void dock_del(struct Dock *d);
+void panel_del(struct Panel *d);
 
 /* operations on clients */
 void client_above(struct Client *c, int above);
@@ -50,7 +50,7 @@ void client_showdesktop(int n);
 void client_tile(struct WS *ws, int recalc);
 void client_unfocus(struct Client *c);
 
-/* operations on docks */
-void dock_updategaps(void);
+/* operations on panels */
+void panel_updategaps(void);
 
 #endif /* _CLIENT_H_ */

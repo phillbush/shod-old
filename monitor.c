@@ -5,6 +5,7 @@
 #include "shod.h"
 #include "monitor.h"
 #include "client.h"
+#include "dockapp.h"
 #include "workspace.h"
 
 static int
@@ -160,7 +161,7 @@ monitor_update(void)
 		if (monitor_isuniquegeom(unique, j, &info[i]))
 			memcpy(&unique[j++], &info[i], sizeof *unique);
 	XFree(info);
-	moncount = j;
+	wm.moncount = j;
 
 	/* look for monitors that do not exist anymore and delete them */
 	mon = wm.mon;
@@ -170,7 +171,7 @@ monitor_update(void)
 		int del;
 
 		del = 1;
-		for (i = 0; i < moncount; i++) {
+		for (i = 0; i < wm.moncount; i++) {
 			if (unique[i].x_org == mon->mx && unique[i].y_org == mon->my &&
 			    unique[i].width == mon->mw && unique[i].height == mon->mh) {
 			    del = 0;
@@ -187,7 +188,7 @@ monitor_update(void)
 	}
 
 	/* look for new monitors and add them */
-	for (i = 0; i < moncount; i++) {
+	for (i = 0; i < wm.moncount; i++) {
 		int add = 1;
 		for (mon = wm.mon; mon; mon = mon->next) {
 			if (unique[i].x_org == mon->mx && unique[i].y_org == mon->my &&
@@ -218,7 +219,76 @@ monitor_update(void)
 		c = tmp;
 	}
 
-	dock_updategaps();
+	monitor_updatearea();
+
+	dockapp_redock();
 
 	free(unique);
+}
+
+/* update the gaps and usable area of the monitors */
+void
+monitor_updatearea(void)
+{
+	struct Monitor *mon;
+	struct Panel *p;
+	int left, right, top, bottom;
+	int pleft, pright, ptop, pbottom;
+	int dleft, dright, dtop, dbottom;
+
+	dleft = dright = dtop = dbottom = 0;
+	pleft = pright = ptop = pbottom = 0;
+
+	for (p = panels; p; p = p->next) {
+		if (p->left > pleft)
+			pleft = p->left;
+		if (p->right > pright)
+			pright = p->right;
+		if (p->top > ptop)
+			ptop = p->top;
+		if (p->bottom > pbottom)
+			pbottom = p->bottom;
+	}
+	if (dock.mode != DockBelow) {
+		switch (dock.position) {
+		case DockTop:
+			dtop = dock.size;
+			break;
+		case DockBottom:
+			dbottom = dock.size;
+			break;
+		case DockLeft:
+			dleft = dock.size;
+			break;
+		case DockRight:
+			dright = dock.size;
+			break;
+		}
+	}
+
+	for (mon = wm.mon; mon; mon = mon->next) {
+		mon->bl = pleft;
+		mon->br = pright;
+		mon->bt = ptop;
+		mon->bb = pbottom;
+
+		top = ptop + ((mon == wm.mon) ? dtop : 0);
+		bottom = pbottom + ((mon == wm.mon) ? dbottom : 0);
+		left = pleft + ((mon == wm.mon) ? dleft : 0);
+		right = pright + ((mon == wm.mon) ? dright : 0);
+
+		mon->wx = mon->mx + (left + config.gapleft);
+		mon->ww = mon->mw - (left + config.gapleft) - (right + config.gapright);
+		mon->wy = mon->my + (top + config.gaptop);
+		mon->wh = mon->mh - (top + config.gaptop) - (bottom + config.gapbottom);
+
+		mon->dx = mon->mx + left;
+		mon->dw = mon->mw - left - right;
+		mon->dy = mon->my + top;
+		mon->dh = mon->mh - top - bottom;
+	}
+
+	if (selws)
+		client_tile(selws, 0);
+	dockapp_redock();
 }

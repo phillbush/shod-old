@@ -1,6 +1,8 @@
 include config.mk
 
-SRCS = ${PROG}.c init.c monitor.c workspace.c ewmh.c winlist.c client.c scan.c xevent.c
+SRCS = ${PROG}.c monitor.c workspace.c ewmh.c \
+       manage.c client.c panel.c dockapp.c desktop.c \
+       menu.c xevent.c winlist.c util.c
 OBJS = ${SRCS:.c=.o}
 
 all: ${PROG}
@@ -8,16 +10,20 @@ all: ${PROG}
 ${PROG}: ${OBJS}
 	${CC} -o $@ ${OBJS} ${LDFLAGS}
 
-${OBJS}: shod.h
-shod.o: init.h monitor.h ewmh.h config.h xevent.h
-init.o: init.h
-scan.o: scan.h client.h
-xevent.o: xevent.h client.h ewmh.h monitor.h workspace.h
-monitor.o: monitor.h workspace.h client.h
-client.o: client.h winlist.h ewmh.h
+${OBJS}: shod.h config.h
+shod.o: monitor.h ewmh.h config.h xevent.h
+xevent.o: xevent.h client.h ewmh.h monitor.h workspace.h manage.h
+manage.o: manage.h client.h panel.h dockapp.h desktop.h menu.h
+panel.o: panel.h util.h monitor.h
+monitor.o: monitor.h workspace.h client.h dockapp.h
+client.o: client.h winlist.h ewmh.h util.h
+dockapp.o: dockapp.h
+desktop.o: desktop.h
+menu.o: menu.h
 ewmh.o: ewmh.h winlist.h
 workspace.o: workspace.h ewmh.h client.h
 winlist.o: winlist.h
+util.o: util.h
 
 .c.o:
 	${CC} ${CFLAGS} -c $<

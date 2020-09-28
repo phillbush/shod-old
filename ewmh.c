@@ -49,13 +49,13 @@ ewmh_setnumberofdesktops(void)
 {
     XChangeProperty(dpy, root, netatom[NetNumberOfDesktops],
                     XA_CARDINAL, 32, PropModeReplace,
-                    (unsigned char *)&wscount, 1);
+                    (unsigned char *)&wm.wscount, 1);
 }
 
 void
 ewmh_setcurrentdesktop(int wsnum)
 {
-	if (wsnum < 0 || wsnum >= wscount)
+	if (wsnum < 0 || wsnum >= wm.wscount)
 		return;
 
 	XChangeProperty(dpy, root, netatom[NetCurrentDesktop],
