@@ -181,7 +181,7 @@ monitor_update(void)
 		tmp = mon;
 		mon = mon->next;
 		if (del) {
-			if (tmp == selmon)
+			if (tmp == wm.selmon)
 				delselmon = 1;
 			cmove = monitor_del(tmp, cmove);
 		}
@@ -202,8 +202,8 @@ monitor_update(void)
 	}
 
 	if (delselmon) {
-		selmon = wm.mon;
-		selmon->selws = selmon->selws;
+		wm.selmon = wm.mon;
+		wm.selmon->selws = wm.selmon->selws;
 	}
 
 	c = cmove;
@@ -215,7 +215,7 @@ monitor_update(void)
 		c->col = NULL;
 		c->state = ISNORMAL;
 		c->layer = 0;
-		client_sendtows(c, selmon->selws, 1, 1, 0);
+		client_sendtows(c, wm.selmon->selws, 1, 1, 0);
 		c = tmp;
 	}
 
@@ -288,7 +288,7 @@ monitor_updatearea(void)
 		mon->dh = mon->mh - top - bottom;
 	}
 
-	if (selmon && selmon->selws)
-		client_tile(selmon->selws, 0);
+	if (wm.selmon && wm.selmon->selws)
+		client_tile(wm.selmon->selws, 0);
 	dockapp_redock();
 }

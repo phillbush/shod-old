@@ -39,7 +39,6 @@ int screenw, screenh;
 
 /* focused client, selected workspace, selected monitor, etc */
 struct Client *focused;
-struct Monitor *selmon;
 
 /* clients */
 struct Panel *panels;
@@ -480,8 +479,8 @@ main(int argc, char *argv[])
 
 	/* initialize wm structure with a list of monitors */
 	monitor_update();
-	selmon = wm.mon;
-	selmon->selws = wm.mon->ws;
+	wm.selmon = wm.mon;
+	wm.selmon->selws = wm.mon->ws;
 
 	ewmh_init();
 	ewmh_setnumberofdesktops();

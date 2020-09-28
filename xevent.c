@@ -151,7 +151,7 @@ xevent_clientmessage(XEvent *e)
 		if (ev->data.l[0])
 			client_showdesktop(1);
 		else
-			client_focus(selmon->selws->focused);
+			client_focus(wm.selmon->selws->focused);
 	} else if (ev->message_type == netatom[NetRequestFrameExtents]) {
 		ewmh_setframeextents(ev->window);
 	} else if (ev->message_type == netatom[NetWMState]) {
@@ -356,10 +356,10 @@ xevent_focusin(XEvent *e)
 {
 	XFocusChangeEvent *ev = &e->xfocus;
 
-	if (selmon->focused && (selmon->focused->win != ev->window
+	if (wm.selmon->focused && (wm.selmon->focused->win != ev->window
 	                    || ev->detail == NotifyPointer
 	                    || ev->detail == NotifyPointerRoot))
-		client_focus(selmon->focused);
+		client_focus(wm.selmon->focused);
 }
 
 /* handle map request event */

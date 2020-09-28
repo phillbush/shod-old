@@ -115,11 +115,11 @@ client_add(Window win, XWindowAttributes *wa)
 	ewmh_setclients();
 	ewmh_setclientsstacking();
 
-	client_sendtows(c, selmon->selws, 1, 1, 0);
+	client_sendtows(c, wm.selmon->selws, 1, 1, 0);
 
 	XMapWindow(dpy, c->win);
 	/* we don't want a client to steal focus when in fullscreen */
-	if (focus && (selmon->selws->focused == NULL || !(selmon->selws->focused->isfullscreen)))
+	if (focus && (wm.selmon->selws->focused == NULL || !(wm.selmon->selws->focused->isfullscreen)))
 		client_focus(c);
 }
 
@@ -169,7 +169,7 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c->next)
 		c->next->prev = c->prev;
 
-	if (c->state & ISMAXIMIZED && c->ws == selmon->selws)
+	if (c->state & ISMAXIMIZED && c->ws == wm.selmon->selws)
 		client_tile(c->ws, 1);
 
 	/*
@@ -191,8 +191,8 @@ client_del(struct Client *c, int dofree, int delws)
 
 			if (ws_isvisible(c->ws)) {
 				c->mon->selws = lastws;
-				if (c->mon == selmon) {
-					selmon->selws = lastws;
+				if (c->mon == wm.selmon) {
+					wm.selmon->selws = lastws;
 					changedesk = 1;
 				}
 			}
@@ -369,12 +369,12 @@ client_focus(struct Client *c)
 	client_setborder(focused, config.unfocused);
 
 	prevfocused = focused;
-	selmon = c->mon;
-	selmon->focused = c;
+	wm.selmon = c->mon;
+	wm.selmon->focused = c;
 	if (c->state & ISBOUND) {
-		selmon->selws = c->ws;
-		selmon->selws->focused = c;
-		selmon->selws = c->ws;
+		wm.selmon->selws = c->ws;
+		wm.selmon->selws->focused = c;
+		wm.selmon->selws = c->ws;
 	}
 	client_unfocus(c);
 	c->fnext = focused;
@@ -466,7 +466,7 @@ client_gotows(struct WS *ws, int wsnum)
 	else
 		wsnum = getwsnum(ws);
 
-	if (ws == NULL || ws == selmon->selws)
+	if (ws == NULL || ws == wm.selmon->selws)
 		return;
 
 	client_tile(ws, 0);
@@ -491,15 +491,15 @@ client_gotows(struct WS *ws, int wsnum)
 
 	/* if changing focus to a new monitor and the cursor isn't there, warp it */
 	querypointer(&cursorx, &cursory);
-	if (ws->mon != selmon && ws->mon != getmon(cursorx, cursory))
+	if (ws->mon != wm.selmon && ws->mon != getmon(cursorx, cursory))
 		XWarpPointer(dpy, None, root, 0, 0, 0, 0,
 		             ws->mon->mx + ws->mon->mw/2,
 		             ws->mon->my + ws->mon->mh/2);
 
 	/* update current workspace */
-	selmon->selws = ws;
-	selmon = ws->mon;
-	selmon->selws = ws;
+	wm.selmon->selws = ws;
+	wm.selmon = ws->mon;
+	wm.selmon->selws = ws;
 	ewmh_setcurrentdesktop(wsnum);
 
 	/* find which client to focus on the new current workspace */
@@ -629,7 +629,7 @@ client_minimize(struct Client *c, int minimize)
 	if (c == NULL)
 		return;
 
-	if (selmon->selws == c->ws)
+	if (wm.selmon->selws == c->ws)
 		focus = 1;
 
 	if (c->state & ISMAXIMIZED)
@@ -657,8 +657,8 @@ client_minimize(struct Client *c, int minimize)
 	} else if (!minimize && (c->state & ISMINIMIZED)) {
 		client_del(c, 0, 0);
 		c->state = ISNORMAL;
-		client_place(c, selmon->selws);
-		client_sendtows(c, selmon->selws, 1, 1, 0);
+		client_place(c, wm.selmon->selws);
+		client_sendtows(c, wm.selmon->selws, 1, 1, 0);
 
 		client_focus(c);
 		client_raise(c);
@@ -1152,7 +1152,7 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 
 		if (!move) {
 			c->mon->focused = c->ws->focused = client_bestfocus(c);
-			if (selmon->selws == c->ws) {
+			if (wm.selmon->selws == c->ws) {
 				client_hide(c, 1);
 				client_focus(c->ws->focused);
 			}
@@ -1214,21 +1214,21 @@ client_showdesktop(int n)
 	showingdesk = n;
 
 	if (n) {    /* show desktop */
-		for (c = selmon->sticky; c; c = c->next)
+		for (c = wm.selmon->sticky; c; c = c->next)
 			client_hide(c, 1);
-		for (c = selmon->selws->floating; c; c = c->next)
+		for (c = wm.selmon->selws->floating; c; c = c->next)
 			client_hide(c, 1);
-		for (col = selmon->selws->col; col; col = col->next)
+		for (col = wm.selmon->selws->col; col; col = col->next)
 			for (c = col->row; c; c = c->next)
 				client_hide(c, 1);
 
 		ewmh_setshowingdesktop(1);
 	} else {    /* show hidden windows */
-		for (c = selmon->sticky; c; c = c->next)
+		for (c = wm.selmon->sticky; c; c = c->next)
 			client_hide(c, 0);
-		for (c = selmon->selws->floating; c; c = c->next)
+		for (c = wm.selmon->selws->floating; c; c = c->next)
 			client_hide(c, 0);
-		for (col = selmon->selws->col; col; col = col->next)
+		for (col = wm.selmon->selws->col; col; col = col->next)
 			for (c = col->row; c; c = c->next)
 				client_hide(c, 0);
 
@@ -1267,12 +1267,12 @@ client_stick(struct Client *c, int stick)
 
 		/* if other workspaces' focus is on c, change it */
 		for (ws = c->mon->ws; ws; ws = ws->next)
-			if (ws != selmon->selws && ws->focused == c)
+			if (ws != wm.selmon->selws && ws->focused == c)
 				ws->mon->focused = ws->focused = NULL;
 
 		client_del(c, 0, 0);
 		c->state = ISNORMAL;
-		client_sendtows(c, selmon->selws, 1, 0, 0);
+		client_sendtows(c, wm.selmon->selws, 1, 0, 0);
 	}
 }
 

@@ -123,6 +123,7 @@ struct Config {
 
 /* contains a list of monitors and of minimized clients */
 struct WM {
+	struct Monitor *selmon;         /* growable array of monitors */
 	struct Monitor *mon;            /* growable array of monitors */
 	struct Client *minimized;       /* list of minimized clients */
 
@@ -231,7 +232,6 @@ extern int screenw, screenh;
 
 /* focused client, selected workspace, selected monitor, etc */
 extern struct Client *focused;
-extern struct Monitor *selmon;
 
 /* clients */
 extern struct Panel *panels;
