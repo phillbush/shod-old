@@ -272,6 +272,7 @@ initdock(void)
 	char *s, *p;
 	size_t i;
 
+	dock.list = NULL;
 	dock.dockapps = NULL;
 	dock.ndockapps = 0;
 	dock.beg = NULL;

@@ -207,6 +207,7 @@ struct Dockapp {
 struct Dock {
 	char *xpmfile;
 	Pixmap xpm;
+	Window win;
 
 	char **dockapps;
 	size_t ndockapps;
@@ -220,6 +221,7 @@ struct Dock {
 
 	struct Dockapp *beg;
 	struct Dockapp *end;
+	struct Dockapp *list;
 };
 
 /* X stuff */
