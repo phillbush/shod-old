@@ -91,7 +91,7 @@ parsemodifier(const char *s)
 }
 
 /* get x resources and update variables in config.h */
-void
+static void
 getresources(void)
 {
 	XrmValue xval;
@@ -178,7 +178,7 @@ ealloccolor(const char *s)
 }
 
 /* initialize atom arrays */
-void
+static void
 initatoms(void)
 {
 	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
@@ -243,7 +243,7 @@ initatoms(void)
 }
 
 /* initialize colors and conf array */
-void
+static void
 initcolors(void)
 {
 	config.unfocused = ealloccolor(config.unfocused_color);
@@ -252,7 +252,7 @@ initcolors(void)
 }
 
 /* Initialize cursors */
-void
+static void
 initcursor(void)
 {
 	cursor[CursMove] = XCreateFontCursor(dpy, XC_fleur);
@@ -263,7 +263,7 @@ initcursor(void)
 }
 
 /* initialize the dock */
-void
+static void
 initdock(void)
 {
 	XpmAttributes xa;
@@ -299,7 +299,7 @@ initdock(void)
 }
 
 /* create dummy windows used for controlling focus and the layer of clients */
-void
+static void
 initdummywindows(void)
 {
 	int i;
@@ -308,9 +308,6 @@ initdummywindows(void)
 	focuswin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
 	for (i = 0; i < LayerLast; i++)
 		layerwin[i] = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
-
-	XMoveWindow(dpy, focuswin, -1, 0);
-	XMapWindow(dpy, focuswin);
 }
 
 /* signal-catching function */
@@ -347,8 +344,8 @@ xerror(Display *dpy, XErrorEvent *e)
 	return xerrorxlib(dpy, e);
 }
 
-/* scan for already existing clients */
-void
+/* scan for already existing windows and adopt them */
+static void
 scan(void)
 {
 	unsigned int i, num;
@@ -373,6 +370,14 @@ scan(void)
 		if (wins)
 			XFree(wins);
 	}
+}
+
+/* map and hide focus window */
+static void
+mapfocuswin(void)
+{
+	XMoveWindow(dpy, focuswin, -1, 0);
+	XMapWindow(dpy, focuswin);
 }
 
 /* destroy dummy windows */
@@ -533,8 +538,9 @@ main(int argc, char *argv[])
 	ewmh_setwmdesktop();
 	ewmh_setactivewindow(None);
 
-	/* scan existing windows and adopt them */
+	/* prepare for main event loop */
 	scan();
+	mapfocuswin();
 
 	/* run main event loop */
 	while (running && !XNextEvent(dpy, &ev))
