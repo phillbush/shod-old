@@ -23,7 +23,6 @@
 
 /* X stuff */
 static XrmDatabase xdb;
-static XrmValue xval;
 static char *xrm;
 Display *dpy;
 Window root, wmcheckwin;
@@ -98,6 +97,7 @@ parsemodifier(const char *s)
 void
 getresources(void)
 {
+	XrmValue xval;
 	long n;
 	char *type;
 
@@ -128,6 +128,7 @@ getresources(void)
 		config.focused_color = xval.addr;
 	if (XrmGetResource(xdb, "shod.unfocused", "*", &type, &xval) == True)
 		config.unfocused_color = xval.addr;
+	dock.xpm = None;
 	if (XrmGetResource(xdb, "shod.dock", "*", &type, &xval) == True) {
 		XpmAttributes xa;
 		Pixmap pi;
@@ -281,7 +282,6 @@ initdock(void)
 	dock.ndockapps = 0;
 	dock.beg = NULL;
 	dock.end = NULL;
-	dock.xpm = None;
 	if (darg) {
 		if ((s = strdup(darg)) == NULL)
 			err(1, "strdup");
