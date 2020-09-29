@@ -295,7 +295,7 @@ initdock(void)
 	}
 	xa.valuemask = 0;
 	if (config.dockxpm_path)
-		XpmReadFileToPixmap(dpy, root, xval.addr, &dock.xpm, &pi, &xa);
+		XpmReadFileToPixmap(dpy, root, config.dockxpm_path, &dock.xpm, &pi, &xa);
 	else
 		dock.xpm = None;
 }
