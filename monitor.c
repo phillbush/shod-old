@@ -31,7 +31,7 @@ monitor_alloc(int x, int y, int w, int h)
 	mon->ws = NULL;
 	mon->sticky = NULL;
 	mon->selws = NULL;
-	mon->selws = NULL;
+	mon->focused = NULL;
 	mon->dx = mon->mx = x;
 	mon->dy = mon->my = y;
 	mon->dw = mon->mw = w;

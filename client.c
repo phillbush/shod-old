@@ -260,21 +260,20 @@ client_bestfocus(struct Client *c)
 
 	/* If client is floating, try to focus next floating */
 	if (c->state & ISFLOATING) {
-		for (tmp = wm.selmon->focused; tmp; tmp = tmp->fnext) {
+		for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
 			if (tmp == c)
 				continue;
 			if (tmp->state & ISNORMAL && tmp->ws == c->ws)
 				break;
-			if (tmp->state & ISSTICKY && tmp->mon == c->mon)
+			if (tmp->state & ISSTICKY)
 				break;
 		}
 		focus = tmp;
 		if (!focus) {
-			for (tmp = wm.selmon->focused; tmp; tmp = tmp->fnext) {
-				if (tmp == c)
-					continue;
-				if (tmp->state & ISMAXIMIZED && tmp->ws == c->ws)
+			for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
+				if (tmp == c) {
 					break;
+				}
 			}
 		}
 		focus = tmp;
@@ -290,7 +289,7 @@ client_bestfocus(struct Client *c)
 				focus = c->col->next->row;
 		}
 		if (!focus) {
-			for (tmp = wm.selmon->focused; tmp; tmp = tmp->fnext) {
+			for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
 				if (tmp == c)
 					continue;
 				if (tmp->state & ISNORMAL && tmp->ws == c->ws)
@@ -370,7 +369,6 @@ client_focus(struct Client *c)
 
 	prevfocused = wm.selmon->focused;
 	wm.selmon = c->mon;
-	wm.selmon->focused = c;
 	if (c->state & ISBOUND) {
 		wm.selmon->selws = c->ws;
 		wm.selmon->selws->focused = c;
