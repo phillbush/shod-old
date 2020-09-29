@@ -12,12 +12,12 @@ struct Config config = {
 
 	/* mouse buttons */
 	.modifier = Mod1Mask,   /* modifier pressed with mouse button */
-	.focusbuttons = 0,      /* bit mask of mousebuttons that focus windows */
-	.raisebuttons = ~0,     /* bit mask of mousebuttons that raise windows */
+	.focusbuttons = 1,      /* bit mask of mousebuttons that focus windows */
+	.raisebuttons = 1,      /* bit mask of mousebuttons that raise windows */
 
 	/* behavior of single maximized windows */
-	.ignoregaps = 0,        /* whether to ignore outer gaps when a single window is maximized */
-	.ignoreborders = 0      /* whether to ignore borders when a single window is maximized */
+	.ignoregaps = 1,        /* whether to ignore outer gaps when a single window is maximized */
+	.ignoreborders = 1      /* whether to ignore borders when a single window is maximized */
 };
 
 struct Dock dock = {
