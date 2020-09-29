@@ -79,30 +79,30 @@ xevent_buttonpress(XEvent *e)
 	}
 
 	/* focus client */
-	if (ev->button == Button1 && config.focusbuttons & 1 << 1)
+	if (ev->button == Button1 && config.focusbuttons & 1 << 0)
 		focus = 1;
-	else if (ev->button == Button2 && config.focusbuttons & 1 << 2)
+	else if (ev->button == Button2 && config.focusbuttons & 1 << 1)
 		focus = 1;
-	else if (ev->button == Button3 && config.focusbuttons & 1 << 3)
+	else if (ev->button == Button3 && config.focusbuttons & 1 << 2)
 		focus = 1;
-	else if (ev->button == Button4 && config.focusbuttons & 1 << 4)
+	else if (ev->button == Button4 && config.focusbuttons & 1 << 3)
 		focus = 1;
-	else if (ev->button == Button5 && config.focusbuttons & 1 << 5)
+	else if (ev->button == Button5 && config.focusbuttons & 1 << 4)
 		focus = 1;
 	if (focus) {
 		client_focus(c);
 	}
 
 	/* raise client */
-	if (ev->button == Button1 && config.raisebuttons & 1 << 1)
+	if (ev->button == Button1 && config.raisebuttons & 1 << 0)
 		focus = 1;
-	else if (ev->button == Button2 && config.raisebuttons & 1 << 2)
+	else if (ev->button == Button2 && config.raisebuttons & 1 << 1)
 		focus = 1;
-	else if (ev->button == Button3 && config.raisebuttons & 1 << 3)
+	else if (ev->button == Button3 && config.raisebuttons & 1 << 2)
 		focus = 1;
-	else if (ev->button == Button4 && config.raisebuttons & 1 << 4)
+	else if (ev->button == Button4 && config.raisebuttons & 1 << 3)
 		focus = 1;
-	else if (ev->button == Button5 && config.raisebuttons & 1 << 5)
+	else if (ev->button == Button5 && config.raisebuttons & 1 << 4)
 		focus = 1;
 	if (focus && c->state & ISFLOATING)
 		client_raise(c);

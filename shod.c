@@ -65,9 +65,9 @@ parsebuttons(const char *s, unsigned int *buttons)
 	origs = s;
 	*buttons = 0;
 	while (*s != '\0') {
-		if (*s <= '0' || *s > '5')
+		if (*s < '1' || *s > '5')
 			errx(1, "improper buttons string %s", origs);
-		*buttons |= 1 << (*s - '0');
+		*buttons |= 1 << (*s - '1');
 		s++;
 	}
 }
