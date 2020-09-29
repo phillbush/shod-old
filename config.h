@@ -17,15 +17,11 @@ struct Config config = {
 
 	/* behavior of single maximized windows */
 	.ignoregaps = 1,        /* whether to ignore outer gaps when a single window is maximized */
-	.ignoreborders = 1      /* whether to ignore borders when a single window is maximized */
-};
+	.ignoreborders = 1,     /* whether to ignore borders when a single window is maximized */
 
-struct Dock dock = {
-	.mode = DockBelow,
-	.position = DockRight,
-	.orientation = 1,       /* if nonzero, map dockapps from right to left */
-	.size = 64,
-
-	.gapsides = 0,          /* the gap on the edges of the dock */
-	.gapback = 0            /* the gap on the back of the dock */
+	/* dock configuration */
+	.dockmode = DockBelow,  /* DockBelow or DockAside */
+	.dockside = DockRight,  /* DockTop, DockBottom, DockLeft, or DockRight */
+	.dockplace = 1,         /* if nonzero, map dockapps from right to left */
+	.docksize = 64,
 };

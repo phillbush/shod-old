@@ -124,6 +124,11 @@ struct Config {
 
 	int ignoregaps;
 	int ignoreborders;
+
+	int dockmode;
+	int dockside;
+	int dockplace;
+	int docksize;
 };
 
 /* contains a list of monitors and of minimized clients */
@@ -212,13 +217,6 @@ struct Dock {
 	char **dockapps;
 	size_t ndockapps;
 
-	int mode;
-	int position;
-	int orientation;
-	int size;
-	int gapsides;
-	int gapback;
-
 	struct Dockapp *beg;
 	struct Dockapp *end;
 	struct Dockapp *list;
@@ -237,9 +235,6 @@ extern int (*xerrorxlib)(Display *, XErrorEvent *);
 extern int screen;
 extern int screenw, screenh;
 
-/* focused client, selected workspace, selected monitor, etc */
-extern struct Client *focused;
-
 /* clients */
 extern struct Panel *panels;
 extern struct WM wm;
@@ -247,8 +242,5 @@ extern struct Dock dock;
 
 /* configuration */
 extern struct Config config;
-
-/* whether shod is running */
-extern int running;
 
 #endif /* _SHOD_H_ */

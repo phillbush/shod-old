@@ -37,12 +37,13 @@ int screen;
 int screenw, screenh;
 
 /* clients */
+struct Dock dock;
 struct Panel *panels;
 struct WM wm;
 
 /* flags and arguments */
 static char *darg = NULL;  /* string of dockapps to be ordered in the dock */
-int running = 1;
+static int running = 1;
 
 /* the config structure */
 #include "config.h"
@@ -307,6 +308,9 @@ initdummywindows(void)
 	focuswin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
 	for (i = 0; i < LayerLast; i++)
 		layerwin[i] = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
+
+	XMoveWindow(dpy, focuswin, -1, 0);
+	XMapWindow(dpy, focuswin);
 }
 
 /* signal-catching function */
@@ -463,6 +467,21 @@ cleanclients(void)
 int
 main(int argc, char *argv[])
 {
+	XEvent ev;
+	void (*xevents[LASTEvent])(XEvent *) = {
+		[ButtonPress]      = xevent_buttonpress,
+		[ButtonRelease]    = xevent_buttonrelease,
+		[ClientMessage]    = xevent_clientmessage,
+		[ConfigureNotify]  = xevent_configurenotify,
+		[ConfigureRequest] = xevent_configurerequest,
+		[DestroyNotify]    = xevent_destroynotify,
+		[EnterNotify]      = xevent_enternotify,
+		[FocusIn]          = xevent_focusin,
+		[MapRequest]       = xevent_maprequest,
+		[MotionNotify]     = xevent_motionnotify,
+		[UnmapNotify]      = xevent_unmapnotify
+	};
+
 	if (signal(SIGINT, sigint) == SIG_ERR)
 		err(1, "signal");
 
@@ -518,7 +537,9 @@ main(int argc, char *argv[])
 	scan();
 
 	/* run main event loop */
-	xevent_run();
+	while (running && !XNextEvent(dpy, &ev))
+		if (xevents[ev.type])
+			xevents[ev.type](&ev);
 
 	/* clean up stuff */
 	cleandummywindows();

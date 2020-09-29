@@ -5,6 +5,19 @@
 #include "workspace.h"
 #include "manage.h"
 
+#define _NET_WM_MOVERESIZE_SIZE_TOPLEFT      0
+#define _NET_WM_MOVERESIZE_SIZE_TOP          1
+#define _NET_WM_MOVERESIZE_SIZE_TOPRIGHT     2
+#define _NET_WM_MOVERESIZE_SIZE_RIGHT        3
+#define _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT  4
+#define _NET_WM_MOVERESIZE_SIZE_BOTTOM       5
+#define _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT   6
+#define _NET_WM_MOVERESIZE_SIZE_LEFT         7
+#define _NET_WM_MOVERESIZE_MOVE              8   /* movement only */
+#define _NET_WM_MOVERESIZE_SIZE_KEYBOARD     9   /* size via keyboard */
+#define _NET_WM_MOVERESIZE_MOVE_KEYBOARD    10   /* move via keyboard */
+#define _NET_WM_MOVERESIZE_CANCEL           11   /* cancel operation */
+
 enum MotionAction {NoAction, Moving, Resizing};
 
 /* global variables */
@@ -13,7 +26,7 @@ static enum MotionAction motionaction = NoAction;
 static enum Quadrant quadrant = SE;
 
 /* focus window when clicking on it, and activate moving/resizing */
-static void
+void
 xevent_buttonpress(XEvent *e)
 {
 	Cursor curs = None;
@@ -99,7 +112,7 @@ done:
 }
 
 /* interrupts moving/resizing action */
-static void
+void
 xevent_buttonrelease(XEvent *e)
 {
 	(void)e;
@@ -107,21 +120,8 @@ xevent_buttonrelease(XEvent *e)
 	motionaction = NoAction;
 }
 
-#define _NET_WM_MOVERESIZE_SIZE_TOPLEFT      0
-#define _NET_WM_MOVERESIZE_SIZE_TOP          1
-#define _NET_WM_MOVERESIZE_SIZE_TOPRIGHT     2
-#define _NET_WM_MOVERESIZE_SIZE_RIGHT        3
-#define _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT  4
-#define _NET_WM_MOVERESIZE_SIZE_BOTTOM       5
-#define _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT   6
-#define _NET_WM_MOVERESIZE_SIZE_LEFT         7
-#define _NET_WM_MOVERESIZE_MOVE              8   /* movement only */
-#define _NET_WM_MOVERESIZE_SIZE_KEYBOARD     9   /* size via keyboard */
-#define _NET_WM_MOVERESIZE_MOVE_KEYBOARD    10   /* move via keyboard */
-#define _NET_WM_MOVERESIZE_CANCEL           11   /* cancel operation */
-
 /* handle client message event */
-static void
+void
 xevent_clientmessage(XEvent *e)
 {
 	XClientMessageEvent *ev = &e->xclient;
@@ -274,7 +274,7 @@ xevent_clientmessage(XEvent *e)
 }
 
 /* handle configure notify event */
-static void
+void
 xevent_configurenotify(XEvent *e)
 {
 	XConfigureEvent *ev = &e->xconfigure;
@@ -288,7 +288,7 @@ xevent_configurenotify(XEvent *e)
 }
 
 /* handle configure request event */
-static void
+void
 xevent_configurerequest(XEvent *e)
 {
 	XWindowChanges wc;
@@ -311,7 +311,7 @@ xevent_configurerequest(XEvent *e)
 }
 
 /* forget about client */
-static void
+void
 xevent_destroynotify(XEvent *e)
 {
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
@@ -320,7 +320,7 @@ xevent_destroynotify(XEvent *e)
 }
 
 /* focus window when cursor enter it, if fflag is set */
-static void
+void
 xevent_enternotify(XEvent *e)
 {
 	struct Client *c;
@@ -335,7 +335,7 @@ xevent_enternotify(XEvent *e)
 		client_focus(c);
 }
 
-static void
+void
 xevent_focusin(XEvent *e)
 {
 	XFocusChangeEvent *ev = &e->xfocus;
@@ -347,7 +347,7 @@ xevent_focusin(XEvent *e)
 }
 
 /* handle map request event */
-static void
+void
 xevent_maprequest(XEvent *e)
 {
 	XMapRequestEvent *ev = &e->xmaprequest;
@@ -356,7 +356,7 @@ xevent_maprequest(XEvent *e)
 }
 
 /* run moving/resizing action */
-static void
+void
 xevent_motionnotify(XEvent *e)
 {
 	XMotionEvent *ev = &e->xmotion;
@@ -400,36 +400,10 @@ xevent_motionnotify(XEvent *e)
 }
 
 /* forget about client */
-static void
+void
 xevent_unmapnotify(XEvent *e)
 {
 	XUnmapEvent *ev = &e->xunmap;
 
 	unmanage(ev->window);
-}
-
-/* the main event loop */
-void
-xevent_run(void)
-{
-	XEvent ev;
-	void (*xevents[LASTEvent])(XEvent *) = {
-		[ButtonPress]      = xevent_buttonpress,
-		[ButtonRelease]    = xevent_buttonrelease,
-		[ClientMessage]    = xevent_clientmessage,
-		[ConfigureNotify]  = xevent_configurenotify,
-		[ConfigureRequest] = xevent_configurerequest,
-		[DestroyNotify]    = xevent_destroynotify,
-		[EnterNotify]      = xevent_enternotify,
-		[FocusIn]          = xevent_focusin,
-		[MapRequest]       = xevent_maprequest,
-		[MotionNotify]     = xevent_motionnotify,
-		[UnmapNotify]      = xevent_unmapnotify
-	};
-
-	XMoveWindow(dpy, focuswin, -1, 0);
-	XMapWindow(dpy, focuswin);
-	while (running && !XNextEvent(dpy, &ev))
-		if (xevents[ev.type])
-			xevents[ev.type](&ev);
 }

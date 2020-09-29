@@ -249,19 +249,19 @@ monitor_updatearea(void)
 		if (p->bottom > pbottom)
 			pbottom = p->bottom;
 	}
-	if (dock.mode != DockBelow) {
-		switch (dock.position) {
+	if (config.dockmode != DockBelow) {
+		switch (config.dockside) {
 		case DockTop:
-			dtop = dock.size;
+			dtop = config.docksize;
 			break;
 		case DockBottom:
-			dbottom = dock.size;
+			dbottom = config.docksize;
 			break;
 		case DockLeft:
-			dleft = dock.size;
+			dleft = config.docksize;
 			break;
 		case DockRight:
-			dright = dock.size;
+			dright = config.docksize;
 			break;
 		}
 	}

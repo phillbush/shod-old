@@ -44,7 +44,7 @@ createparentwin(void)
 		swa.background_pixel = BlackPixel(dpy, screen);
 		valuemask |= CWBackPixel;
 	}
-	win = XCreateWindow(dpy, root, 0, 0, dock.size, dock.size, 0,
+	win = XCreateWindow(dpy, root, 0, 0, config.docksize, config.docksize, 0,
 	                    CopyFromParent, CopyFromParent, CopyFromParent,
 	                    valuemask, &swa);
 	return win;
@@ -96,14 +96,14 @@ dockapp_add(Window win, XWindowAttributes *wa)
 		d->prev = tmp;
 		tmp->next = d;
 	}
-	if (dock.mode == DockBelow) {
+	if (config.dockmode == DockBelow) {
 		Window wins[2];
 
 		wins[0] = layerwin[LayerDockapps];
 		wins[1] = d->parent;
 		XRestackWindows(dpy, wins, sizeof wins);
 	}
-	XReparentWindow(dpy, d->win, d->parent, (dock.size - d->w) / 2, (dock.size - d->h) / 2);
+	XReparentWindow(dpy, d->win, d->parent, (config.docksize - d->w) / 2, (config.docksize - d->h) / 2);
 	dockapp_redock();
 	XMapWindow(dpy, d->parent);
 	XMapWindow(dpy, d->win);
@@ -136,35 +136,35 @@ dockapp_redock(void)
 	int x, y;
 	size_t n;
 
-	xs = (dock.position == DockRight) ? wm.mon->mw - wm.mon->br - dock.size : wm.mon->mx + wm.mon->bl;
-	ys = (dock.position == DockBottom) ? wm.mon->mh - wm.mon->bb - dock.size : wm.mon->my + wm.mon->bt;
-	xe = (dock.position == DockLeft) ? wm.mon->mx + wm.mon->bl : wm.mon->mw - wm.mon->br;
-	ye = (dock.position == DockTop) ? wm.mon->my + wm.mon->bt : wm.mon->mh - wm.mon->bb;
+	xs = (config.dockside == DockRight) ? wm.mon->mw - wm.mon->br - config.docksize : wm.mon->mx + wm.mon->bl;
+	ys = (config.dockside == DockBottom) ? wm.mon->mh - wm.mon->bb - config.docksize : wm.mon->my + wm.mon->bt;
+	xe = (config.dockside == DockLeft) ? wm.mon->mx + wm.mon->bl : wm.mon->mw - wm.mon->br;
+	ye = (config.dockside == DockTop) ? wm.mon->my + wm.mon->bt : wm.mon->mh - wm.mon->bb;
 	for (d = dock.list, n = 0; d; d = d->next, n++) {
-		if (dock.orientation) {
-			switch (dock.position) {
+		if (config.dockplace) {
+			switch (config.dockside) {
 			case DockTop:
 			case DockBottom:
-				x = xe - (n + 1) * dock.size;
+				x = xe - (n + 1) * config.docksize;
 				y = ys;
 				break;
 			case DockLeft:
 			case DockRight:
 				x = xs;
-				y = ye - (n + 1) * dock.size;
+				y = ye - (n + 1) * config.docksize;
 				break;
 			}
 		} else {
-			switch (dock.position) {
+			switch (config.dockside) {
 			case DockTop:
 			case DockBottom:
-				x = xs + n * dock.size;
+				x = xs + n * config.docksize;
 				y = ys;
 				break;
 			case DockLeft:
 			case DockRight:
 				x = xs;
-				y = ys + n * dock.size;
+				y = ys + n * config.docksize;
 				break;
 			}
 		}
