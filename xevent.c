@@ -57,30 +57,40 @@ xevent_buttonpress(XEvent *e)
 		goto done;
 	}
 
-	/* user is dragging window while clicking modifier or dragging window's border */
 	isborder = client_isborder(c, ev->x, ev->y);
-	if ((isborder && ev->button == Button1) || (ev->state == config.modifier && ev->button == Button3)) {
-		quadrant = client_quadrant(c, ev->x, ev->y);
-		motionaction = Resizing;
-		switch (quadrant) {
-		case NW: curs = cursor[CursNW]; break;
-		case NE: curs = cursor[CursNE]; break;
-		case SW: curs = cursor[CursSW]; break;
-		case SE: curs = cursor[CursSE]; break;
-		}
-	} else if ((isborder && ev->button == Button3) || (ev->state == config.modifier && ev->button == Button1)) {
+	if (ev->state == config.modifier && ev->button == Button1)
 		motionaction = Moving;
-		curs = cursor[CursMove];
-	} else {
-		goto focusraise;
-	}
-	XGrabPointer(dpy, c->win, False,
-		     ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
-			 GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
-	motionx = ev->x;
-	motiony = ev->y;
+	else if (ev->state == config.modifier && ev->button == Button3)
+		motionaction = Resizing;
+	else if (isborder && ev->button == Button3)
+		motionaction = Moving;
+	else if (isborder && ev->button == Button1)
+		motionaction = Resizing;
+	else
+		motionaction = NoAction;
 
-focusraise:
+	/* user is dragging window while clicking modifier or dragging window's border */
+	if (motionaction != NoAction) {
+		quadrant = client_quadrant(c, ev->x, ev->y);
+
+		if (motionaction == Moving)
+			curs = cursor[CursMove];
+		else if (quadrant == NW)
+			curs = cursor[CursNW];
+		else if (quadrant == NE)
+			curs = cursor[CursNE];
+		else if (quadrant == SW)
+			curs = cursor[CursSW];
+		else if (quadrant == SE)
+			curs = cursor[CursSE];
+
+		XGrabPointer(dpy, c->win, False,
+		     	     ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
+			 	 GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+		motionx = ev->x;
+		motiony = ev->y;
+	}
+
 	/* focus client */
 	if (ev->button == Button1 && config.focusbuttons & 1 << 1)
 		focus = 1;
