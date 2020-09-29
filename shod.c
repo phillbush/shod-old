@@ -41,9 +41,7 @@ struct Panel *panels;
 struct WM wm;
 
 /* flags and arguments */
-char *darg = NULL;  /* string of dockapps to be ordered in the dock */
-
-/* whether shod is running */
+static char *darg = NULL;  /* string of dockapps to be ordered in the dock */
 int running = 1;
 
 /* the config structure */
@@ -385,24 +383,37 @@ cleandummywindows(void)
 		XDestroyWindow(dpy, layerwin[i]);
 }
 
+/* free cursors */
+static void
+cleancursor(void)
+{
+	size_t i;
+
+	for (i = 0; i < CursLast; i++)
+		XFreeCursor(dpy, cursor[i]);
+}
+
 /* clean up */
 static void
-cleanup(void)
+cleanclients(void)
 {
 	struct Monitor *mon;
 	struct Client *c;
-	struct Panel *d;
+	struct Panel *p;
+	struct Dockapp *d;
 	size_t i;
 
-	d = panels;
-	while (d) {
+	/* free panels */
+	p = panels;
+	while (p) {
 		struct Panel *tmp;
 
-		tmp = d->next;
-		free(d);
-		d = tmp;
+		tmp = p->next;
+		free(p);
+		p = tmp;
 	}
 
+	/* free minimized windows */
 	c = wm.minimized;
 	while (c) {
 		struct Client *tmp;
@@ -412,6 +423,7 @@ cleanup(void)
 		c = tmp;
 	}
 
+	/* free non-minimized windows */
 	mon = wm.mon;
 	while (mon) {
 		struct Monitor *tmp;
@@ -428,18 +440,23 @@ cleanup(void)
 			c = tmp;
 		}
 	}
+
+	/* free dockapps */
+	d = dock.list;
+	while (d) {
+		struct Dockapp *tmp;
+
+		tmp = d->next;
+		XDestroyWindow(dpy, d->win);
+		free(d);
+		d = tmp;
+	}
 	if (dock.ndockapps > 0) {
 		for (i = 0; i < dock.ndockapps; i++)
 			free(dock.dockapps[i]);
 		free(dock.dockapps);
 	}
 
-	XUngrabPointer(dpy, CurrentTime);
-
-	for (i = 0; i < CursLast; i++)
-		XFreeCursor(dpy, cursor[i]);
-
-	XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
 }
 
 /* shod window manager */
@@ -505,9 +522,12 @@ main(int argc, char *argv[])
 
 	/* clean up stuff */
 	cleandummywindows();
-	cleanup();
+	cleancursor();
+	cleanclients();
 
-	/* close connection to server */
+	/* free X stuff and close connection to server */
+	XUngrabPointer(dpy, CurrentTime);
+	XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
 	XrmDestroyDatabase(xdb);
 	XCloseDisplay(dpy);
 

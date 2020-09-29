@@ -64,7 +64,8 @@ getdockapp(Window win)
 void
 dockapp_add(Window win, XWindowAttributes *wa)
 {
-	struct Dockapp *d;
+	struct Dockapp *d = NULL;
+	struct Dockapp *last = NULL;
 	struct Dockapp *tmp = NULL;
 
 	if ((d = malloc(sizeof *d)) == NULL)
@@ -76,18 +77,25 @@ dockapp_add(Window win, XWindowAttributes *wa)
 	d->h = wa->height;
 	d->parent = createparentwin();
 	d->pos = isdocked(win);
-	for (tmp = dock.list; tmp && d->pos < tmp->pos; tmp = tmp->next)
-		;
-	if (!tmp) {
+	for (last = dock.list; last && last->next; last = last->next)
+		if (last->pos <= d->pos)
+			tmp = last;
+	if (!tmp && !last) {
 		d->prev = NULL;
+		d->next = NULL;
+		dock.list = d;
+	} else if (!tmp && last) {
+		dock.list->prev = d;
+		d->prev = NULL;
+		d->next = dock.list;
 		dock.list = d;
 	} else {
-		d->prev = tmp->prev;
-		if (tmp->prev)
-			tmp->prev->next = d;
-		tmp->prev = d;
+		if (tmp->next)
+			tmp->next->prev = d;
+		d->next = tmp->next;
+		d->prev = tmp;
+		tmp->next = d;
 	}
-	d->next = tmp;
 	if (dock.mode == DockBelow) {
 		Window wins[2];
 
@@ -126,40 +134,40 @@ dockapp_redock(void)
 	int xs, ys;         /* beginning of dock */
 	int xe, ye;         /* end of dock */
 	int x, y;
+	size_t n;
 
 	xs = (dock.position == DockRight) ? wm.mon->mw - wm.mon->br - dock.size : wm.mon->mx + wm.mon->bl;
 	ys = (dock.position == DockBottom) ? wm.mon->mh - wm.mon->bb - dock.size : wm.mon->my + wm.mon->bt;
 	xe = (dock.position == DockLeft) ? wm.mon->mx + wm.mon->bl : wm.mon->mw - wm.mon->br;
 	ye = (dock.position == DockTop) ? wm.mon->my + wm.mon->bt : wm.mon->mh - wm.mon->bb;
-	for (d = dock.list; d; d = d->next) {
+	for (d = dock.list, n = 0; d; d = d->next, n++) {
 		if (dock.orientation) {
 			switch (dock.position) {
 			case DockTop:
 			case DockBottom:
-				x = xe - (d->pos + 1) * dock.size;
+				x = xe - (n + 1) * dock.size;
 				y = ys;
 				break;
 			case DockLeft:
 			case DockRight:
 				x = xs;
-				y = ye - (d->pos + 1) * dock.size;
+				y = ye - (n + 1) * dock.size;
 				break;
 			}
 		} else {
 			switch (dock.position) {
 			case DockTop:
 			case DockBottom:
-				x = xs + d->pos * dock.size;
+				x = xs + n * dock.size;
 				y = ys;
 				break;
 			case DockLeft:
 			case DockRight:
 				x = xs;
-				y = ys + d->pos * dock.size;
+				y = ys + n * dock.size;
 				break;
 			}
 		}
-
 		XMoveWindow(dpy, d->parent, x, y);
 	}
 }

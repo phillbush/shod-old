@@ -245,9 +245,6 @@ extern struct Panel *panels;
 extern struct WM wm;
 extern struct Dock dock;
 
-/* flags and arguments */
-extern char *darg;  /* string of dockapps to be ordered in the dock */
-
 /* configuration */
 extern struct Config config;
 

@@ -23,7 +23,7 @@ struct Config config = {
 struct Dock dock = {
 	.mode = DockBelow,
 	.position = DockRight,
-	.orientation = 0,       /* if nonzero, map dockapps from right to left */
+	.orientation = 1,       /* if nonzero, map dockapps from right to left */
 	.size = 64,
 
 	.gapsides = 0,          /* the gap on the edges of the dock */

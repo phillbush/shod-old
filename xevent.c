@@ -7,36 +7,10 @@
 
 enum MotionAction {NoAction, Moving, Resizing};
 
-/* function declarations */
-static void xevent_buttonpress(XEvent *);
-static void xevent_buttonrelease(XEvent *);
-static void xevent_clientmessage(XEvent *);
-static void xevent_configurenotify(XEvent *e);
-static void xevent_configurerequest(XEvent *);
-static void xevent_destroynotify(XEvent *);
-static void xevent_enternotify(XEvent *);
-static void xevent_focusin(XEvent *);
-static void xevent_maprequest(XEvent *);
-static void xevent_motionnotify(XEvent *);
-static void xevent_unmapnotify(XEvent *);
-
 /* global variables */
 static int motionx = 0, motiony = 0;
 static enum MotionAction motionaction = NoAction;
 static enum Quadrant quadrant = SE;
-static void (*xevents[LASTEvent])(XEvent *) = {
-	[ButtonPress]      = xevent_buttonpress,
-	[ButtonRelease]    = xevent_buttonrelease,
-	[ClientMessage]    = xevent_clientmessage,
-	[ConfigureNotify]  = xevent_configurenotify,
-	[ConfigureRequest] = xevent_configurerequest,
-	[DestroyNotify]    = xevent_destroynotify,
-	[EnterNotify]      = xevent_enternotify,
-	[FocusIn]          = xevent_focusin,
-	[MapRequest]       = xevent_maprequest,
-	[MotionNotify]     = xevent_motionnotify,
-	[UnmapNotify]      = xevent_unmapnotify
-};
 
 /* focus window when clicking on it, and activate moving/resizing */
 static void
@@ -439,6 +413,19 @@ void
 xevent_run(void)
 {
 	XEvent ev;
+	void (*xevents[LASTEvent])(XEvent *) = {
+		[ButtonPress]      = xevent_buttonpress,
+		[ButtonRelease]    = xevent_buttonrelease,
+		[ClientMessage]    = xevent_clientmessage,
+		[ConfigureNotify]  = xevent_configurenotify,
+		[ConfigureRequest] = xevent_configurerequest,
+		[DestroyNotify]    = xevent_destroynotify,
+		[EnterNotify]      = xevent_enternotify,
+		[FocusIn]          = xevent_focusin,
+		[MapRequest]       = xevent_maprequest,
+		[MotionNotify]     = xevent_motionnotify,
+		[UnmapNotify]      = xevent_unmapnotify
+	};
 
 	XMoveWindow(dpy, focuswin, -1, 0);
 	XMapWindow(dpy, focuswin);
