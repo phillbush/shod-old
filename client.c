@@ -1345,18 +1345,18 @@ client_tile(struct WS *ws, int recalc)
 			if (!rerow || !c->next)
 				c->mh = h;
 
-			/* if there is only one tiled window, it is subject to bflag */
+			/* if there is only one tiled window, borders or gaps can be ignored */
 			if (nrow == 1 && ncol == 1) {
-				if (bflag) {
+				if (config.ignoreborders) {
 					c->mh += 2 * config.border_width;
 					c->mw += 2 * config.border_width;
 					XSetWindowBorderWidth(dpy, c->win, 0);
 				}
-				if (gflag) {
+				if (config.ignoregaps) {
 					c->mx = mon->dx;
 					c->my = mon->dy;
-					c->mw = mon->dw - ((!bflag) ? 2 * config.border_width : 0);
-					c->mh = mon->dh - ((!bflag) ? 2 * config.border_width : 0);
+					c->mw = mon->dw - ((!config.ignoreborders) ? 2 * config.border_width : 0);
+					c->mh = mon->dh - ((!config.ignoreborders) ? 2 * config.border_width : 0);
 				}
 			} else {
 				XSetWindowBorderWidth(dpy, c->win, config.border_width);

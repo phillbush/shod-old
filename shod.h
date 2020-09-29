@@ -121,6 +121,9 @@ struct Config {
 
 	int gapinner, gaptop, gapbottom, gapleft, gapright;
 	int border_width;
+
+	int ignoregaps;
+	int ignoreborders;
 };
 
 /* contains a list of monitors and of minimized clients */
@@ -238,13 +241,9 @@ extern struct Client *focused;
 /* clients */
 extern struct Panel *panels;
 extern struct WM wm;
-
-/* The dock */
 extern struct Dock dock;
 
 /* flags and arguments */
-extern int gflag;   /* whether to ignore outer gaps when a single window is maximized */
-extern int bflag;   /* whether to ignore borders when a single window is maximized */
 extern char *darg;  /* string of dockapps to be ordered in the dock */
 
 /* configuration */

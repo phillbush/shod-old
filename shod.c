@@ -41,8 +41,6 @@ struct Panel *panels;
 struct WM wm;
 
 /* flags and arguments */
-int gflag = 0;      /* whether to ignore outer gaps when a single window is maximized */
-int bflag = 0;      /* whether to ignore borders when a single window is maximized */
 char *darg = NULL;  /* string of dockapps to be ordered in the dock */
 
 /* whether shod is running */
@@ -141,7 +139,7 @@ getoptions(int argc, char *argv[])
 	while ((ch = getopt(argc, argv, "bd:f:gm:r:")) != -1) {
 		switch (ch) {
 		case 'b':
-			bflag = 1;
+			config.ignoreborders = 1;
 			break;
 		case 'd':
 			darg = optarg;
@@ -150,7 +148,7 @@ getoptions(int argc, char *argv[])
 			parsebuttons(optarg, &config.focusbuttons);
 			break;
 		case 'g':
-			gflag = 1;
+			config.ignoregaps = 1;
 			break;
 		case 'm':
 			parsemodifier(optarg);
