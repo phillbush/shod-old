@@ -249,7 +249,7 @@ monitor_updatearea(void)
 		if (p->bottom > pbottom)
 			pbottom = p->bottom;
 	}
-	if (config.dockmode != DockBelow) {
+	if (config.dockmode != DockBelow && dock.num > 0) {
 		switch (config.dockside) {
 		case DockTop:
 			dtop = config.docksize;

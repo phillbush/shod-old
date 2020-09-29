@@ -3,12 +3,12 @@ struct Config config = {
 	.focused_color = "#3584E4",
 	.unfocused_color = "#E6E6E6",
 
-	.border_width = 10,
-	.gapleft = 9,
-	.gapright = 9,
-	.gaptop = 9,
-	.gapbottom = 9,
-	.gapinner = 9,
+	.border_width = 10,     /* width of the border around windows */
+	.gapleft = 9,           /* gap to the left */
+	.gapright = 9,          /* gap to the right */
+	.gaptop = 9,            /* gap to the top */
+	.gapbottom = 9,         /* gap to the bottom */
+	.gapinner = 9,          /* gap between tiled windows */
 
 	/* mouse buttons */
 	.modifier = Mod1Mask,   /* modifier pressed with mouse button */
@@ -22,6 +22,8 @@ struct Config config = {
 	/* dock configuration */
 	.dockmode = DockBelow,  /* DockBelow or DockAside */
 	.dockside = DockRight,  /* DockTop, DockBottom, DockLeft, or DockRight */
-	.dockplace = 1,         /* if nonzero, map dockapps from right to left */
-	.docksize = 64,
+	.dockplace = DockEnd,   /* DockBegin, DockCenter, or DockEnd */
+	.dockinverse = 1,       /* if nonzero, map dockapps from end to begin */
+	.docksize = 64,         /* size of each dockapp */
+	.dockborder = 0         /* (TODO) size of the dock border */
 };

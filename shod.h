@@ -97,11 +97,14 @@ enum {
 /* cursor types */
 enum {CursMove, CursNW, CursNE, CursSW, CursSE, CursLast};
 
+/* dock mode */
+enum {DockBelow, DockAside};
+
 /* dock positions */
 enum {DockTop, DockBottom, DockLeft, DockRight};
 
-/* dock mode */
-enum {DockBelow, DockAside};
+/* dock placement */
+enum {DockBegin, DockCenter, DockEnd};
 
 /* configuration structure */
 struct Config {
@@ -128,7 +131,9 @@ struct Config {
 	int dockmode;
 	int dockside;
 	int dockplace;
+	int dockinverse;
 	int docksize;
+	int dockborder;
 };
 
 /* contains a list of monitors and of minimized clients */
@@ -205,7 +210,7 @@ struct Dockapp {
 	Window parent;
 	Window win;
 	int w, h;
-	int pos;
+	unsigned int pos;
 };
 
 /* dock whither dockapps are mapped */
@@ -213,12 +218,11 @@ struct Dock {
 	char *xpmfile;
 	Pixmap xpm;
 	Window win;
+	size_t num;
 
 	char **dockapps;
 	size_t ndockapps;
 
-	struct Dockapp *beg;
-	struct Dockapp *end;
 	struct Dockapp *list;
 };
 

@@ -119,6 +119,40 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.gapInner", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.gapinner = n;
+	if (XrmGetResource(xdb, "shod.dockMode", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "below") == 0)
+			config.dockmode = DockBelow;
+		else if (strcasecmp(xval.addr, "aside") == 0)
+			config.dockmode = DockAside;
+	}
+	if (XrmGetResource(xdb, "shod.dockSide", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "top") == 0)
+			config.dockside = DockTop;
+		else if (strcasecmp(xval.addr, "bottom") == 0)
+			config.dockside = DockBottom;
+		else if (strcasecmp(xval.addr, "left") == 0)
+			config.dockside = DockLeft;
+		else if (strcasecmp(xval.addr, "right") == 0)
+			config.dockside = DockRight;
+	}
+	if (XrmGetResource(xdb, "shod.dockPlace", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "begin") == 0)
+			config.dockplace = DockBegin;
+		else if (strcasecmp(xval.addr, "center") == 0)
+			config.dockplace = DockCenter;
+		else if (strcasecmp(xval.addr, "end") == 0)
+			config.dockplace = DockEnd;
+	}
+	if (XrmGetResource(xdb, "shod.dockInverse", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "true") == 0)
+			config.dockinverse = 1;
+	}
+	if (XrmGetResource(xdb, "shod.dockSize", "*", &type, &xval) == True)
+		if ((n = strtol(xval.addr, NULL, 10)) > 0)
+			config.docksize = n;
+	if (XrmGetResource(xdb, "shod.dockBorder", "*", &type, &xval) == True)
+		if ((n = strtol(xval.addr, NULL, 10)) > 0)
+			config.dockborder = n;
 	if (XrmGetResource(xdb, "shod.urgent", "*", &type, &xval) == True)
 		config.urgent_color = xval.addr;
 	if (XrmGetResource(xdb, "shod.focused", "*", &type, &xval) == True)
@@ -266,16 +300,19 @@ initcursor(void)
 static void
 initdock(void)
 {
+	XSetWindowAttributes swa;
 	XpmAttributes xa;
 	Pixmap pi;
 	char *s, *p;
+	unsigned long valuemask;
 	size_t i;
 
 	dock.list = NULL;
+	dock.num = 0;
 	dock.dockapps = NULL;
 	dock.ndockapps = 0;
-	dock.beg = NULL;
-	dock.end = NULL;
+
+	/* set array of fixed dockapps */
 	if (darg) {
 		if ((s = strdup(darg)) == NULL)
 			err(1, "strdup");
@@ -291,11 +328,28 @@ initdock(void)
 		}
 		free(s);
 	}
+
+	/* create dock window background pixmap */
 	xa.valuemask = 0;
 	if (config.dockxpm_path)
 		XpmReadFileToPixmap(dpy, root, config.dockxpm_path, &dock.xpm, &pi, &xa);
 	else
 		dock.xpm = None;
+
+	/* create dock window */
+	valuemask = CWEventMask;
+	swa.event_mask = SubstructureNotifyMask | SubstructureRedirectMask
+	               | StructureNotifyMask | ButtonPressMask;
+	if (dock.xpm != None) {
+		swa.background_pixmap = dock.xpm;
+		valuemask |= CWBackPixmap;
+	} else {
+		swa.background_pixel = BlackPixel(dpy, screen);
+		valuemask |= CWBackPixel;
+	}
+	dock.win = XCreateWindow(dpy, root, 0, 0, config.docksize, config.docksize, 0,
+	                         CopyFromParent, CopyFromParent, CopyFromParent,
+	                         valuemask, &swa);
 }
 
 /* create dummy windows used for controlling focus and the layer of clients */
