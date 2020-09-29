@@ -8,24 +8,184 @@
 #include "ewmh.h"
 #include "util.h"
 
-#define DIV 15      /* number to divide the screen into grids */
-
+#define DIV         15          /* number to divide the screen into grids */
 #define NOTINCSIZE  0
 #define INCSIZEW    1 << 0
 #define INCSIZEH    1 << 1
 #define INCSIZEWH   1 << 0 | 1 << 1
 
-/* function declarations */
-static void applyaspectsize(struct Client *c);
-static void applyincsize(struct Client *c, int *w, int *h);
-static struct Column *colalloc(struct Column *prev, struct Column *next, struct Client *c);
-static void colfree(struct Column *col);
-static void moveresize(struct Client *c, int x, int y, int w, int h, int incsize);
-static void querypointer(int *x_ret, int *y_ret);
-static long setsizehints(struct Client *c);
+/* whether the wm is showing the desktop */
+static int showingdesk = 0;
 
-/* global variables */
-static int showingdesk = 0;     /* whether the wm is showing the desktop */
+/* apply size hints for unmaximized window */
+static void
+applyaspectsize(struct Client *c)
+{
+	if (c == NULL)
+		return;
+
+	if (c->mina > 0 && c->maxa > 0) {
+		if (c->maxa < (float)c->uw/c->uh) {
+			if (c->uw == MAX(c->uw, c->uh)) {
+				c->uh = c->uw / c->maxa - 0.5;
+			} else {
+				c->uw = c->uh * c->maxa + 0.5;
+			}
+		} else if (c->mina < (float)c->uh/c->uw) {
+			if (c->uh == MAX(c->uw, c->uh)) {
+				c->uw = c->uh / c->mina - 0.5;
+			} else {
+				c->uh = c->uw * c->mina + 0.5;
+			}
+		}
+	}
+}
+
+/* apply size hints for unmaximized window */
+static void
+applyincsize(struct Client *c, int *w, int *h)
+{
+	if (w && c->incw > 0 && c->basew < *w) {
+		*w -= c->basew;
+		*w /= c->incw;
+		*w *= c->incw;
+		*w += c->basew;
+	}
+	if (h && c->inch > 0 && c->baseh < *h) {
+		*h -= c->baseh;
+		*h /= c->inch;
+		*h *= c->inch;
+		*h += c->baseh;
+	}
+}
+
+/* create a column */
+static struct Column *
+colalloc(struct Column *prev, struct Column *next, struct Client *c)
+{
+	struct Column *col;
+
+	if (c == NULL || c->ws == NULL)
+		errx(1, "trying to create column with improper client");
+
+	if ((col = malloc(sizeof *col)) == NULL)
+		err(1, "malloc");
+
+	col->next = next;
+	col->prev = prev;
+	col->row = c;
+	col->ws = c->ws;
+
+	return col;
+}
+
+/* free a column */
+static void
+colfree(struct Column *col)
+{
+	struct WS *ws;
+
+	if (col == NULL)
+		return;
+
+	ws = col->ws;
+
+	if (ws->col == col) {
+		if (col->prev)
+			errx(1, "there is a prev column for the first column");
+		ws->col = col->next;
+		if (col->next)
+			col->next->prev = NULL;
+	} else {
+		if (col->next)
+			col->next->prev = col->prev;
+		col->prev->next = col->next;
+	}
+
+	free(col);
+}
+
+/* call XMoveResizeWindow and apply size increment, depending on incsize */
+static void
+moveresize(struct Client *c, int x, int y, int w, int h, int incsize)
+{
+	if (incsize & INCSIZEW && c->incw > 0 && c->basew < w) {
+		w -= c->basew;
+		w /= c->incw;
+		w *= c->incw;
+		w += c->basew;
+	}
+	if (incsize & INCSIZEH && c->inch > 0 && c->baseh < h) {
+		h -= c->baseh;
+		h /= c->inch;
+		h *= c->inch;
+		h += c->baseh;
+	}
+	XMoveResizeWindow(dpy, c->win, x, y, w, h);
+}
+
+/* get cursor position */
+static void
+querypointer(int *x_ret, int *y_ret)
+{
+	Window da, db;
+	int dx, dy;
+	unsigned dm;
+
+	XQueryPointer(dpy, root, &da, &db, x_ret, y_ret, &dx, &dy, &dm);
+}
+
+/* set client size hints */
+static long
+setsizehints(struct Client *c)
+{
+	long msize;
+	XSizeHints size;
+
+	if (!XGetWMNormalHints(dpy, c->win, &size, &msize))
+		/* size is uninitialized, ensure that size.flags aren't used */
+		size.flags = PSize;
+
+	if (size.flags & PResizeInc) {
+		c->incw = size.width_inc;
+		c->inch = size.height_inc;
+	} else
+		c->incw = c->inch = 0;
+
+	if (size.flags & PMaxSize) {
+		c->maxw = size.max_width;
+		c->maxh = size.max_height;
+	} else
+		c->maxw = c->maxh = 0;
+
+	if (size.flags & PBaseSize) {
+		c->basew = size.base_width;
+		c->baseh = size.base_height;
+	} else if (size.flags & PMinSize) {
+		c->basew = size.min_width;
+		c->baseh = size.min_height;
+	} else
+		c->basew = c->baseh = 0;
+
+	if (size.flags & PMinSize) {
+		c->minw = size.min_width;
+		c->minh = size.min_height;
+	} else if (size.flags & PBaseSize) {
+		c->minw = size.base_width;
+		c->minh = size.base_height;
+	} else
+		c->minw = c->minh = 0;
+
+	if (size.flags & PAspect) {
+		c->mina = (float)size.min_aspect.y / size.min_aspect.x;
+		c->maxa = (float)size.max_aspect.x / size.max_aspect.y;
+	} else
+		c->maxa = c->mina = 0.0;
+
+	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
+
+	return size.flags;
+}
 
 /* get client given a window */
 struct Client *
@@ -1387,174 +1547,4 @@ client_unfocus(struct Client *c)
 		c->fprev->fnext = c->fnext;
 	c->fnext = NULL;
 	c->fprev = NULL;
-}
-
-/* apply size hints for unmaximized window */
-static void
-applyaspectsize(struct Client *c)
-{
-	if (c == NULL)
-		return;
-
-	if (c->mina > 0 && c->maxa > 0) {
-		if (c->maxa < (float)c->uw/c->uh) {
-			if (c->uw == MAX(c->uw, c->uh)) {
-				c->uh = c->uw / c->maxa - 0.5;
-			} else {
-				c->uw = c->uh * c->maxa + 0.5;
-			}
-		} else if (c->mina < (float)c->uh/c->uw) {
-			if (c->uh == MAX(c->uw, c->uh)) {
-				c->uw = c->uh / c->mina - 0.5;
-			} else {
-				c->uh = c->uw * c->mina + 0.5;
-			}
-		}
-	}
-}
-
-/* apply size hints for unmaximized window */
-static void
-applyincsize(struct Client *c, int *w, int *h)
-{
-	if (w && c->incw > 0 && c->basew < *w) {
-		*w -= c->basew;
-		*w /= c->incw;
-		*w *= c->incw;
-		*w += c->basew;
-	}
-	if (h && c->inch > 0 && c->baseh < *h) {
-		*h -= c->baseh;
-		*h /= c->inch;
-		*h *= c->inch;
-		*h += c->baseh;
-	}
-}
-
-/* create a column */
-static struct Column *
-colalloc(struct Column *prev, struct Column *next, struct Client *c)
-{
-	struct Column *col;
-
-	if (c == NULL || c->ws == NULL)
-		errx(1, "trying to create column with improper client");
-
-	if ((col = malloc(sizeof *col)) == NULL)
-		err(1, "malloc");
-
-	col->next = next;
-	col->prev = prev;
-	col->row = c;
-	col->ws = c->ws;
-
-	return col;
-}
-
-/* free a column */
-static void
-colfree(struct Column *col)
-{
-	struct WS *ws;
-
-	if (col == NULL)
-		return;
-
-	ws = col->ws;
-
-	if (ws->col == col) {
-		if (col->prev)
-			errx(1, "there is a prev column for the first column");
-		ws->col = col->next;
-		if (col->next)
-			col->next->prev = NULL;
-	} else {
-		if (col->next)
-			col->next->prev = col->prev;
-		col->prev->next = col->next;
-	}
-
-	free(col);
-}
-
-/* call XMoveResizeWindow and apply size increment, depending on incsize */
-static void
-moveresize(struct Client *c, int x, int y, int w, int h, int incsize)
-{
-	if (incsize & INCSIZEW && c->incw > 0 && c->basew < w) {
-		w -= c->basew;
-		w /= c->incw;
-		w *= c->incw;
-		w += c->basew;
-	}
-	if (incsize & INCSIZEH && c->inch > 0 && c->baseh < h) {
-		h -= c->baseh;
-		h /= c->inch;
-		h *= c->inch;
-		h += c->baseh;
-	}
-	XMoveResizeWindow(dpy, c->win, x, y, w, h);
-}
-
-/* get cursor position */
-static void
-querypointer(int *x_ret, int *y_ret)
-{
-	Window da, db;
-	int dx, dy;
-	unsigned dm;
-
-	XQueryPointer(dpy, root, &da, &db, x_ret, y_ret, &dx, &dy, &dm);
-}
-
-/* set client size hints */
-static long
-setsizehints(struct Client *c)
-{
-	long msize;
-	XSizeHints size;
-
-	if (!XGetWMNormalHints(dpy, c->win, &size, &msize))
-		/* size is uninitialized, ensure that size.flags aren't used */
-		size.flags = PSize;
-
-	if (size.flags & PResizeInc) {
-		c->incw = size.width_inc;
-		c->inch = size.height_inc;
-	} else
-		c->incw = c->inch = 0;
-
-	if (size.flags & PMaxSize) {
-		c->maxw = size.max_width;
-		c->maxh = size.max_height;
-	} else
-		c->maxw = c->maxh = 0;
-
-	if (size.flags & PBaseSize) {
-		c->basew = size.base_width;
-		c->baseh = size.base_height;
-	} else if (size.flags & PMinSize) {
-		c->basew = size.min_width;
-		c->baseh = size.min_height;
-	} else
-		c->basew = c->baseh = 0;
-
-	if (size.flags & PMinSize) {
-		c->minw = size.min_width;
-		c->minh = size.min_height;
-	} else if (size.flags & PBaseSize) {
-		c->minw = size.base_width;
-		c->minh = size.base_height;
-	} else
-		c->minw = c->minh = 0;
-
-	if (size.flags & PAspect) {
-		c->mina = (float)size.min_aspect.y / size.min_aspect.x;
-		c->maxa = (float)size.max_aspect.x / size.max_aspect.y;
-	} else
-		c->maxa = c->mina = 0.0;
-
-	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
-
-	return size.flags;
 }
