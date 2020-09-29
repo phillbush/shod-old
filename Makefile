@@ -11,7 +11,7 @@ ${PROG}: ${OBJS}
 	${CC} -o $@ ${OBJS} ${LDFLAGS}
 
 ${OBJS}: shod.h config.h
-shod.o: monitor.h ewmh.h config.h xevent.h
+shod.o: monitor.h ewmh.h config.h xevent.h util.h manage.h
 xevent.o: xevent.h client.h ewmh.h monitor.h workspace.h manage.h
 manage.o: manage.h client.h panel.h dockapp.h desktop.h menu.h
 panel.o: panel.h util.h monitor.h
