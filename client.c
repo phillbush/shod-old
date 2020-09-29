@@ -86,6 +86,7 @@ client_add(Window win, XWindowAttributes *wa)
 
 	c->prev = c->next = NULL;
 	c->fprev = c->fnext = NULL;
+	c->ws = NULL;
 	c->col = NULL;
 	c->state = ISNORMAL;
 	c->layer = 0;
@@ -127,6 +128,7 @@ client_add(Window win, XWindowAttributes *wa)
 void
 client_del(struct Client *c, int dofree, int delws)
 {
+	struct WS *ws, *lastws;
 	struct Column *col;
 	struct Client *bestfocus = NULL;
 	int focus = 0;
@@ -177,13 +179,12 @@ client_del(struct Client *c, int dofree, int delws)
 	 * the client was the last client in it
 	 */
 	if (delws && c->state & ISBOUND) {
-		struct WS *ws, *lastws;
-
 		/* find last workspace */
 		for (ws = c->ws->mon->ws; ws; ws = ws->next)
 			lastws = ws;
 
 		c->ws->nclients--;
+		client_unfocus(c);
 
 		/* only the last ws can have 0 clients */
 		if (c->ws->nclients == 0) {
@@ -204,13 +205,10 @@ client_del(struct Client *c, int dofree, int delws)
 	}
 
 	if (dofree) {
-		struct WS *ws;
-
-		/* if other workspaces' focus is on c, change it */
 		if (!(c->state & ISMINIMIZED))
 			for (ws = c->mon->ws; ws; ws = ws->next)
 				if (ws->focused == c)
-					ws->mon->focused = ws->focused = NULL;
+					ws->focused = NULL;
 
 		client_unfocus(c);
 		if (focus)
@@ -271,7 +269,7 @@ client_bestfocus(struct Client *c)
 		focus = tmp;
 		if (!focus) {
 			for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
-				if (tmp == c) {
+				if (tmp != c) {
 					break;
 				}
 			}
@@ -351,6 +349,7 @@ client_configure(struct Client *c, XWindowChanges wc, unsigned valuemask)
 void
 client_focus(struct Client *c)
 {
+	static struct Client *focused = NULL;
 	struct Client *prevfocused;
 	struct Monitor *mon;
 	struct WS *ws;
@@ -365,9 +364,9 @@ client_focus(struct Client *c)
 		return;
 	}
 
-	client_setborder(wm.selmon->focused, config.unfocused);
+	client_setborder(focused, config.unfocused);
 
-	prevfocused = wm.selmon->focused;
+	prevfocused = focused;
 	wm.selmon = c->mon;
 	if (c->state & ISBOUND) {
 		wm.selmon->selws = c->ws;
@@ -380,6 +379,7 @@ client_focus(struct Client *c)
 	if (wm.selmon->focused)
 		wm.selmon->focused->fprev = c;
 	wm.selmon->focused = c;
+	focused = c;
 
 	client_setborder(c, config.focused);
 
@@ -495,7 +495,6 @@ client_gotows(struct WS *ws, int wsnum)
 		             ws->mon->my + ws->mon->mh/2);
 
 	/* update current workspace */
-	wm.selmon->selws = ws;
 	wm.selmon = ws->mon;
 	wm.selmon->selws = ws;
 	ewmh_setcurrentdesktop(wsnum);
@@ -1123,7 +1122,6 @@ client_resize(struct Client *c, enum Quadrant q, int x, int y)
 void
 client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 {
-	//struct Monitor *mon;
 	struct WS *lastws;
 	int createnewws = 0;    /* whether to create a new workspace */
 	int focus = 0;
@@ -1378,12 +1376,14 @@ client_tile(struct WS *ws, int recalc)
 void
 client_unfocus(struct Client *c)
 {
-	if (wm.selmon->focused == c)
-		wm.selmon->focused = c->fnext;
+	if (c->mon->focused == c)
+		c->mon->focused = c->fnext;
 	if (c->fnext)
 		c->fnext->fprev = c->fprev;
 	if (c->fprev)
 		c->fprev->fnext = c->fnext;
+	c->fnext = NULL;
+	c->fprev = NULL;
 }
 
 /* apply size hints for unmaximized window */
