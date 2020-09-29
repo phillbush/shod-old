@@ -128,14 +128,8 @@ getresources(void)
 		config.focused_color = xval.addr;
 	if (XrmGetResource(xdb, "shod.unfocused", "*", &type, &xval) == True)
 		config.unfocused_color = xval.addr;
-	dock.xpm = None;
-	if (XrmGetResource(xdb, "shod.dock", "*", &type, &xval) == True) {
-		XpmAttributes xa;
-		Pixmap pi;
-
-		xa.valuemask = 0;
-		XpmReadFileToPixmap(dpy, root, xval.addr, &dock.xpm, &pi, &xa);
-	}
+	if (XrmGetResource(xdb, "shod.dock", "*", &type, &xval) == True)
+		config.dockxpm_path = xval.addr;
 }
 
 /* get configuration from command-line */
@@ -275,6 +269,8 @@ initcursor(void)
 void
 initdock(void)
 {
+	XpmAttributes xa;
+	Pixmap pi;
 	char *s, *p;
 	size_t i;
 
@@ -297,6 +293,11 @@ initdock(void)
 		}
 		free(s);
 	}
+	xa.valuemask = 0;
+	if (config.dockxpm_path)
+		XpmReadFileToPixmap(dpy, root, xval.addr, &dock.xpm, &pi, &xa);
+	else
+		dock.xpm = None;
 }
 
 /* create dummy windows used for controlling the layer of clients */

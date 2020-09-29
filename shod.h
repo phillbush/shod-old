@@ -105,6 +105,8 @@ enum {DockBelow, DockAside};
 
 /* configuration structure */
 struct Config {
+	const char *dockxpm_path;
+
 	const char *urgent_color;
 	const char *focused_color;
 	const char *unfocused_color;
