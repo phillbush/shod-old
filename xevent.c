@@ -44,8 +44,8 @@ xevent_buttonpress(XEvent *e)
 {
 	Cursor curs = None;
 	XButtonPressedEvent *ev = &e->xbutton;
-	int isborder = 0;
 	struct Client *c;
+	int isborder = 0;
 	int focus = 0;
 
 	/* if user clicked in no window, focus the monitor below cursor */
@@ -85,8 +85,8 @@ xevent_buttonpress(XEvent *e)
 			curs = cursor[CursSE];
 
 		XGrabPointer(dpy, c->win, False,
-		     	     ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
-			 	 GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+		             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
+		             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
 		motionx = ev->x;
 		motiony = ev->y;
 	}
