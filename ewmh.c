@@ -92,7 +92,7 @@ ewmh_setstate(struct Client *c)
 	if (c == NULL)
 		return;
 
-	if (focused == c)
+	if (wm.selmon->focused == c)
 		data[n++] = netatom[NetWMStateFocused];
 
 	if (c->isfullscreen)

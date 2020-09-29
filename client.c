@@ -134,7 +134,7 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c == NULL)
 		return;
 
-	if (dofree && !(c->state & ISMINIMIZED) && focused == c) {
+	if (dofree && !(c->state & ISMINIMIZED) && wm.selmon->focused == c) {
 		bestfocus = client_bestfocus(c);
 		focus = 1;
 	}
@@ -260,7 +260,7 @@ client_bestfocus(struct Client *c)
 
 	/* If client is floating, try to focus next floating */
 	if (c->state & ISFLOATING) {
-		for (tmp = focused; tmp; tmp = tmp->fnext) {
+		for (tmp = wm.selmon->focused; tmp; tmp = tmp->fnext) {
 			if (tmp == c)
 				continue;
 			if (tmp->state & ISNORMAL && tmp->ws == c->ws)
@@ -270,7 +270,7 @@ client_bestfocus(struct Client *c)
 		}
 		focus = tmp;
 		if (!focus) {
-			for (tmp = focused; tmp; tmp = tmp->fnext) {
+			for (tmp = wm.selmon->focused; tmp; tmp = tmp->fnext) {
 				if (tmp == c)
 					continue;
 				if (tmp->state & ISMAXIMIZED && tmp->ws == c->ws)
@@ -290,7 +290,7 @@ client_bestfocus(struct Client *c)
 				focus = c->col->next->row;
 		}
 		if (!focus) {
-			for (tmp = focused; tmp; tmp = tmp->fnext) {
+			for (tmp = wm.selmon->focused; tmp; tmp = tmp->fnext) {
 				if (tmp == c)
 					continue;
 				if (tmp->state & ISNORMAL && tmp->ws == c->ws)
@@ -366,9 +366,9 @@ client_focus(struct Client *c)
 		return;
 	}
 
-	client_setborder(focused, config.unfocused);
+	client_setborder(wm.selmon->focused, config.unfocused);
 
-	prevfocused = focused;
+	prevfocused = wm.selmon->focused;
 	wm.selmon = c->mon;
 	wm.selmon->focused = c;
 	if (c->state & ISBOUND) {
@@ -377,11 +377,11 @@ client_focus(struct Client *c)
 		wm.selmon->selws = c->ws;
 	}
 	client_unfocus(c);
-	c->fnext = focused;
+	c->fnext = wm.selmon->focused;
 	c->fprev = NULL;
-	if (focused)
-		focused->fprev = c;
-	focused = c;
+	if (wm.selmon->focused)
+		wm.selmon->focused->fprev = c;
+	wm.selmon->focused = c;
 
 	client_setborder(c, config.focused);
 
@@ -1133,7 +1133,7 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 	if (c == NULL || ws == NULL || (c->state & ISFREE))
 		return;
 
-	if (focused == c)
+	if (wm.selmon->focused == c)
 		focus = 1;
 
 	/* find last workspace in this monitor */
@@ -1258,7 +1258,7 @@ client_stick(struct Client *c, int stick)
 		c->state = ISSTICKY;
 		c->prev = NULL;
 		c->ws = NULL;
-		if (focused == c)
+		if (wm.selmon->focused == c)
 			for (ws = c->mon->ws; ws; ws = ws->next)
 				ws->focused = c;
 		ewmh_setwmdesktop();
@@ -1380,8 +1380,8 @@ client_tile(struct WS *ws, int recalc)
 void
 client_unfocus(struct Client *c)
 {
-	if (focused == c)
-		focused = c->fnext;
+	if (wm.selmon->focused == c)
+		wm.selmon->focused = c->fnext;
 	if (c->fnext)
 		c->fnext->fprev = c->fprev;
 	if (c->fprev)

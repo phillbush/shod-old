@@ -37,9 +37,6 @@ int (*xerrorxlib)(Display *, XErrorEvent *);
 int screen;
 int screenw, screenh;
 
-/* focused client, selected workspace, selected monitor, etc */
-struct Client *focused;
-
 /* clients */
 struct Panel *panels;
 struct WM wm;
