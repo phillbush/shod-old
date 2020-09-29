@@ -269,7 +269,10 @@ client_bestfocus(struct Client *c)
 		focus = tmp;
 		if (!focus) {
 			for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
-				if (tmp != c) {
+				if (tmp == c) {
+					continue;
+				}
+				if (tmp->state & ISMAXIMIZED && tmp->ws == c->ws) {
 					break;
 				}
 			}
