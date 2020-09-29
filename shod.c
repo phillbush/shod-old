@@ -300,12 +300,13 @@ initdock(void)
 		dock.xpm = None;
 }
 
-/* create dummy windows used for controlling the layer of clients */
+/* create dummy windows used for controlling focus and the layer of clients */
 void
 initdummywindows(void)
 {
 	int i;
 
+	wmcheckwin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
 	focuswin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
 	for (i = 0; i < LayerLast; i++)
 		layerwin[i] = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
@@ -373,6 +374,18 @@ scan(void)
 	}
 }
 
+/* destroy dummy windows */
+static void
+cleandummywindows(void)
+{
+	int i;
+
+	XDestroyWindow(dpy, wmcheckwin);
+	XDestroyWindow(dpy, focuswin);
+	for (i = 0; i < LayerLast; i++)
+		XDestroyWindow(dpy, layerwin[i]);
+}
+
 /* clean up */
 static void
 cleanup(void)
@@ -427,10 +440,6 @@ cleanup(void)
 	for (i = 0; i < CursLast; i++)
 		XFreeCursor(dpy, cursor[i]);
 
-	XDestroyWindow(dpy, focuswin);
-	for (i = 0; i < LayerLast; i++)
-		XDestroyWindow(dpy, layerwin[i]);
-	XDestroyWindow(dpy, wmcheckwin);
 	XDeleteProperty(dpy, root, netatom[NetActiveWindow]);
 }
 
@@ -438,7 +447,6 @@ cleanup(void)
 int
 main(int argc, char *argv[])
 {
-
 	if (signal(SIGINT, sigint) == SIG_ERR)
 		err(1, "signal");
 
@@ -462,8 +470,8 @@ main(int argc, char *argv[])
 
 	/* Select SubstructureRedirect events on root window */
 	XSelectInput(dpy, root, SubstructureRedirectMask
-	             | SubstructureNotifyMask | PropertyChangeMask
-	             | StructureNotifyMask | ButtonPressMask);
+	             | SubstructureNotifyMask | StructureNotifyMask
+	             | ButtonPressMask);
 
 	/* Set focus to root window */
 	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
@@ -493,8 +501,11 @@ main(int argc, char *argv[])
 	/* scan existing windows and adopt them */
 	scan();
 
+	/* run main event loop */
 	xevent_run();
 
+	/* clean up stuff */
+	cleandummywindows();
 	cleanup();
 
 	/* close connection to server */
