@@ -26,17 +26,6 @@ isdocked(Window win)
 	return retval;
 }
 
-/* checks whether a dockapp is listed in dock.beg */
-static int
-isinbeg(struct Dockapp *d)
-{
-	for (; d; d = d->prev) {
-		if (d == dock.beg)
-			return 1;
-	}
-	return 0;
-}
-
 /* create dockapp's parent window */
 static Window
 createparentwin(void)
@@ -66,10 +55,7 @@ getdockapp(Window win)
 {
 	struct Dockapp *d;
 
-	for (d = dock.beg; d; d = d->next)
-		if (d->win == win)
-			return d;
-	for (d = dock.end; d; d = d->next)
+	for (d = dock.list; d; d = d->next)
 		if (d->win == win)
 			return d;
 	return NULL;
@@ -79,7 +65,7 @@ void
 dockapp_add(Window win, XWindowAttributes *wa)
 {
 	struct Dockapp *d;
-	int n;
+	struct Dockapp *tmp = NULL;
 
 	if ((d = malloc(sizeof *d)) == NULL)
 		err(1, "malloc");
@@ -89,33 +75,19 @@ dockapp_add(Window win, XWindowAttributes *wa)
 	d->w = wa->width;
 	d->h = wa->height;
 	d->parent = createparentwin();
-	if ((n = isdocked(win)) != -1) {
-		if (dock.beg == NULL) {
-			d->prev = NULL;
-			dock.beg = d;
-		} else {
-			struct Dockapp *lastd;
-
-			for (lastd = dock.beg; lastd->next; lastd = lastd->next)
-				;
-			d->prev = lastd;
-			lastd->next = d;
-		}
-		d->pos = n;
+	d->pos = isdocked(win);
+	for (tmp = dock.list; tmp && d->pos < tmp->pos; tmp = tmp->next)
+		;
+	if (!tmp) {
+		d->prev = NULL;
+		dock.list = d;
 	} else {
-		if (dock.end == NULL) {
-			d->prev = NULL;
-			dock.end = d;
-		} else {
-			struct Dockapp *lastd;
-
-			for (lastd = dock.end; lastd->next; lastd = lastd->next)
-				;
-			d->prev = lastd;
-			lastd->next = d;
-		}
-		d->pos = 0;
+		d->prev = tmp->prev;
+		if (tmp->prev)
+			tmp->prev->next = d;
+		tmp->prev = d;
 	}
+	d->next = tmp;
 	if (dock.mode == DockBelow) {
 		Window wins[2];
 
@@ -137,12 +109,8 @@ dockapp_del(struct Dockapp *d)
 
 	if (d->prev)
 		d->prev->next = d->next;
-	else {
-		if (isinbeg(d))
-			dock.beg = d->next;
-		else
-			dock.end = d->next;
-	}
+	else
+		dock.list = d->next;
 	if (d->next)
 		d->next->prev = d->prev;
 	XDestroyWindow(dpy, d->parent);
@@ -163,7 +131,7 @@ dockapp_redock(void)
 	ys = (dock.position == DockBottom) ? wm.mon->mh - wm.mon->bb - dock.size : wm.mon->my + wm.mon->bt;
 	xe = (dock.position == DockLeft) ? wm.mon->mx + wm.mon->bl : wm.mon->mw - wm.mon->br;
 	ye = (dock.position == DockTop) ? wm.mon->my + wm.mon->bt : wm.mon->mh - wm.mon->bb;
-	for (d = dock.beg; d; d = d->next) {
+	for (d = dock.list; d; d = d->next) {
 		if (dock.orientation) {
 			switch (dock.position) {
 			case DockTop:
@@ -192,43 +160,6 @@ dockapp_redock(void)
 			}
 		}
 
-		XMoveWindow(dpy, d->parent, x, y);
-	}
-	if (dock.orientation) {
-		x = xs - dock.size;
-		y = ys - dock.size;
-	} else {
-		x = xe;
-		y = ye;
-	}
-	for (d = dock.end; d; d = d->next) {
-		if (dock.orientation) {
-			switch (dock.position) {
-			case DockTop:
-			case DockBottom:
-				x += dock.size;
-				y = ys;
-				break;
-			case DockLeft:
-			case DockRight:
-				x = xs;
-				y += dock.size;
-				break;
-			}
-		} else {
-			switch (dock.position) {
-			case DockTop:
-			case DockBottom:
-				x -= dock.size;
-				y = ys;
-				break;
-			case DockLeft:
-			case DockRight:
-				x = xs;
-				y -= dock.size;
-				break;
-			}
-		}
 		XMoveWindow(dpy, d->parent, x, y);
 	}
 }

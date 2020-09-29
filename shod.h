@@ -200,7 +200,7 @@ struct Dockapp {
 	Window parent;
 	Window win;
 	int w, h;
-	unsigned pos;
+	int pos;
 };
 
 /* dock whither dockapps are mapped */
