@@ -15,9 +15,9 @@ shod.o: monitor.h ewmh.h config.h xevent.h util.h manage.h
 xevent.o: xevent.h client.h ewmh.h monitor.h workspace.h manage.h
 manage.o: manage.h client.h panel.h dockapp.h desktop.h menu.h
 panel.o: panel.h util.h monitor.h
+dockapp.o: dockapp.h monitor.h
 monitor.o: monitor.h workspace.h client.h dockapp.h
 client.o: client.h winlist.h ewmh.h util.h
-dockapp.o: dockapp.h
 desktop.o: desktop.h
 menu.o: menu.h
 ewmh.o: ewmh.h winlist.h
