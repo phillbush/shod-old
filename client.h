@@ -26,7 +26,7 @@ void panel_del(struct Panel *d);
 /* operations on clients */
 void client_above(struct Client *c, int above);
 void client_below(struct Client *c, int below);
-struct Client *client_bestfocus(struct Client *c);
+void client_bestfocus(struct Client *c);
 void client_close(struct Client *c);
 void client_configure(struct Client *c, XWindowChanges wc, unsigned value);
 void client_focus(struct Client *c);
@@ -48,7 +48,6 @@ void client_setborder(struct Client *c, unsigned long color);
 void client_stick(struct Client *c, int stick);
 void client_showdesktop(int n);
 void client_tile(struct WS *ws, int recalc);
-void client_unfocus(struct Client *c);
 
 /* operations on panels */
 void panel_updategaps(void);

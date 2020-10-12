@@ -105,6 +105,37 @@ colfree(struct Column *col)
 	free(col);
 }
 
+/* remove client from focus history */
+void
+unfocus(struct Client *c)
+{
+	if (c->mon->focused == c)
+		c->mon->focused = c->fnext;
+	if (c->fnext)
+		c->fnext->fprev = c->fprev;
+	if (c->fprev)
+		c->fprev->fnext = c->fnext;
+	c->fnext = NULL;
+	c->fprev = NULL;
+}
+
+/* focus client in its current monitor and workspace */
+static void
+focus(struct Client *c)
+{
+	if (c == NULL || c->state & ISMINIMIZED)
+		return;
+
+	unfocus(c);
+	c->fnext = c->mon->focused;
+	c->fprev = NULL;
+	if (c->mon->focused)
+		c->mon->focused->fprev = c;
+	c->mon->focused = c;
+	if (c->state & ISBOUND)
+		c->ws->focused = c;
+}
+
 /* call XMoveResizeWindow and apply size increment, depending on incsize */
 static void
 moveresize(struct Client *c, int x, int y, int w, int h, int incsize)
@@ -290,16 +321,12 @@ client_del(struct Client *c, int dofree, int delws)
 {
 	struct WS *ws, *lastws;
 	struct Column *col;
-	struct Client *bestfocus = NULL;
-	int focus = 0;
 
 	if (c == NULL)
 		return;
 
-	if (dofree && !(c->state & ISMINIMIZED) && wm.selmon->focused == c) {
-		bestfocus = client_bestfocus(c);
-		focus = 1;
-	}
+	if (dofree && wm.selmon->focused == c)
+		client_bestfocus(c);
 
 	if (c->prev) {  /* c is not at the beginning of the list */
 		c->prev->next = c->next;
@@ -334,6 +361,9 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c->state & ISMAXIMIZED && c->ws == wm.selmon->selws)
 		client_tile(c->ws, 1);
 
+	if (dofree || delws)
+		unfocus(c);
+
 	/*
 	 * the calling routine wants client's workspace to be deleted if
 	 * the client was the last client in it
@@ -344,7 +374,6 @@ client_del(struct Client *c, int dofree, int delws)
 			lastws = ws;
 
 		c->ws->nclients--;
-		client_unfocus(c);
 
 		/* only the last ws can have 0 clients */
 		if (c->ws->nclients == 0) {
@@ -369,10 +398,6 @@ client_del(struct Client *c, int dofree, int delws)
 			for (ws = c->mon->ws; ws; ws = ws->next)
 				if (ws->focused == c)
 					ws->focused = NULL;
-
-		client_unfocus(c);
-		if (focus)
-			client_focus(bestfocus);
 
 		winlist_del(c->win);
 		ewmh_setclients();
@@ -407,27 +432,26 @@ client_below(struct Client *c, int below)
 }
 
 /* find the best client to focus after deleting c */
-struct Client *
+void
 client_bestfocus(struct Client *c)
 {
-	struct Client *focus = NULL;
+	struct Client *bestfocus = NULL;
 	struct Client *tmp = NULL;
 
 	if (c == NULL || c->state & ISMINIMIZED)
-		return NULL;
+		return;
 
 	/* If client is floating, try to focus next floating */
 	if (c->state & ISFLOATING) {
 		for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
 			if (tmp == c)
 				continue;
-			if (tmp->state & ISNORMAL && tmp->ws == c->ws)
-				break;
-			if (tmp->state & ISSTICKY)
+			if ((tmp->state & ISNORMAL && tmp->ws == c->ws)
+			   || (tmp->state & ISSTICKY))
 				break;
 		}
-		focus = tmp;
-		if (!focus) {
+		bestfocus = tmp;
+		if (!bestfocus) {
 			for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
 				if (tmp == c) {
 					continue;
@@ -437,19 +461,19 @@ client_bestfocus(struct Client *c)
 				}
 			}
 		}
-		focus = tmp;
+		bestfocus = tmp;
 	} else if (c->state & ISMAXIMIZED) {
 		if (c->next)
-			focus = c->next;
-		if (!focus && c->prev)
-			focus = c->prev;
-		if (!focus && c->state & ISMAXIMIZED) {
-			if (!focus && c->col->prev)
-				focus = c->col->prev->row;
-			if (!focus && c->col->next)
-				focus = c->col->next->row;
+			bestfocus = c->next;
+		if (!bestfocus && c->prev)
+			bestfocus = c->prev;
+		if (!bestfocus && c->state & ISMAXIMIZED) {
+			if (!bestfocus && c->col->prev)
+				bestfocus = c->col->prev->row;
+			if (!bestfocus && c->col->next)
+				bestfocus = c->col->next->row;
 		}
-		if (!focus) {
+		if (!bestfocus) {
 			for (tmp = c->mon->focused; tmp; tmp = tmp->fnext) {
 				if (tmp == c)
 					continue;
@@ -458,11 +482,12 @@ client_bestfocus(struct Client *c)
 				if (tmp->state & ISSTICKY && tmp->mon == c->mon)
 					break;
 			}
-			focus = tmp;
+			bestfocus = tmp;
 		}
 	}
 
-	return focus;
+	if (bestfocus)
+		focus(bestfocus);
 }
 
 /* send a WM_DELETE message to client */
@@ -531,17 +556,9 @@ client_focus(struct Client *c)
 
 	prevfocused = focused;
 	wm.selmon = c->mon;
-	if (c->state & ISBOUND) {
+	if (c->state & ISBOUND)
 		wm.selmon->selws = c->ws;
-		wm.selmon->selws->focused = c;
-		wm.selmon->selws = c->ws;
-	}
-	client_unfocus(c);
-	c->fnext = wm.selmon->focused;
-	c->fprev = NULL;
-	if (wm.selmon->focused)
-		wm.selmon->focused->fprev = c;
-	wm.selmon->focused = c;
+	focus(c);
 	focused = c;
 
 	client_setborder(c, config.focused);
@@ -805,7 +822,7 @@ client_minimize(struct Client *c, int minimize)
 
 		/* focus another window */
 		if (c->ws) {
-			c->mon->focused = c->ws->focused = client_bestfocus(c);
+			client_bestfocus(c);
 			if (focus)
 				client_focus(c->ws->focused);
 		}
@@ -831,6 +848,9 @@ client_minimize(struct Client *c, int minimize)
 void
 client_move(struct Client *c, int x, int y)
 {
+	struct Monitor *monto;  /* monitor to move the client to */
+	int focus = 0;          /* whether to refocus client */
+
 	if (c == NULL || c->state & ISMINIMIZED || c->isfullscreen)
 		return;
 
@@ -938,12 +958,15 @@ client_move(struct Client *c, int x, int y)
 			XMoveWindow(dpy, c->win, c->ux, c->uy);
 
 		if (c->state & ISNORMAL) {
-			struct Monitor *monto;  /* monitor to move the client to */
-
 			monto = getmon(c->ux + c->uw / 2, c->uy + c->uh / 2);
 			if (monto && monto != c->mon) {
+				if (c->mon->focused == c)
+					focus = 1;
+				if (focus)
+					client_bestfocus(c);
 				client_sendtows(c, monto->selws, 0, 0, 1);
-				client_focus(c);
+				if (focus)
+					client_focus(c);
 			}
 		}
 	}
@@ -1310,9 +1333,9 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 			place = 1;
 
 		if (!move) {
-			c->mon->focused = c->ws->focused = client_bestfocus(c);
+			client_bestfocus(c);
+			client_hide(c, 1);
 			if (wm.selmon->selws == c->ws) {
-				client_hide(c, 1);
 				client_focus(c->ws->focused);
 			}
 		}
@@ -1533,18 +1556,4 @@ client_tile(struct WS *ws, int recalc)
 
 		x += col->row->mw + config.gapinner + config.border_width * 2;
 	}
-}
-
-/* remove client from focus history */
-void
-client_unfocus(struct Client *c)
-{
-	if (c->mon->focused == c)
-		c->mon->focused = c->fnext;
-	if (c->fnext)
-		c->fnext->fprev = c->fprev;
-	if (c->fprev)
-		c->fprev->fnext = c->fnext;
-	c->fnext = NULL;
-	c->fprev = NULL;
 }
