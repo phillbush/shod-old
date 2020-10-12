@@ -327,6 +327,7 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c == NULL)
 		return;
 
+	bestfocus = client_bestfocus(c);
 	if (wm.selmon->focused == c)
 		focus = 1;
 
@@ -401,7 +402,6 @@ client_del(struct Client *c, int dofree, int delws)
 				if (ws->focused == c)
 					ws->focused = NULL;
 
-		bestfocus = client_bestfocus(c);
 		if (focus)
 			client_focus(bestfocus);
 
