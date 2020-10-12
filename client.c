@@ -107,7 +107,7 @@ colfree(struct Column *col)
 
 /* remove client from focus history */
 void
-unfocus(struct Client *c)
+delfocus(struct Client *c)
 {
 	if (c->mon->focused == c)
 		c->mon->focused = c->fnext;
@@ -119,14 +119,14 @@ unfocus(struct Client *c)
 	c->fprev = NULL;
 }
 
-/* focus client in its current monitor and workspace */
+/* add client to focus history */
 static void
-focus(struct Client *c)
+addfocus(struct Client *c)
 {
 	if (c == NULL || c->state & ISMINIMIZED)
 		return;
 
-	unfocus(c);
+	delfocus(c);
 	c->fnext = c->mon->focused;
 	c->fprev = NULL;
 	if (c->mon->focused)
@@ -365,7 +365,7 @@ client_del(struct Client *c, int dofree, int delws)
 		client_tile(c->ws, 1);
 
 	if (dofree || delws)
-		unfocus(c);
+		delfocus(c);
 
 	/*
 	 * the calling routine wants client's workspace to be deleted if
@@ -493,7 +493,7 @@ client_bestfocus(struct Client *c)
 	}
 
 	if (bestfocus)
-		focus(bestfocus);
+		addfocus(bestfocus);
 
 	return bestfocus;
 }
@@ -566,7 +566,7 @@ client_focus(struct Client *c)
 	wm.selmon = c->mon;
 	if (c->state & ISBOUND)
 		wm.selmon->selws = c->ws;
-	focus(c);
+	addfocus(c);
 	focused = c;
 
 	client_setborder(c, config.focused);
