@@ -828,13 +828,6 @@ client_minimize(struct Client *c, int minimize)
 		wm.minimized = c;
 		c->prev = NULL;
 
-		/* focus another window */
-		if (c->ws) {
-			(void)client_bestfocus(c);
-			if (focus)
-				client_focus(c->ws->focused);
-		}
-
 		c->ws = NULL;
 		c->mon = NULL;
 		c->state = ISMINIMIZED;
