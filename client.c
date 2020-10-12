@@ -327,9 +327,9 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c == NULL)
 		return;
 
-	bestfocus = client_bestfocus(c);
 	if (wm.selmon->focused == c)
 		focus = 1;
+	bestfocus = client_bestfocus(c);
 
 	if (c->prev) {  /* c is not at the beginning of the list */
 		c->prev->next = c->next;
