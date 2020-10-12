@@ -321,12 +321,14 @@ client_del(struct Client *c, int dofree, int delws)
 {
 	struct WS *ws, *lastws;
 	struct Column *col;
+	struct Client *bestfocus = NULL;
+	int focus = 0;
 
 	if (c == NULL)
 		return;
 
-	if (dofree && wm.selmon->focused == c)
-		client_bestfocus(c);
+	if (wm.selmon->focused == c)
+		focus = 1;
 
 	if (c->prev) {  /* c is not at the beginning of the list */
 		c->prev->next = c->next;
@@ -399,6 +401,10 @@ client_del(struct Client *c, int dofree, int delws)
 				if (ws->focused == c)
 					ws->focused = NULL;
 
+		bestfocus = client_bestfocus(c);
+		if (focus)
+			client_focus(bestfocus);
+
 		winlist_del(c->win);
 		ewmh_setclients();
 		ewmh_setclientsstacking();
@@ -432,14 +438,14 @@ client_below(struct Client *c, int below)
 }
 
 /* find the best client to focus after deleting c */
-void
+struct Client *
 client_bestfocus(struct Client *c)
 {
 	struct Client *bestfocus = NULL;
 	struct Client *tmp = NULL;
 
 	if (c == NULL || c->state & ISMINIMIZED)
-		return;
+		return NULL;
 
 	/* If client is floating, try to focus next floating */
 	if (c->state & ISFLOATING) {
@@ -488,6 +494,8 @@ client_bestfocus(struct Client *c)
 
 	if (bestfocus)
 		focus(bestfocus);
+
+	return bestfocus;
 }
 
 /* send a WM_DELETE message to client */
@@ -822,7 +830,7 @@ client_minimize(struct Client *c, int minimize)
 
 		/* focus another window */
 		if (c->ws) {
-			client_bestfocus(c);
+			(void)client_bestfocus(c);
 			if (focus)
 				client_focus(c->ws->focused);
 		}
@@ -963,7 +971,7 @@ client_move(struct Client *c, int x, int y)
 				if (c->mon->focused == c)
 					focus = 1;
 				if (focus)
-					client_bestfocus(c);
+					(void)client_bestfocus(c);
 				client_sendtows(c, monto->selws, 0, 0, 1);
 				if (focus)
 					client_focus(c);
@@ -1333,7 +1341,7 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 			place = 1;
 
 		if (!move) {
-			client_bestfocus(c);
+			(void)client_bestfocus(c);
 			client_hide(c, 1);
 			if (wm.selmon->selws == c->ws) {
 				client_focus(c->ws->focused);
