@@ -1,10 +1,12 @@
 .TH SHOD 1
 .SH NAME
 .B shod
-\- shod window manager
+\- hybrid window manager with dockapp support
 .SH SYNOPSIS
 .B shod
 .RB [ \-bg ]
+.RB [ \-d
+.IR dockapps ]
 .RB [ \-f
 .IR buttons ]
 .RB [ \-m
@@ -16,13 +18,18 @@
 is an hybrid (tiling and floating) window manager for X11.
 .B shod
 is controlled by responding to client messages with EWMH hints and regular ICCCM events,
-and by using a specified modifier with the mouse pointer.
+and by using a given key modifier with the mouse pointer.
 .PP
 The options are as follows:
 .TP
 .B \-b
 If this option is set, shod ignores borders when a single window is maximized on the screen.
 By default, borders are always drawn, except on fullscreen windows.
+.TP
+.BI \-d " dockapps"
+Specify a semicolon-separated list of names of dockapps that should be displayed in the dock.
+This option does not spawn the dockapps, the dockapps must be invoked by other means.
+This option only specify the order in which the dockapps should appear in the dock.
 .TP
 .BI \-f " buttons"
 Specify which mouse buttons can be used to focus a window when clicking on it.
@@ -34,8 +41,9 @@ For example,
 .B -f 13
 make windows be focused when clicking on them with the mouse buttons 1 and 3
 (the left and the right mouse buttons, respectively).
-Without this option, no mouse button is used to focus window,
+If this is set to a blank string, no mouse button is used to focus window,
 and Shod uses the focus-follow-cursor focusing style.
+By default, focus follows mouse click on button 1.
 .TP
 .B \-g
 If this option is set, shod ignores gaps when a single window is maximized on the screen.
@@ -58,7 +66,7 @@ For example,
 .B -r 13
 make windows be raised when clicking on them with the mouse buttons 1 and 3
 (the left and the right mouse buttons, respectively).
-Without this option, all mouse buttons raise windows.
+By default, raise occurs on mouse click on button 1.
 .SS Desktop organization
 The desktop is made up of a set of monitors and a set of hidden windows.
 One of the monitors is the focused one, where new windows go to when they are created.
@@ -89,40 +97,47 @@ when windows are tiled or when tiled windows are moved around via configure requ
 Each column contains a set of tiled windows that are tiled in a vertical fashion,
 one above the other.
 The columns are displayed one next to the other.
+.PP
+.B shod
+maintains a dock, that is, a panel into which dockapps windows are reparented.
+Dockapps are small windows that appear to reside inside an icon.
+They are normally used to monitor things in the background such as the CPU usage.
+The dock only appears on the first monitor.
 .SH USAGE
-Shod has several ways of manipulating windows.
+.B shod
+has several ways of manipulating windows.
 See the section
 .B EXAMPLES
 for examples on how to use
 .IR wmctrl (1)
-and
-.IR wmutils (1)
-for controling shod.
+for controlling shod.
 .SS Manipulating with the mouse
-The main method for controling windows is the mouse.
+The main method for controlling windows is the mouse.
 .PP
 The
 .BI \-f " buttons"
 specifies which mouse buttons can be used to focus a window when clicking on it.
-If this option is not used, the focus follow the mouse pointer.
+If this option is set to an empty string, the focus follow the mouse pointer.
 .PP
 The
 .BI \-r " buttons"
 specifies which mouse buttons can be used to raise a window when clicking on it.
-If this option is not used, clicking on a window with any mouse button raises it.
 .PP
 Pressing the modifier key specified by the
 .B -m
-option and dragging a window with the Button 1 (the left mouse button)
-will move that window.
-By default, the modifier is Mod1 (which is normally Alt).
+option and dragging a window with the Button 1 (the left mouse button) will move that window.
 .PP
 Pressing the modifier key specified by the
 .B -m
 option and dragging a window corner with the Button 3 (the right mouse button)
 will resize that window in the direction of the corner.
+.PP
 By default, the modifier is Mod1 (which is normally Alt).
-Resizing windows can also be performed by dragging a window border with the Button 1.
+.PP
+Resizing windows can also be performed by dragging a window border with the Button 1,
+without pressing any modifier.
+Moving windows can also be performed by dragging a window border with the button 3,
+without pressing any modifier.
 .SS Manipulating via window properties
 The
 .IR wmctrl (1)
@@ -298,6 +313,55 @@ understands the following X resources.
 .B shod.borderWidth
 The size in pixels of the border around windows.
 .TP
+.B shod.dock
+The path to a .xpm file containing the background of the dock.
+.TP
+.B shod.dockBorder
+TODO
+.TP
+.B shod.dockInverse
+If set to
+.RB \(lq true \(rq,
+map dockapps from end to beginning.
+For example, if the dock is horizontal, and this resource is set to
+.RB true ,
+then the dockapps are mapped from right to left,
+rather than from left to right (which is the normal behavior).
+And if the dock is vertical, and this resource is set to
+.RB true ,
+then the dockapps are mapped from bottom to top,
+rather than from top to bottom.
+.TP
+.B shod.dockMode
+This resource can be set to
+.BR Below ,
+in which case the dock will appear bellow the windows;
+or
+.BR Aside ,
+in which case the dock will appear at the side of the windows.
+.TP
+.B shod.dockPlace
+This resource can be set to
+.BR Begin ,
+.BR Center ,
+or
+.BR End ,
+indicating that the dockapps should appear at the beginning
+(left tip of a horizontal dock or top of a vertical dock),
+the center, or the end of the dock, respectively.
+.TP
+.B shod.dockSide
+This resource can be set to
+.BR Top ,
+.BR Bottom ,
+.BR Left ,
+or
+.BR Right ,
+indicating that the dock should be displayed at the top, bottom, left or right edge of the first monitor.
+.TP
+.B shod.dockWidth
+The width, in pixels, of the dock.
+.TP
 .B shod.gapLeft
 The gap in pixels between the left border of the monitor and the windows.
 .TP
@@ -339,6 +403,23 @@ It also ignores gaps and borders when there is only a single tiled window, for o
 $ shod -m Mod4 -f 13 -r 1 -g -b
 .EE
 .PP
+The following is a sample content of the
+.B .xinitrc
+file.
+It first invokes four dockapps;
+and then invokes shod, telling it to map the two of the dockapps at the beginning of the dock,
+in the order specified.
+The two unlisted dockapps (bubblemon and wmcube) will appear at the end of the dock,
+in the order they are mapped to the screen.
+.IP
+.EX
+wmwlmon
+wmcube
+wmclock
+bubblemon
+exec shod -d "wmclock;wmwlmon"
+.EE
+.PP
 The following is a sample configuration for X resources.
 It must be placed in
 .B $HOME/.Xresources
@@ -351,6 +432,8 @@ and a 7 pixels wide gap around and between tiled windows.
 It sets the color of the border of urgent windows to red;
 the border of the focused window to blue;
 and the border of regular windows to gray.
+It also sets a 64-pixel width dock to be below windows, at the right edge of the screen,
+and map dockapps from the end (bottom of the dock) to the beginning (top of the dock).
 .IP
 .EX
 shod.borderWidth:   3
@@ -362,6 +445,11 @@ shod.gapInner:      7
 shod.urgent:        #cc0000
 shod.focused:       #3465a4
 shod.unfocused:     #555753
+shod.dockWidth:     64
+shod.dockMode:      Below
+shod.dockSide:      Right
+shod.dockPlace:     End
+shod.dockInverse:   True
 .EE
 .PP
 The following is a sample configuration for
@@ -394,13 +482,13 @@ mod4 + Enter
 
 # Killing windows
 mod4 + shift + q
-	wmctrl -ic $(pfw)
+	wmctrl -c :ACTIVE:
 
 # Workspace
 mod4 + {1,2,3,4,5,6,7,8,9,0}
 	wmctrl -s {0,1,2,3,4,5,6,7,8,9}
 mod4 + shift + {1,2,3,4,5,6,7,8,9,0}
-	wmctrl -ir $(pfw) -t {0,1,2,3,4,5,6,7,8,9}
+	wmctrl -r :ACTIVE: -t {0,1,2,3,4,5,6,7,8,9}
 
 # Resize/move windows
 mod4 + {c, v, shift + c, shift + v}
@@ -410,7 +498,7 @@ mod4 + shift + {h, j, k, l}
 
 # Change window status to sticky/above/below/minimized/fullscreen/maximized
 mod4 + shift + {s, a, b, z, f, m}
-	wmctrl -ir $(pfw) -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
+	wmctrl -r :ACTIVE: -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
 
 # Call the unhide.sh script
 mod4 + shift + u
@@ -423,59 +511,59 @@ The previous example binds the following keys to the following commands:
 Spawns a terminal emulator window.
 .TP
 .B Mod4 + Shift + Q
-Gently closes the focused windows.
+Gently closes the active windows.
 .TP
 .B Mod4 + <N>
 Go to the N-th workspace.
 .TP
 .B Mod4 + Shift + <N>
-Send focused window to the N-th workspace.
+Send active window to the N-th workspace.
 .TP
 .B Mod4 + C
-Shrink the focused window horizontally by 25 pixels.
+Shrink the active window horizontally by 25 pixels.
 .TP
 .B Mod4 + Shift + C
-Expand the focused window horizontally by 25 pixels.
+Expand the active window horizontally by 25 pixels.
 .TP
 .B Mod4 + V
-Shrink the focused window vertically by 25 pixels.
+Shrink the active window vertically by 25 pixels.
 .TP
 .B Mod4 + Shift + V
-Expand the focused window vertically by 25 pixels.
+Expand the active window vertically by 25 pixels.
 .TP
 .B Mod4 + Shift + H
-Move the focused window 10 pixels to the left.
+Move the active window 10 pixels to the left.
 .TP
 .B Mod4 + Shift + J
-Move the focused window 10 pixels down.
+Move the active window 10 pixels down.
 .TP
 .B Mod4 + Shift + K
-Move the focused window 10 pixels up.
+Move the active window 10 pixels up.
 .TP
 .B Mod4 + Shift + L
-Move the focused window 10 pixels to the right.
+Move the active window 10 pixels to the right.
 .TP
 .B Mod4 + Shift + S
-Make the focused window sticky;
+Make the active window sticky;
 or make it normal if it was sticky.
 .TP
 .B Mod4 + Shift + A
-Raise the focused window above the others;
+Raise the active window above the others;
 or move it to its normal place if it was already above others.
 .TP
 .B Mod4 + Shift + B
-Lower the focused window below the others;
+Lower the active window below the others;
 or move it to its normal place if it was already below others.
 .TP
 .B Mod4 + Shift + Z
-Hide the focused window.
+Hide the active window.
 .TP
 .B Mod4 + Shift + F
-Make the focused window fullscreen;
+Make the active window fullscreen;
 or make it normal if it was already fullscreen.
 .TP
 .B Mod4 + Shift + M
-Tile the focused window;
+Tile the active window;
 or make it floating if it was already tiled.
 .TP
 .B Mod4 + Shift + U

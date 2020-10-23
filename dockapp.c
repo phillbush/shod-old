@@ -126,27 +126,27 @@ dockapp_redock(void)
 		return;
 
 	if (config.dockside == DockTop || config.dockside == DockBottom) {
-		w = config.docksize * dock.num;
-		h = config.docksize;
+		w = config.dockwidth * dock.num;
+		h = config.dockwidth;
 		for (d = dock.list, n = 0; d; d = d->next, n++) {
-			y = (config.docksize - d->h) / 2;
+			y = (config.dockwidth - d->h) / 2;
 			if (config.dockinverse)
-				x = w - (n + 1) * config.docksize;
+				x = w - (n + 1) * config.dockwidth;
 			else
-				x = n * config.docksize;
-			x += (config.docksize - d->w) / 2;
+				x = n * config.dockwidth;
+			x += (config.dockwidth - d->w) / 2;
 			XMoveWindow(dpy, d->win, x, y);
 		}
 	} else {
-		w = config.docksize;
-		h = config.docksize * dock.num;
+		w = config.dockwidth;
+		h = config.dockwidth * dock.num;
 		for (d = dock.list, n = 0; d; d = d->next, n++) {
-			x = (config.docksize - d->w) / 2;
+			x = (config.dockwidth - d->w) / 2;
 			if (config.dockinverse)
-				y = h - (n + 1) * config.docksize;
+				y = h - (n + 1) * config.dockwidth;
 			else
-				y = n * config.docksize;
-			y += (config.docksize - d->h) / 2;
+				y = n * config.dockwidth;
+			y += (config.dockwidth - d->h) / 2;
 			XMoveWindow(dpy, d->win, x, y);
 		}
 	}
@@ -158,10 +158,10 @@ dockapp_redock(void)
 			x = wm.mon->mx;
 			break;
 		case DockCenter:
-			x = wm.mon->mx + (wm.mon->mw - dock.num * config.docksize) / 2;
+			x = wm.mon->mx + (wm.mon->mw - dock.num * config.dockwidth) / 2;
 			break;
 		case DockEnd:
-			x = wm.mon->mx + wm.mon->mw - dock.num * config.docksize;
+			x = wm.mon->mx + wm.mon->mw - dock.num * config.dockwidth;
 			break;
 		}
 		break;
@@ -172,38 +172,38 @@ dockapp_redock(void)
 			y = wm.mon->my;
 			break;
 		case DockCenter:
-			y = wm.mon->my + (wm.mon->mh - dock.num * config.docksize) / 2;
+			y = wm.mon->my + (wm.mon->mh - dock.num * config.dockwidth) / 2;
 			break;
 		case DockEnd:
-			y = wm.mon->my + wm.mon->mh - dock.num * config.docksize;
+			y = wm.mon->my + wm.mon->mh - dock.num * config.dockwidth;
 			break;
 		}
 		break;
 	case DockBottom:
-		y = wm.mon->my + wm.mon->mh - config.docksize;
+		y = wm.mon->my + wm.mon->mh - config.dockwidth;
 		switch (config.dockplace) {
 		case DockBegin:
 			x = wm.mon->mx;
 			break;
 		case DockCenter:
-			x = wm.mon->mx + (wm.mon->mw - dock.num * config.docksize) / 2;
+			x = wm.mon->mx + (wm.mon->mw - dock.num * config.dockwidth) / 2;
 			break;
 		case DockEnd:
-			x = wm.mon->mx + wm.mon->mw - dock.num * config.docksize;
+			x = wm.mon->mx + wm.mon->mw - dock.num * config.dockwidth;
 			break;
 		}
 		break;
 	case DockRight:
-		x = wm.mon->mx + wm.mon->mw - config.docksize;
+		x = wm.mon->mx + wm.mon->mw - config.dockwidth;
 		switch (config.dockplace) {
 		case DockBegin:
 			y = wm.mon->my;
 			break;
 		case DockCenter:
-			y = wm.mon->my + (wm.mon->mh - dock.num * config.docksize) / 2;
+			y = wm.mon->my + (wm.mon->mh - dock.num * config.dockwidth) / 2;
 			break;
 		case DockEnd:
-			y = wm.mon->my + wm.mon->mh - dock.num * config.docksize;
+			y = wm.mon->my + wm.mon->mh - dock.num * config.dockwidth;
 			break;
 		}
 		break;

@@ -24,6 +24,6 @@ struct Config config = {
 	.dockside = DockRight,  /* DockTop, DockBottom, DockLeft, or DockRight */
 	.dockplace = DockEnd,   /* DockBegin, DockCenter, or DockEnd */
 	.dockinverse = 1,       /* if nonzero, map dockapps from end to begin */
-	.docksize = 64,         /* size of each dockapp */
+	.dockwidth = 64,         /* size of each dockapp */
 	.dockborder = 0         /* (TODO) size of the dock border */
 };

@@ -252,16 +252,16 @@ monitor_updatearea(void)
 	if (config.dockmode != DockBelow && dock.num > 0) {
 		switch (config.dockside) {
 		case DockTop:
-			dtop = config.docksize;
+			dtop = config.dockwidth;
 			break;
 		case DockBottom:
-			dbottom = config.docksize;
+			dbottom = config.dockwidth;
 			break;
 		case DockLeft:
-			dleft = config.docksize;
+			dleft = config.dockwidth;
 			break;
 		case DockRight:
-			dright = config.docksize;
+			dright = config.dockwidth;
 			break;
 		}
 	}

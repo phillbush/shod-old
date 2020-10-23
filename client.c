@@ -327,9 +327,10 @@ client_del(struct Client *c, int dofree, int delws)
 	if (c == NULL)
 		return;
 
-	if (wm.selmon->focused == c)
+	if (dofree && !(c->state & ISMINIMIZED)) {
+		bestfocus = client_bestfocus(c);
 		focus = 1;
-	bestfocus = client_bestfocus(c);
+	}
 
 	if (c->prev) {  /* c is not at the beginning of the list */
 		c->prev->next = c->next;
@@ -413,7 +414,7 @@ client_del(struct Client *c, int dofree, int delws)
 	}
 }
 
-/* move client above others */
+/* rise client above others */
 void
 client_above(struct Client *c, int above)
 {
@@ -425,7 +426,7 @@ client_above(struct Client *c, int above)
 	client_raise(c);
 }
 
-/* move client below others */
+/* lower client below others */
 void
 client_below(struct Client *c, int below)
 {
@@ -809,24 +810,25 @@ client_maximize(struct Client *c, int maximize)
 void
 client_minimize(struct Client *c, int minimize)
 {
-	int focus = 0;
+	struct Client *bestfocus;
 
 	if (c == NULL)
 		return;
-
-	if (wm.selmon->selws == c->ws)
-		focus = 1;
 
 	if (c->state & ISMAXIMIZED)
 		client_maximize(c, 0);
 
 	if (minimize && !(c->state & ISMINIMIZED)) {
+		bestfocus = client_bestfocus(c);
+
 		client_del(c, 0, 1);
 		if (wm.minimized)
 			wm.minimized->prev = c;
 		c->next = wm.minimized;
 		wm.minimized = c;
 		c->prev = NULL;
+
+		client_focus(bestfocus);
 
 		c->ws = NULL;
 		c->mon = NULL;

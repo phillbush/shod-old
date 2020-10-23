@@ -104,6 +104,42 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.borderWidth", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.border_width = n;
+	if (XrmGetResource(xdb, "shod.dock", "*", &type, &xval) == True)
+		config.dockxpm_path = xval.addr;
+	if (XrmGetResource(xdb, "shod.dockBorder", "*", &type, &xval) == True)
+		if ((n = strtol(xval.addr, NULL, 10)) > 0)
+			config.dockborder = n;
+	if (XrmGetResource(xdb, "shod.dockInverse", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "true") == 0)
+			config.dockinverse = 1;
+	}
+	if (XrmGetResource(xdb, "shod.dockMode", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "below") == 0)
+			config.dockmode = DockBelow;
+		else if (strcasecmp(xval.addr, "aside") == 0)
+			config.dockmode = DockAside;
+	}
+	if (XrmGetResource(xdb, "shod.dockPlace", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "begin") == 0)
+			config.dockplace = DockBegin;
+		else if (strcasecmp(xval.addr, "center") == 0)
+			config.dockplace = DockCenter;
+		else if (strcasecmp(xval.addr, "end") == 0)
+			config.dockplace = DockEnd;
+	}
+	if (XrmGetResource(xdb, "shod.dockSide", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "top") == 0)
+			config.dockside = DockTop;
+		else if (strcasecmp(xval.addr, "bottom") == 0)
+			config.dockside = DockBottom;
+		else if (strcasecmp(xval.addr, "left") == 0)
+			config.dockside = DockLeft;
+		else if (strcasecmp(xval.addr, "right") == 0)
+			config.dockside = DockRight;
+	}
+	if (XrmGetResource(xdb, "shod.dockWidth", "*", &type, &xval) == True)
+		if ((n = strtol(xval.addr, NULL, 10)) > 0)
+			config.dockwidth = n;
 	if (XrmGetResource(xdb, "shod.gapLeft", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.gapleft = n;
@@ -119,48 +155,12 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.gapInner", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.gapinner = n;
-	if (XrmGetResource(xdb, "shod.dockMode", "*", &type, &xval) == True) {
-		if (strcasecmp(xval.addr, "below") == 0)
-			config.dockmode = DockBelow;
-		else if (strcasecmp(xval.addr, "aside") == 0)
-			config.dockmode = DockAside;
-	}
-	if (XrmGetResource(xdb, "shod.dockSide", "*", &type, &xval) == True) {
-		if (strcasecmp(xval.addr, "top") == 0)
-			config.dockside = DockTop;
-		else if (strcasecmp(xval.addr, "bottom") == 0)
-			config.dockside = DockBottom;
-		else if (strcasecmp(xval.addr, "left") == 0)
-			config.dockside = DockLeft;
-		else if (strcasecmp(xval.addr, "right") == 0)
-			config.dockside = DockRight;
-	}
-	if (XrmGetResource(xdb, "shod.dockPlace", "*", &type, &xval) == True) {
-		if (strcasecmp(xval.addr, "begin") == 0)
-			config.dockplace = DockBegin;
-		else if (strcasecmp(xval.addr, "center") == 0)
-			config.dockplace = DockCenter;
-		else if (strcasecmp(xval.addr, "end") == 0)
-			config.dockplace = DockEnd;
-	}
-	if (XrmGetResource(xdb, "shod.dockInverse", "*", &type, &xval) == True) {
-		if (strcasecmp(xval.addr, "true") == 0)
-			config.dockinverse = 1;
-	}
-	if (XrmGetResource(xdb, "shod.dockSize", "*", &type, &xval) == True)
-		if ((n = strtol(xval.addr, NULL, 10)) > 0)
-			config.docksize = n;
-	if (XrmGetResource(xdb, "shod.dockBorder", "*", &type, &xval) == True)
-		if ((n = strtol(xval.addr, NULL, 10)) > 0)
-			config.dockborder = n;
 	if (XrmGetResource(xdb, "shod.urgent", "*", &type, &xval) == True)
 		config.urgent_color = xval.addr;
 	if (XrmGetResource(xdb, "shod.focused", "*", &type, &xval) == True)
 		config.focused_color = xval.addr;
 	if (XrmGetResource(xdb, "shod.unfocused", "*", &type, &xval) == True)
 		config.unfocused_color = xval.addr;
-	if (XrmGetResource(xdb, "shod.dock", "*", &type, &xval) == True)
-		config.dockxpm_path = xval.addr;
 }
 
 /* get configuration from command-line */
@@ -347,7 +347,7 @@ initdock(void)
 		swa.background_pixel = BlackPixel(dpy, screen);
 		valuemask |= CWBackPixel;
 	}
-	dock.win = XCreateWindow(dpy, root, 0, 0, config.docksize, config.docksize, 0,
+	dock.win = XCreateWindow(dpy, root, 0, 0, config.dockwidth, config.dockwidth, 0,
 	                         CopyFromParent, CopyFromParent, CopyFromParent,
 	                         valuemask, &swa);
 }
@@ -582,6 +582,7 @@ main(int argc, char *argv[])
 	wm.selmon = wm.mon;
 	wm.selmon->selws = wm.mon->ws;
 
+	/* initialize ewmh hints */
 	ewmh_init();
 	ewmh_setnumberofdesktops();
 	ewmh_setcurrentdesktop(0);

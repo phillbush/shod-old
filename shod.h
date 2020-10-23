@@ -132,7 +132,7 @@ struct Config {
 	int dockside;
 	int dockplace;
 	int dockinverse;
-	int docksize;
+	int dockwidth;
 	int dockborder;
 };
 
