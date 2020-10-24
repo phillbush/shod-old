@@ -138,6 +138,20 @@ struct Config {
 	int dockborder;
 };
 
+/* draw context structure */
+struct DC {
+	//XftColor normal[ColorLast];
+	//XftColor selected[ColorLast];
+	//XftColor border;
+	//XftColor separator;
+
+	GC gc;
+
+	//FcPattern *pattern;
+	//XftFont **fonts;
+	//size_t nfonts;
+};
+
 /* contains a list of monitors and of minimized clients */
 struct WM {
 	struct Monitor *selmon;         /* growable array of monitors */
@@ -185,18 +199,20 @@ struct Client {
 	struct Monitor *mon;
 	struct WS *ws;
 	struct Column *col;
-	int ux, uy, uw, uh;         /* unmaximized (floating) geometry */
-	int mx, my, mw, mh;         /* maximized (tiling) geometry */
+	int x, y;               /* position of the window inside its parent decoration */
+	int ux, uy, uw, uh;     /* unmaximized (floating) geometry */
+	int mx, my, mw, mh;     /* maximized (tiling) geometry */
 	int basew, baseh;
 	int minw, minh;
 	int maxw, maxh;
 	int incw, inch;
 	int isfixed, isuserplaced, isfullscreen;
 	int layer;
+	int border;
 	unsigned char state;
 	float mina, maxa;
 	Window win;
-	Window title;
+	Window dec;
 };
 
 /* panel client structure */
@@ -230,6 +246,7 @@ struct Dock {
 };
 
 /* X stuff */
+extern struct DC dc;
 extern Display *dpy;
 extern Window root, wmcheckwin;
 extern Cursor cursor[CursLast];

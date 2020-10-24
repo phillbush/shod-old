@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <X11/Xutil.h>
 #include "shod.h"
-#include "title.h"
+#include "decor.h"
 #include "client.h"
 #include "winlist.h"
 #include "workspace.h"
@@ -11,12 +11,8 @@
 
 /* macros */
 #define ISVISIBLE(c) (!((c)->state & ISMINIMIZED) && ((c)->state & ISSTICKY || (c)->ws == (c)->ws->mon->selws))
-#define MINW(c) (MAX((c)->minw, 10))
-#define MINH(c) (MAX((c)->minh, 10))
-#define WIDTH(x) ((x)->uw + 2 * config.border_width)
-#define HEIGHT(x) ((x)->uh + config.border_width + (config.ignoretitle ? config.border_width : config.title_height))
 
-#define DIV         15          /* number to divide the screen into grids */
+#define DIV         15          /* how to divide the screen into grids */
 #define NOTINCSIZE  0
 #define INCSIZEW    1 << 0
 #define INCSIZEH    1 << 1
@@ -32,6 +28,8 @@ applyaspectsize(struct Client *c)
 	if (c == NULL)
 		return;
 
+	c->uw -= c->x + config.border_width;
+	c->uh -= c->y + config.border_width;
 	if (c->mina > 0 && c->maxa > 0) {
 		if (c->maxa < (float)c->uw/c->uh) {
 			if (c->uw == MAX(c->uw, c->uh)) {
@@ -47,6 +45,8 @@ applyaspectsize(struct Client *c)
 			}
 		}
 	}
+	c->uw += c->x + config.border_width;
+	c->uh += c->y + config.border_width;
 }
 
 /* apply size hints for unmaximized window */
@@ -146,29 +146,50 @@ addfocus(struct Client *c)
 
 /* call XMoveResizeWindow and apply size increment, depending on incsize */
 static void
-moveresize(struct Client *c, int x, int y, int w, int h, int incsize, int title)
+moveresize(struct Client *c, int x, int y, int w, int h, int incsize)
 {
+	int contentw, contenth;
+
+	contentw = w - c->x - c->border;
+	contentw = MAX(contentw, 1);
+	contenth = h - c->y - c->border;
+	contenth = MAX(contenth, 1);
 	if (incsize & INCSIZEW && c->incw > 0 && c->basew < w) {
-		w -= c->basew;
-		w /= c->incw;
-		w *= c->incw;
-		w += c->basew;
+		contentw -= c->basew;
+		contentw /= c->incw;
+		contentw *= c->incw;
+		contentw += c->basew;
 	}
 	if (incsize & INCSIZEH && c->inch > 0 && c->baseh < h) {
-		h -= c->baseh;
-		h /= c->inch;
-		h *= c->inch;
-		h += c->baseh;
+		contenth -= c->baseh;
+		contenth /= c->inch;
+		contenth *= c->inch;
+		contenth += c->baseh;
 	}
-	XMoveResizeWindow(dpy, c->win, x, y, w, h);
-	if (title) {
-		XMoveResizeWindow(dpy, c->title, x, y + config.border_width - config.title_height,
-		                  w + config.border_width * 2, config.title_height);
-	} else {
-		XMoveResizeWindow(dpy, c->title, (w + config.border_width * 2) * -2,
-		                  y + config.border_width - config.title_height,
-		                  w + config.border_width * 2, config.title_height);
-	}
+	w = contentw + c->x + c->border;
+	h = contenth + c->y + c->border;
+	XMoveResizeWindow(dpy, c->dec, x, y, w, h);
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, contentw, contenth);
+}
+
+/* check whether window size is acceptable after adding x and y */
+static int
+oksize(struct Client *c, int x, int y)
+{
+	int w, h;
+
+	getgeom(c, NULL, NULL, &w, &h);
+	w -= c->x + c->border;
+	h -= c->y + c->border;
+	w = MAX(w, 1);
+	h = MAX(h, 1);
+	w += x;
+	h += y;
+	if (x != 0)
+		return w >= (MAX((c)->minw, 10)) && (!c->maxw || w <= c->maxw);
+	if (y != 0)
+		return h >= (MAX((c)->minh, 10)) && (!c->maxh || h <= c->maxh);
+	return 1;
 }
 
 /* get cursor position */
@@ -247,25 +268,25 @@ getclient(Window w)
 		for (ws = mon->ws; ws; ws = ws->next) {
 			for (col = ws->col; col; col = col->next) {
 				for (c = col->row; c; c = c->next) {
-					if (c->win == w || c->title == w) {
+					if (c->win == w || c->dec == w) {
 						return c;
 					}
 				}
 			}
 			for (c = ws->floating; c; c = c->next) {
-				if (c->win == w || c->title == w) {
+				if (c->win == w || c->dec == w) {
 					return c;
 				}
 			}
 		}
 		for (c = mon->sticky; c; c = c->next) {
-			if (c->win == w || c->title == w) {
+			if (c->win == w || c->dec == w) {
 				return c;
 			}
 		}
 	}
 	for (c = wm.minimized; c; c = c->next) {
-		if (c->win == w || c->title == w) {
+		if (c->win == w || c->dec == w) {
 			return c;
 		}
 	}
@@ -298,14 +319,17 @@ client_add(Window win, XWindowAttributes *wa)
 	c->state = ISNORMAL;
 	c->layer = 0;
 	c->win = win;
-	c->ux = wa->x;
-	c->uy = wa->y;
-	c->uw = wa->width;
-	c->uh = wa->height;
+	c->border = config.border_width;
+	c->x = c->border;
+	c->y = c->border + ((config.ignoretitle) ? c->border : config.title_height);
+	c->ux = wa->x - c->border;
+	c->uy = wa->y - c->border - (config.ignoretitle ? c->border : config.title_height);
+	c->uw = wa->width + c->border * 2;
+	c->uh = wa->height + c->border * 2 + (config.ignoretitle ? c->border : config.title_height);
 	c->isfullscreen = 0;
 	flags = setsizehints(c);
 	c->isuserplaced = (flags & USPosition) ? 1 : 0;
-	c->title = title_createwin(c);
+	c->dec = decor_createwin(c);
 
 	client_raise(c);
 
@@ -316,16 +340,17 @@ client_add(Window win, XWindowAttributes *wa)
 	            ButtonPressMask | ButtonReleaseMask,
 	            GrabModeSync, GrabModeSync, None, None);
 
-	XSetWindowBorderWidth(dpy, c->win, config.border_width);
+	XSetWindowBorderWidth(dpy, c->win, 0);
 
 	winlist_add(c->win);
-	ewmh_setframeextents(c->win);
+	ewmh_setframeextents(c);
 	ewmh_setallowedactions(c->win);
 	ewmh_setclients();
 	ewmh_setclientsstacking();
 
 	client_sendtows(c, wm.selmon->selws, 1, 1, 0);
 
+	XMapWindow(dpy, c->dec);
 	XMapWindow(dpy, c->win);
 	/* we don't want a client to steal focus when in fullscreen */
 	if (focus && (wm.selmon->selws->focused == NULL || !(wm.selmon->selws->focused->isfullscreen)))
@@ -546,7 +571,7 @@ client_configure(struct Client *c, XWindowChanges wc, unsigned valuemask)
 	if (c == NULL || c->state & ISMINIMIZED || c->isfullscreen)
 		return;
 
-	client_getgeom(c, &x, &y, &w, &h);
+	getgeom(c, &x, &y, &w, &h);
 
 	x = (valuemask & CWX) ? wc.x - x : 0;
 	y = (valuemask & CWY) ? wc.y - y : 0;
@@ -572,13 +597,15 @@ client_focus(struct Client *c)
 	if (showingdesk)
 		client_showdesktop(0);
 
+	if (focused)
+		decor_drawunfocus(focused);
+
 	if (c == NULL || c->state & ISMINIMIZED) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmh_setactivewindow(None);
+		focused = NULL;
 		return;
 	}
-
-	client_setborder(focused, config.unfocused);
 
 	prevfocused = focused;
 	wm.selmon = c->mon;
@@ -587,7 +614,7 @@ client_focus(struct Client *c)
 	addfocus(c);
 	focused = c;
 
-	client_setborder(c, config.focused);
+	decor_drawfocus(c);
 
 	if (c->state & ISMINIMIZED)
 		client_minimize(c, 0);
@@ -625,36 +652,19 @@ client_fullscreen(struct Client *c, int fullscreen)
 
 	if (fullscreen && !c->isfullscreen) {
 		c->isfullscreen = 1;
-		XSetWindowBorderWidth(dpy, c->win, 0);
+		decor_borderdel(c);
 		if (ISVISIBLE(c))
-			moveresize(c, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh, NOTINCSIZE, 1);
+			moveresize(c, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh, NOTINCSIZE);
 		XRaiseWindow(dpy, c->win);
 	} else if (!fullscreen && c->isfullscreen) {
 		c->isfullscreen = 0;
-		XSetWindowBorderWidth(dpy, c->win, config.border_width);
+		decor_borderadd(c);
 		if (c->state & ISMAXIMIZED)
 			client_tile(c->ws, 0);
 		else if (ISVISIBLE(c))
-			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH, 1);
+			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
 		client_raise(c);
 	}
-}
-
-/* return client position, width and height */
-void
-client_getgeom(struct Client *c, int *x_ret, int *y_ret, int *w_ret, int *h_ret)
-{
-	if (c == NULL)
-		return;
-
-	if (x_ret)
-		*x_ret = (c->isfullscreen) ? c->mon->mx : (c->state & ISMAXIMIZED) ? c->mx : c->ux;
-	if (y_ret)
-		*y_ret = (c->isfullscreen) ? c->mon->my : (c->state & ISMAXIMIZED) ? c->my : c->uy;
-	if (w_ret)
-		*w_ret = (c->isfullscreen) ? c->mon->mw : (c->state & ISMAXIMIZED) ? c->mw : c->uw;
-	if (h_ret)
-		*h_ret = (c->isfullscreen) ? c->mon->mh : (c->state & ISMAXIMIZED) ? c->mh : c->uh;
 }
 
 /* go to workspace */
@@ -728,29 +738,11 @@ client_hide(struct Client *c, int hide)
 	if (c == NULL)
 		return;
 
-	client_getgeom(c, &x, &y, &w, &h);
+	getgeom(c, &x, &y, &w, &h);
 	if (hide)
 		x = (w + 2 * config.border_width) * -2;
 	incsize = (c->isfullscreen || c->state & ISMAXIMIZED) ? NOTINCSIZE : INCSIZEWH;
-	moveresize(c, x, y, w, h, incsize, 1);
-}
-
-/* returns 1 if position x and y are on client's border, 0 otherwise */
-int
-client_isborder(struct Client *c, int x, int y)
-{
-	int w, h;
-
-	if (c == NULL || c->state == ISMINIMIZED || c->isfullscreen)
-		return 0;
-
-	client_getgeom(c, NULL, NULL, &w, &h);
-
-	if (x < 0 || x > w)
-		return 1;
-	if (y < 0 || y > h)
-		return 1;
-	return 0;
+	moveresize(c, x, y, w, h, incsize);
 }
 
 /* maximize client */
@@ -812,10 +804,10 @@ client_maximize(struct Client *c, int maximize)
 		c->ws->floating = c;
 
 		/* restore client's border width and stacking order (maximizing may change them) */
-		XSetWindowBorderWidth(dpy, c->win, config.border_width);
+		decor_borderadd(c);
 
 		if (ISVISIBLE(c))
-			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH, 1);
+			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
 
 		c->state = ISNORMAL;
 	}
@@ -975,7 +967,7 @@ client_move(struct Client *c, int x, int y)
 		c->uy += y;
 
 		if (ISVISIBLE(c))
-			moveresize(c, c->ux, c->uy, c->uw, c->uh, NOTINCSIZE, 1);
+			moveresize(c, c->ux, c->uy, c->uw, c->uh, NOTINCSIZE);
 
 		if (c->state & ISNORMAL) {
 			monto = getmon(c->ux + c->uw / 2, c->uy + c->uh / 2);
@@ -990,24 +982,6 @@ client_move(struct Client *c, int x, int y)
 			}
 		}
 	}
-}
-
-/* test if window size is acceptable after adding x or y */
-int
-client_oksize(struct Client *c, int x, int y)
-{
-	int w, h;
-
-	client_getgeom(c, NULL, NULL, &w, &h);
-
-	w += x;
-	h += y;
-
-	if (x != 0)
-		return w >= MINW(c) && (!c->maxw || w <= c->maxw);
-	if (y != 0)
-		return h >= MINH(c) && (!c->maxh || w <= c->maxh);
-	return 1;
 }
 
 /* find best position to place a client on screen */
@@ -1046,8 +1020,8 @@ client_place(struct Client *c, struct WS *ws)
 
 	/* If this is the first floating window in the workspace, just center it */
 	if (ws->floating == c && c->next == NULL && ws->mon->sticky == NULL) {
-		c->ux = mon->wx + mon->ww/2 - WIDTH(c)/2;
-		c->uy = mon->wy + mon->wh/2 - HEIGHT(c)/2;
+		c->ux = mon->wx + mon->ww/2 - c->uw/2;
+		c->uy = mon->wy + mon->wh/2 - c->uh/2;
 		return;
 	}
 
@@ -1067,9 +1041,9 @@ client_place(struct Client *c, struct WS *ws)
 				wb = mon->wx + (mon->ww * (j + 1))/DIV;
 
 				ya = tmp->uy;
-				yb = tmp->uy + HEIGHT(tmp);
+				yb = tmp->uy + tmp->uh;
 				xa = tmp->ux;
-				xb = tmp->ux + WIDTH(tmp);
+				xb = tmp->ux + tmp->uw;
 
 				if (ya <= hb && ha <= yb && xa <= wb && wa <= xb) {
 					grid[i][j]++;
@@ -1129,32 +1103,30 @@ client_place(struct Client *c, struct WS *ws)
 	if (posi == 0) {
 		c->uy = mon->wy;
 	} else if (posi >= DIV - 1) {
-		c->uy = mon->wy + mon->wh - HEIGHT(c);
+		c->uy = mon->wy + mon->wh - c->uh;
 	} else {
 		int n, d, maxy;
 
 		n = posi;
 		d = DIV;
-		maxy = mon->wy + mon->wh - HEIGHT(c);
-		c->uy = (mon->wy + mon->wh * n)/d - HEIGHT(c);
+		maxy = mon->wy + mon->wh - c->uh;
+		c->uy = (mon->wy + mon->wh * n)/d - c->uh;
 		c->uy = MAX(mon->wy, c->uy);
 		c->uy = MIN(c->uy, maxy);
-		if (!config.ignoretitle)
-			c->uy += config.title_height;
 	}
 
 	/* calculate x */
 	if (posj == 0) {
 		c->ux = mon->wx;
 	} else if (posj >= DIV - 1) {
-		c->ux = mon->wx + mon->ww - WIDTH(c);
+		c->ux = mon->wx + mon->ww - c->uw;
 	} else {
 		int n, d, maxx;
 
 		n = posj;
 		d = DIV;
-		maxx = mon->wx + mon->ww - WIDTH(c);
-		c->ux = (mon->wx + mon->ww * n)/d - WIDTH(c);
+		maxx = mon->wx + mon->ww - c->uw;
+		c->ux = (mon->wx + mon->ww * n)/d - c->uw;
 		c->ux = MAX(mon->wx, c->ux);
 		c->ux = MIN(c->ux, maxx);
 	}
@@ -1169,7 +1141,7 @@ client_quadrant(struct Client *c, int x, int y)
 	if (c == NULL || c->state == ISMINIMIZED)
 		return SE;
 
-	client_getgeom(c, NULL, NULL, &midw, &midh);
+	getgeom(c, NULL, NULL, &midw, &midh);
 	midw /= 2;
 	midh /= 2;
 
@@ -1201,7 +1173,7 @@ client_raise(struct Client *c)
 	else
 		wins[0] = layerwin[LayerTop];
 
-	wins[1] = c->title;
+	wins[1] = c->dec;
 	wins[2] = c->win;
 	XRestackWindows(dpy, wins, sizeof wins);
 }
@@ -1217,56 +1189,56 @@ client_resize(struct Client *c, enum Quadrant q, int x, int y)
 		switch (q) {
 		case NW:
 			if (c->col->prev &&
-			    client_oksize(c->col->prev->row, -x, 0) &&
-			    client_oksize(c->col->row, +x, 0)) {
+			    oksize(c->col->prev->row, -x, 0) &&
+			    oksize(c->col->row, +x, 0)) {
 				c->col->row->mw += x;
 				c->col->prev->row->mw -= x;
 			}
 			if (c->prev &&
-			    client_oksize(c->prev, 0, -y) &&
-			    client_oksize(c, 0, +y)) {
+			    oksize(c->prev, 0, -y) &&
+			    oksize(c, 0, +y)) {
 				c->mh += y;
 				c->prev->mh -= y;
 			}
 			break;
 		case NE:
 			if (c->col->next &&
-			    client_oksize(c->col->next->row, -x, 0) &&
-			    client_oksize(c->col->row, +x, 0)) {
+			    oksize(c->col->next->row, -x, 0) &&
+			    oksize(c->col->row, +x, 0)) {
 				c->col->next->row->mw -= x;
 				c->col->row->mw += x;
 			}
 			if (c->prev &&
-			    client_oksize(c->prev, 0, -y) &&
-			    client_oksize(c, 0, +y)) {
+			    oksize(c->prev, 0, -y) &&
+			    oksize(c, 0, +y)) {
 				c->mh += y;
 				c->prev->mh -= y;
 			}
 			break;
 		case SW:
 			if (c->col->prev &&
-			    client_oksize(c->col->prev->row, -x, 0) &&
-			    client_oksize(c->col->row, +x, 0)) {
+			    oksize(c->col->prev->row, -x, 0) &&
+			    oksize(c->col->row, +x, 0)) {
 				c->col->row->mw += x;
 				c->col->prev->row->mw -= x;
 			}
 			if (c->next &&
-			    client_oksize(c->next, 0, -y) &&
-			    client_oksize(c, 0, +y)) {
+			    oksize(c->next, 0, -y) &&
+			    oksize(c, 0, +y)) {
 				c->next->mh -= y;
 				c->mh += y;
 			}
 			break;
 		case SE:
 			if (c->col->next &&
-			    client_oksize(c->col->next->row, -x, 0) &&
-			    client_oksize(c->col->row, +x, 0)) {
+			    oksize(c->col->next->row, -x, 0) &&
+			    oksize(c->col->row, +x, 0)) {
 				c->col->next->row->mw -= x;
 				c->col->row->mw += x;
 			}
 			if (c->next &&
-			    client_oksize(c->next, 0, -y) &&
-			    client_oksize(c, 0, +y)) {
+			    oksize(c->next, 0, -y) &&
+			    oksize(c, 0, +y)) {
 				c->next->mh -= y;
 				c->mh += y;
 			}
@@ -1276,7 +1248,7 @@ client_resize(struct Client *c, enum Quadrant q, int x, int y)
 	} else {
 		int origw, origh, incsize;
 
-		if (!(client_oksize(c, +x, 0) && client_oksize(c, 0, +y)))
+		if (!(oksize(c, +x, 0) && oksize(c, 0, +y)))
 			return;
 		switch (q) {
 		case NW:
@@ -1323,7 +1295,7 @@ client_resize(struct Client *c, enum Quadrant q, int x, int y)
 			break;
 		}
 		if (ISVISIBLE(c))
-			moveresize(c, c->ux, c->uy, c->uw, c->uh, incsize, 1);
+			moveresize(c, c->ux, c->uy, c->uw, c->uh, incsize);
 	}
 }
 
@@ -1391,22 +1363,12 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 	if (place) {
 		client_place(c, ws);
 		if (ws->mon->selws == ws) {
-			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH, 1);
+			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
 		}
 	}
 
 	client_raise(c);
 	XSync(dpy, False);
-}
-
-/* set client border */
-void
-client_setborder(struct Client *c, unsigned long color)
-{
-	if (c == NULL)
-		return;
-
-	XSetWindowBorder(dpy, c->win, color);
 }
 
 /* hide all windows and show the desktop */
@@ -1494,18 +1456,12 @@ client_tile(struct WS *ws, int recalc)
 	int ncol, nrow;
 	int x, y;
 	int w, h;
-	int border_height;
-	int title = 1;
-
-	border_height = (config.ignoretitle)
-	              ? config.border_width * 2
-	              : config.border_width + config.title_height;
 
 	mon = ws->mon;
 
 	/* get number of columns and sum their widths */
 	for (ncol = 0, col = ws->col; col; col = col->next, ncol++) {
-		sumw += col->row->mw + config.border_width * 2;
+		sumw += col->row->mw;
 		if (col->row->mw == 0)
 			zerow = 1;
 	}
@@ -1519,16 +1475,16 @@ client_tile(struct WS *ws, int recalc)
 	if (!(recalc && sumw != mon->ww) || (sumw == mon->ww && !zerow))
 		recol = 1;
 
-	w = (mon->ww - config.gapinner * (ncol - 1) - config.border_width * 2 * ncol) / ncol;
+	w = (mon->ww - config.gapinner * (ncol - 1)) / ncol;
 	x = mon->wx;
 	for (col = ws->col; col; col = col->next) {
 		/* the last column gets the remaining width */
 		if (!col->next)
-			w = mon->ww + mon->wx - x - 2 * config.border_width;
+			w = mon->ww + mon->wx - x;
 
 		/* get number of clients in current column and sum their heights */
 		for (nrow = 0, c = col->row; c; c = c->next, nrow++) {
-			sumh += c->mh + border_height;
+			sumh += c->mh;
 			if (c->mh == 0) {
 				zeroh = 1;
 			}
@@ -1542,7 +1498,7 @@ client_tile(struct WS *ws, int recalc)
 		if (!(recalc && sumh != mon->wh) || (sumh == mon->wh && !zeroh))
 			rerow = 1;
 
-		h = (mon->wh - config.gapinner * (nrow - 1) - border_height * nrow) / nrow;
+		h = (mon->wh - config.gapinner * (nrow - 1)) / nrow;
 		y = mon->wy;
 		for (c = col->row; c; c = c->next) {
 			if (c->isfullscreen)
@@ -1550,10 +1506,10 @@ client_tile(struct WS *ws, int recalc)
 
 			/* the last client gets the remaining height */
 			if (!c->next)
-				h = mon->wh + mon->wy - y - border_height;
+				h = mon->wh + mon->wy - y;
 
 			c->mx = x;
-			c->my = y + (config.ignoretitle ? 0 : config.title_height - config.border_width);
+			c->my = y;
 			if (!recol || !col->next)
 				c->mw = w;
 			else
@@ -1564,28 +1520,24 @@ client_tile(struct WS *ws, int recalc)
 			/* if there is only one tiled window, borders or gaps can be ignored */
 			if (nrow == 1 && ncol == 1) {
 				if (config.ignoreborders) {
-					c->mh += border_height;
-					c->mw += 2 * config.border_width;
-					XSetWindowBorderWidth(dpy, c->win, 0);
-					title = 0;
+					decor_borderdel(c);
 				}
 				if (config.ignoregaps) {
 					c->mx = mon->dx;
 					c->my = mon->dy;
-					c->mw = mon->dw - ((!config.ignoreborders) ? 2 * config.border_width : 0);
-					c->mh = mon->dh - ((!config.ignoreborders) ? border_height : 0);
+					c->mw = mon->dw;
+					c->mh = mon->dh;
 				}
 			} else {
-				XSetWindowBorderWidth(dpy, c->win, config.border_width);
-				title = 1;
+				decor_borderadd(c);
 			}
 
 			if (ISVISIBLE(c))
-				moveresize(c, c->mx, c->my, c->mw, c->mh, NOTINCSIZE, title);
+				moveresize(c, c->mx, c->my, c->mw, c->mh, NOTINCSIZE);
 
-			y += c->mh + config.gapinner + border_height;
+			y += c->mh + config.gapinner;
 		}
 
-		x += col->row->mw + config.gapinner + config.border_width * 2;
+		x += col->row->mw + config.gapinner;
 	}
 }

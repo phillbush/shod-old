@@ -63,13 +63,14 @@ ewmh_setcurrentdesktop(int wsnum)
 }
 
 void
-ewmh_setframeextents(Window win)
+ewmh_setframeextents(struct Client *c)
 {
 	unsigned long data[4];
 
-	data[0] = data[1] = data[2] = data[3] = config.border_width;
+	data[0] = data[1] = data[3] = c->border;
+	data[2] = c->border + ((config.ignoretitle) ? 0 : config.title_height);
 
-	XChangeProperty(dpy, win, netatom[NetFrameExtents],
+	XChangeProperty(dpy, c->win, netatom[NetFrameExtents],
 	                XA_CARDINAL, 32, PropModeReplace,
 	                (unsigned char *)&data, 4);
 }

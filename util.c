@@ -41,6 +41,23 @@ getcardinalprop(Window win, Atom atom, unsigned long size)
 	return values;
 }
 
+/* return client position, width and height */
+void
+getgeom(struct Client *c, int *x_ret, int *y_ret, int *w_ret, int *h_ret)
+{
+	if (c == NULL)
+		return;
+
+	if (x_ret)
+		*x_ret = (c->isfullscreen) ? c->mon->mx : (c->state & ISMAXIMIZED) ? c->mx : c->ux;
+	if (y_ret)
+		*y_ret = (c->isfullscreen) ? c->mon->my : (c->state & ISMAXIMIZED) ? c->my : c->uy;
+	if (w_ret)
+		*w_ret = (c->isfullscreen) ? c->mon->mw : (c->state & ISMAXIMIZED) ? c->mw : c->uw;
+	if (h_ret)
+		*h_ret = (c->isfullscreen) ? c->mon->mh : (c->state & ISMAXIMIZED) ? c->mh : c->uh;
+}
+
 struct Monitor *
 getmon(int x, int y)
 {

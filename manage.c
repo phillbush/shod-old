@@ -46,7 +46,7 @@ unmanage(Window win)
 	struct Panel *p;
 
 	if ((c = getclient(win)) != NULL) {
-		XDestroyWindow(dpy, c->title);
+		XDestroyWindow(dpy, c->dec);
 		client_del(c, 1, 1);
 	} else if ((p = getpanel(win)) != NULL) {
 		panel_del(p);

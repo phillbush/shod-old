@@ -17,7 +17,7 @@ void ewmh_setnumberofdesktops(void);
 void ewmh_setcurrentdesktop(int wsnum);
 
 /* send the size of the borders when a client requests it */
-void ewmh_setframeextents(Window win);
+void ewmh_setframeextents(struct Client *c);
 
 /* set the state of the window manager (whether it is showing the desktop) */
 void ewmh_setshowingdesktop(int n);

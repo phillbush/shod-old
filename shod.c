@@ -24,6 +24,7 @@
 /* X stuff */
 static XrmDatabase xdb;
 static char *xrm;
+struct DC dc;
 Display *dpy;
 Window root, wmcheckwin;
 Cursor cursor[CursLast];
@@ -276,6 +277,14 @@ initatoms(void)
 	wmatom[WMState] = XInternAtom(dpy, "WM_STATE", False);
 }
 
+/* initialize drawing context */
+static void
+initdc(void)
+{
+	/* create common GC */
+	dc.gc = XCreateGC(dpy, root, 0, NULL);
+}
+
 /* initialize colors and conf array */
 static void
 initcolors(void)
@@ -482,7 +491,8 @@ cleanclients(void)
 		struct Client *tmp;
 
 		tmp = c->next;
-		XDestroyWindow(dpy, c->title);
+		XReparentWindow(dpy, c->win, root, 0, 0);
+		XDestroyWindow(dpy, c->dec);
 		free(c);
 		c = tmp;
 	}
@@ -500,7 +510,8 @@ cleanclients(void)
 			struct Client *tmp;
 
 			tmp = c->next;
-			XDestroyWindow(dpy, c->title);
+			XReparentWindow(dpy, c->win, root, 0, 0);
+			XDestroyWindow(dpy, c->dec);
 			free(c);
 			c = tmp;
 		}
@@ -573,6 +584,7 @@ main(int argc, char *argv[])
 	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
 
 	/* setup */
+	initdc();
 	initdock();
 	initcolors();
 	initcursor();

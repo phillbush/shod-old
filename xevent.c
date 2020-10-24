@@ -1,9 +1,11 @@
 #include "shod.h"
 #include "client.h"
+#include "decor.h"
 #include "ewmh.h"
 #include "monitor.h"
 #include "workspace.h"
 #include "manage.h"
+#include "util.h"
 
 #define _NET_WM_MOVERESIZE_SIZE_TOPLEFT      0
 #define _NET_WM_MOVERESIZE_SIZE_TOP          1
@@ -45,22 +47,22 @@ xevent_buttonpress(XEvent *e)
 		goto done;
 	}
 
-	istitle = ev->window == c->title;
-	isborder = istitle || client_isborder(c, ev->x, ev->y);
+	istitle = ev->window == c->dec && decor_istitle(c, ev->x, ev->y);
+	isborder = !istitle && decor_isborder(c, ev->x, ev->y);
 	if (ev->state == config.modifier && ev->button == Button1)
 		motionaction = Moving;
 	else if (ev->state == config.modifier && ev->button == Button3)
 		motionaction = Resizing;
-	else if ((istitle && ev->button == Button1) || (isborder && ev->button == Button3))
+	else if ((istitle && ev->button == Button1))
 		motionaction = Moving;
 	else if (isborder && ev->button == Button1)
 		motionaction = Resizing;
 	else
 		motionaction = NoAction;
 
-	if (istitle) {
-		ev->x -= config.border_width;
-		ev->y -= config.title_height;
+	if (ev->window == c->dec) {
+		ev->x -= c->x;
+		ev->y -= c->y;
 	}
 
 	/* user is dragging window while clicking modifier or dragging window's border */
@@ -133,6 +135,7 @@ xevent_clientmessage(XEvent *e)
 {
 	XClientMessageEvent *ev = &e->xclient;
 	struct Client *c;
+	int x, y, w, h;
 
 	c = getclient(ev->window);
 
@@ -144,7 +147,9 @@ xevent_clientmessage(XEvent *e)
 		else
 			client_focus(wm.selmon->selws->focused);
 	} else if (ev->message_type == netatom[NetRequestFrameExtents]) {
-		ewmh_setframeextents(ev->window);
+		if (c == NULL)
+			return;
+		ewmh_setframeextents(c);
 	} else if (ev->message_type == netatom[NetWMState]) {
 		if (c == NULL)
 			return;
@@ -192,30 +197,25 @@ xevent_clientmessage(XEvent *e)
 
 		client_close(c);
 	} else if (ev->message_type == netatom[NetMoveresizeWindow]) {
-		XWindowChanges wc;
-		unsigned value_mask = 0;
-
 		if (c == NULL)
 			return;
 
-		if (ev->data.l[0] & 1 << 8) {
-			wc.x = ev->data.l[1];
-			value_mask |= CWX;
-		}
-		if (ev->data.l[0] & 1 << 9) {
-			wc.y = ev->data.l[2];
-			value_mask |= CWY;
-		}
-		if (ev->data.l[0] & 1 << 10) {
-			wc.width = ev->data.l[3];
-			value_mask |= CWWidth;
-		}
-		if (ev->data.l[0] & 1 << 11) {
-			wc.height = ev->data.l[4];
-			value_mask |= CWHeight;
-		}
+		getgeom(c, &x, &y, &w, &h);
 
-		client_configure(c, wc, value_mask);
+		if (ev->data.l[0] & 1 << 8)
+			x -= ev->data.l[1];
+		if (ev->data.l[0] & 1 << 9)
+			y -= ev->data.l[2];
+		if (ev->data.l[0] & 1 << 10)
+			w -= ev->data.l[3];
+		if (ev->data.l[0] & 1 << 11)
+			h -= ev->data.l[4];
+
+		if (x || y)
+			client_move(c, x, y);
+		if (w || h)
+			client_resize(c, NW, w, h);
+		printf("%d, %d, %d, %d\n", x, y, w, h);
 	} else if (ev->message_type == netatom[NetWMDesktop]) {
 		if (c == NULL)
 			return;
