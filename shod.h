@@ -124,9 +124,11 @@ struct Config {
 
 	int gapinner, gaptop, gapbottom, gapleft, gapright;
 	int border_width;
+	int title_height;
 
 	int ignoregaps;
 	int ignoreborders;
+	int ignoretitle;
 
 	int dockmode;
 	int dockside;
@@ -194,6 +196,7 @@ struct Client {
 	unsigned char state;
 	float mina, maxa;
 	Window win;
+	Window title;
 };
 
 /* panel client structure */

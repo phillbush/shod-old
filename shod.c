@@ -482,6 +482,7 @@ cleanclients(void)
 		struct Client *tmp;
 
 		tmp = c->next;
+		XDestroyWindow(dpy, c->title);
 		free(c);
 		c = tmp;
 	}
@@ -499,6 +500,7 @@ cleanclients(void)
 			struct Client *tmp;
 
 			tmp = c->next;
+			XDestroyWindow(dpy, c->title);
 			free(c);
 			c = tmp;
 		}

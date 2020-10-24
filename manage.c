@@ -45,10 +45,12 @@ unmanage(Window win)
 	struct Client *c;
 	struct Panel *p;
 
-	if ((c = getclient(win)) != NULL)
+	if ((c = getclient(win)) != NULL) {
+		XDestroyWindow(dpy, c->title);
 		client_del(c, 1, 1);
-	else if ((p = getpanel(win)) != NULL)
+	} else if ((p = getpanel(win)) != NULL) {
 		panel_del(p);
-	else if ((d = getdockapp(win)) != NULL)
+	} else if ((d = getdockapp(win)) != NULL) {
 		dockapp_del(d);
+	}
 }

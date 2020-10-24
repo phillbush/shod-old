@@ -1,13 +1,6 @@
 #ifndef _CLIENT_H_
 #define _CLIENT_H_
 
-/* macros */
-#define ISVISIBLE(c) (!((c)->state & ISMINIMIZED) && ((c)->state & ISSTICKY || (c)->ws == (c)->ws->mon->selws))
-#define MINW(c) (MAX((c)->minw, 10))
-#define MINH(c) (MAX((c)->minh, 10))
-#define WIDTH(x) ((x)->uw + 2 * config.border_width)
-#define HEIGHT(x) ((x)->uh + 2 * config.border_width)
-
 enum Quadrant {NW, NE, SW, SE};
 
 /* get which monitor a given coordinate is in */

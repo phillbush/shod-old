@@ -33,6 +33,7 @@ xevent_buttonpress(XEvent *e)
 	XButtonPressedEvent *ev = &e->xbutton;
 	struct Client *c;
 	int isborder = 0;
+	int istitle = 0;
 	int focus = 0;
 
 	/* if user clicked in no window, focus the monitor below cursor */
@@ -44,17 +45,23 @@ xevent_buttonpress(XEvent *e)
 		goto done;
 	}
 
-	isborder = client_isborder(c, ev->x, ev->y);
+	istitle = ev->window == c->title;
+	isborder = istitle || client_isborder(c, ev->x, ev->y);
 	if (ev->state == config.modifier && ev->button == Button1)
 		motionaction = Moving;
 	else if (ev->state == config.modifier && ev->button == Button3)
 		motionaction = Resizing;
-	else if (isborder && ev->button == Button3)
+	else if ((istitle && ev->button == Button1) || (isborder && ev->button == Button3))
 		motionaction = Moving;
 	else if (isborder && ev->button == Button1)
 		motionaction = Resizing;
 	else
 		motionaction = NoAction;
+
+	if (istitle) {
+		ev->x -= config.border_width;
+		ev->y -= config.title_height;
+	}
 
 	/* user is dragging window while clicking modifier or dragging window's border */
 	if (motionaction != NoAction) {

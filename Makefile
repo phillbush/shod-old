@@ -2,7 +2,7 @@ include config.mk
 
 SRCS = ${PROG}.c monitor.c workspace.c ewmh.c \
        manage.c client.c panel.c dockapp.c desktop.c \
-       menu.c xevent.c winlist.c util.c
+       menu.c title.c xevent.c winlist.c util.c
 OBJS = ${SRCS:.c=.o}
 
 all: ${PROG}
@@ -17,7 +17,8 @@ manage.o: manage.h client.h panel.h dockapp.h desktop.h menu.h
 panel.o: panel.h util.h monitor.h
 dockapp.o: dockapp.h monitor.h
 monitor.o: monitor.h workspace.h client.h dockapp.h
-client.o: client.h winlist.h ewmh.h util.h
+client.o: client.h winlist.h ewmh.h util.h title.h
+title.o: title.h
 desktop.o: desktop.h
 menu.o: menu.h
 ewmh.o: ewmh.h winlist.h
