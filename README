@@ -11,6 +11,7 @@ The main features of SHOD are:
 • Using maximized hints to implement tiled windows.
 • No configuration file.
 • Support to dockapps
+• Optional title bars
 
 Shod's manual can be read at its Github repository wiki page.
 Read the examples on the manual.

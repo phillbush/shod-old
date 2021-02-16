@@ -27,6 +27,8 @@ static char *xrm;
 struct DC dc;
 Display *dpy;
 Window root, wmcheckwin;
+Colormap colormap;
+Visual *visual;
 Cursor cursor[CursLast];
 Atom utf8string;
 Atom wmatom[WMLast];
@@ -91,6 +93,44 @@ parsemodifier(const char *s)
 		errx(1, "improper modifier string %s", s);
 }
 
+/* parse font string */
+static void
+parsefonts(const char *s)
+{
+	const char *p;
+	char buf[1024];
+	size_t nfont = 0;
+
+	dc.nfonts = 1;
+	for (p = s; *p; p++)
+		if (*p == ',')
+			dc.nfonts++;
+
+	if ((dc.fonts = calloc(dc.nfonts, sizeof *dc.fonts)) == NULL)
+		err(1, "calloc");
+
+	p = s;
+	while (*p != '\0') {
+		size_t i;
+
+		i = 0;
+		while (isspace(*p))
+			p++;
+		while (i < sizeof buf && *p != '\0' && *p != ',')
+			buf[i++] = *p++;
+		if (i >= sizeof buf)
+			errx(1, "font name too long");
+		if (*p == ',')
+			p++;
+		buf[i] = '\0';
+		if (nfont == 0)
+			if ((dc.pattern = FcNameParse((FcChar8 *)buf)) == NULL)
+				errx(1, "the first font in the cache must be loaded from a font string");
+		if ((dc.fonts[nfont++] = XftFontOpenName(dpy, screen, buf)) == NULL)
+			errx(1, "could not load font");
+	}
+}
+
 /* get x resources and update variables in config.h */
 static void
 getresources(void)
@@ -144,6 +184,8 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.gapLeft", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.gapleft = n;
+	if (XrmGetResource(xdb, "shod.font", "*", &type, &xval) == True)
+		config.font = strdup(xval.addr);
 	if (XrmGetResource(xdb, "shod.gapRight", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.gapright = n;
@@ -156,12 +198,18 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.gapInner", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.gapinner = n;
-	if (XrmGetResource(xdb, "shod.urgent", "*", &type, &xval) == True)
-		config.urgent_color = xval.addr;
-	if (XrmGetResource(xdb, "shod.focused", "*", &type, &xval) == True)
-		config.focused_color = xval.addr;
-	if (XrmGetResource(xdb, "shod.unfocused", "*", &type, &xval) == True)
-		config.unfocused_color = xval.addr;
+	if (XrmGetResource(xdb, "shod.urgentBG", "*", &type, &xval) == True)
+		config.urgentBG_color = xval.addr;
+	if (XrmGetResource(xdb, "shod.urgentFG", "*", &type, &xval) == True)
+		config.urgentFG_color = xval.addr;
+	if (XrmGetResource(xdb, "shod.focusedBG", "*", &type, &xval) == True)
+		config.focusedBG_color = xval.addr;
+	if (XrmGetResource(xdb, "shod.focusedFG", "*", &type, &xval) == True)
+		config.focusedFG_color = xval.addr;
+	if (XrmGetResource(xdb, "shod.unfocusedBG", "*", &type, &xval) == True)
+		config.unfocusedBG_color = xval.addr;
+	if (XrmGetResource(xdb, "shod.unfocusedFG", "*", &type, &xval) == True)
+		config.unfocusedFG_color = xval.addr;
 }
 
 /* get configuration from command-line */
@@ -202,14 +250,11 @@ getoptions(int argc, char *argv[])
 }
 
 /* get color from color string */
-static unsigned long
-ealloccolor(const char *s)
+static void
+ealloccolor(const char *s, XftColor *color)
 {
-	XColor color;
-
-	if(!XAllocNamedColor(dpy, DefaultColormap(dpy, screen), s, &color, &color))
-		errx(1, "cannot allocate color: %s", s);
-	return color.pixel;
+	if(!XftColorAllocName(dpy, visual, colormap, s, color))
+		errx(1, "could not allocate color: %s", s);
 }
 
 /* initialize atom arrays */
@@ -245,6 +290,7 @@ initatoms(void)
 	netatom[NetWMStateSticky]           = XInternAtom(dpy, "_NET_WM_STATE_STICKY", False);
 	netatom[NetWMStateMaximizedVert]    = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False);
 	netatom[NetWMStateMaximizedHorz]    = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
+	netatom[NetWMStateShaded]           = XInternAtom(dpy, "_NET_WM_STATE_SHADED", False);
 	netatom[NetWMStateHidden]           = XInternAtom(dpy, "_NET_WM_STATE_HIDDEN", False);
 	netatom[NetWMStateFullscreen]       = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
 	netatom[NetWMStateAbove]            = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
@@ -283,15 +329,21 @@ initdc(void)
 {
 	/* create common GC */
 	dc.gc = XCreateGC(dpy, root, 0, NULL);
+
+	/* parse fonts */
+	parsefonts(config.font);
 }
 
 /* initialize colors and conf array */
 static void
 initcolors(void)
 {
-	config.unfocused = ealloccolor(config.unfocused_color);
-	config.focused = ealloccolor(config.focused_color);
-	config.urgent = ealloccolor(config.urgent_color);
+	ealloccolor(config.unfocusedBG_color, &dc.unfocused[ColorBG]);
+	ealloccolor(config.unfocusedFG_color, &dc.unfocused[ColorFG]);
+	ealloccolor(config.focusedBG_color, &dc.focused[ColorBG]);
+	ealloccolor(config.focusedFG_color, &dc.focused[ColorFG]);
+	ealloccolor(config.urgentBG_color, &dc.urgent[ColorBG]);
+	ealloccolor(config.urgentFG_color, &dc.urgent[ColorFG]);
 }
 
 /* Initialize cursors */
@@ -365,10 +417,15 @@ initdock(void)
 static void
 initdummywindows(void)
 {
+	XSetWindowAttributes swa;
 	int i;
 
+	swa.do_not_propagate_mask = NoEventMask;
+	swa.event_mask = KeyPressMask;
 	wmcheckwin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
-	focuswin = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
+	focuswin = XCreateWindow(dpy, root, 0, 0, 1, 1, 0,
+	                         CopyFromParent, CopyFromParent, CopyFromParent,
+	                         CWDontPropagate | CWEventMask, &swa);
 	for (i = 0; i < LayerLast; i++)
 		layerwin[i] = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
 }
@@ -420,15 +477,17 @@ scan(void)
 			if (!XGetWindowAttributes(dpy, wins[i], &wa)
 			|| wa.override_redirect || XGetTransientForHint(dpy, wins[i], &d1))
 				continue;
-			if (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)
+			if (wa.map_state == IsViewable || getstate(wins[i]) == IconicState) {
 				manage(wins[i]);
+			}
 		}
 		for (i = 0; i < num; i++) { /* now the transients */
 			if (!XGetWindowAttributes(dpy, wins[i], &wa))
 				continue;
 			if (XGetTransientForHint(dpy, wins[i], &d1)
-			&& (wa.map_state == IsViewable || getstate(wins[i]) == IconicState))
+			&& (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)) {
 				manage(wins[i]);
+			}
 		}
 		if (wins)
 			XFree(wins);
@@ -548,9 +607,12 @@ main(int argc, char *argv[])
 		[ConfigureRequest] = xevent_configurerequest,
 		[DestroyNotify]    = xevent_destroynotify,
 		[EnterNotify]      = xevent_enternotify,
+		[Expose]           = xevent_expose,
 		[FocusIn]          = xevent_focusin,
+		[KeyPress]         = xevent_keypress,
 		[MapRequest]       = xevent_maprequest,
 		[MotionNotify]     = xevent_motionnotify,
+		[PropertyNotify]   = xevent_propertynotify,
 		[UnmapNotify]      = xevent_unmapnotify
 	};
 
@@ -566,6 +628,8 @@ main(int argc, char *argv[])
 	root = RootWindow(dpy, screen);
 	screenw = DisplayWidth(dpy, screen);
 	screenh = DisplayHeight(dpy, screen);
+	colormap = DefaultColormap(dpy, screen);
+	visual = DefaultVisual(dpy, screen);
 	xerrorxlib = XSetErrorHandler(xerror);
 	XrmInitialize();
 	if ((xrm = XResourceManagerString(dpy)) != NULL)
@@ -595,6 +659,7 @@ main(int argc, char *argv[])
 	monitor_update();
 	wm.selmon = wm.mon;
 	wm.selmon->selws = wm.mon->ws;
+	wm.focused = NULL;
 
 	/* initialize ewmh hints */
 	ewmh_init();

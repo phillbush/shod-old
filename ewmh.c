@@ -86,7 +86,7 @@ ewmh_setshowingdesktop(int n)
 void
 ewmh_setstate(struct Client *c)
 {
-	Atom data[5];
+	Atom data[6];
 	int n = 0;
 
 	if (c == NULL)
@@ -97,6 +97,9 @@ ewmh_setstate(struct Client *c)
 
 	if (c->isfullscreen)
 		data[n++] = netatom[NetWMStateFullscreen];
+
+	if (c->isshaded)
+		data[n++] = netatom[NetWMStateShaded];
 
 	switch (c->state) {
 		case ISMINIMIZED:

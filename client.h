@@ -24,7 +24,7 @@ void client_close(struct Client *c);
 void client_configure(struct Client *c, XWindowChanges wc, unsigned value);
 void client_focus(struct Client *c);
 void client_fullscreen(struct Client *c, int fullscreen);
-void client_getgeom(struct Client *c, int *x_ret, int *y_ret, int *w_ret, int *h_ret);
+int client_getstate(struct Client *c);
 void client_gotows(struct WS *ws, int wsnum);
 void client_hide(struct Client *c, int hide);
 void client_maximize(struct Client *c, int maximize);
@@ -37,8 +37,10 @@ void client_resize(struct Client *c, enum Quadrant q, int x, int y);
 void client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move);
 void client_setborder(struct Client *c, unsigned long color);
 void client_stick(struct Client *c, int stick);
+void client_shade(struct Client *c, int shade);
 void client_showdesktop(int n);
 void client_tile(struct WS *ws, int recalc);
+void client_updatetitle(struct Client *c);
 
 /* operations on panels */
 void panel_updategaps(void);

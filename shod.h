@@ -3,6 +3,7 @@
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#include <X11/Xft/Xft.h>
 
 /* macros */
 #define LEN(x) (sizeof (x) / sizeof (x[0]))
@@ -17,6 +18,7 @@
 #define ISFLOATING   (ISNORMAL | ISSTICKY)        /* Window isn't tiled nor fullscreen */
 #define ISFREE       (ISSTICKY | ISMINIMIZED)     /* Window belongs to no workspace */
 #define ISBOUND      (ISNORMAL | ISMAXIMIZED)     /* Window belongs to a workspace */
+#define HASTITLE(C)  (!config.ignoretitle || (C)->isshaded)
 
 /* EWMH atoms */
 enum {
@@ -47,6 +49,7 @@ enum {
 	NetWMStateSticky,
 	NetWMStateMaximizedVert,
 	NetWMStateMaximizedHorz,
+	NetWMStateShaded,
 	NetWMStateHidden,
 	NetWMStateFullscreen,
 	NetWMStateAbove,
@@ -106,13 +109,27 @@ enum {DockTop, DockBottom, DockLeft, DockRight};
 /* dock placement */
 enum {DockBegin, DockCenter, DockEnd};
 
+/* title alignment */
+enum {TitleLeft, TitleCenter, TitleRight};
+
+/* decoration state */
+enum {DecorFocused, DecorUnfocused, DecorUrgent};
+
+/* color enum */
+enum {ColorFG, ColorBG, ColorLast};
+
 /* configuration structure */
 struct Config {
+	const char *font;
+
 	const char *dockxpm_path;
 
-	const char *urgent_color;
-	const char *focused_color;
-	const char *unfocused_color;
+	const char *urgentBG_color;
+	const char *urgentFG_color;
+	const char *focusedBG_color;
+	const char *focusedFG_color;
+	const char *unfocusedBG_color;
+	const char *unfocusedFG_color;
 
 	unsigned long urgent;
 	unsigned long focused;
@@ -128,7 +145,9 @@ struct Config {
 
 	int ignoregaps;
 	int ignoreborders;
+
 	int ignoretitle;
+	int titlealign;
 
 	int dockmode;
 	int dockside;
@@ -140,16 +159,15 @@ struct Config {
 
 /* draw context structure */
 struct DC {
-	//XftColor normal[ColorLast];
-	//XftColor selected[ColorLast];
-	//XftColor border;
-	//XftColor separator;
+	XftColor focused[ColorLast];
+	XftColor unfocused[ColorLast];
+	XftColor urgent[ColorLast];
 
 	GC gc;
 
-	//FcPattern *pattern;
-	//XftFont **fonts;
-	//size_t nfonts;
+	FcPattern *pattern;
+	XftFont **fonts;
+	size_t nfonts;
 };
 
 /* contains a list of monitors and of minimized clients */
@@ -157,6 +175,7 @@ struct WM {
 	struct Monitor *selmon;         /* growable array of monitors */
 	struct Monitor *mon;            /* growable array of monitors */
 	struct Client *minimized;       /* list of minimized clients */
+	struct Client *focused;
 
 	int moncount;                   /* number of connected monitors */
 	int wscount;                    /* number of workspaces in each monitor */
@@ -199,6 +218,7 @@ struct Client {
 	struct Monitor *mon;
 	struct WS *ws;
 	struct Column *col;
+	char name[128];
 	int x, y;               /* position of the window inside its parent decoration */
 	int ux, uy, uw, uh;     /* unmaximized (floating) geometry */
 	int mx, my, mw, mh;     /* maximized (tiling) geometry */
@@ -206,7 +226,7 @@ struct Client {
 	int minw, minh;
 	int maxw, maxh;
 	int incw, inch;
-	int isfixed, isuserplaced, isfullscreen;
+	int isfixed, isuserplaced, isfullscreen, isshaded;
 	int layer;
 	int border;
 	unsigned char state;
@@ -249,6 +269,8 @@ struct Dock {
 extern struct DC dc;
 extern Display *dpy;
 extern Window root, wmcheckwin;
+extern Colormap colormap;
+extern Visual *visual;
 extern Cursor cursor[CursLast];
 extern Atom utf8string;
 extern Atom wmatom[WMLast];

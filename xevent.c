@@ -164,6 +164,9 @@ xevent_clientmessage(XEvent *e)
 		    || (Atom) ev->data.l[2] == netatom[NetWMStateMaximizedVert]
 		    || (Atom) ev->data.l[2] == netatom[NetWMStateMaximizedHorz])
 			client_maximize(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & ISMAXIMIZED))));
+		else if ((Atom) ev->data.l[1] == netatom[NetWMStateShaded]
+		         || (Atom) ev->data.l[2] == netatom[NetWMStateShaded])
+			client_shade(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !c->isshaded)));
 		else if ((Atom) ev->data.l[1] == netatom[NetWMStateFullscreen]
 		         || (Atom) ev->data.l[2] == netatom[NetWMStateFullscreen])
 			client_fullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !c->isfullscreen)));
@@ -203,19 +206,18 @@ xevent_clientmessage(XEvent *e)
 		getgeom(c, &x, &y, &w, &h);
 
 		if (ev->data.l[0] & 1 << 8)
-			x -= ev->data.l[1];
+			x = (ev->data.l[1] - c->x * 2) - x;
 		if (ev->data.l[0] & 1 << 9)
-			y -= ev->data.l[2];
+			y = (ev->data.l[2] - c->y * 2) - y;
 		if (ev->data.l[0] & 1 << 10)
-			w -= ev->data.l[3];
+			w = (ev->data.l[3] + c->x + c->border) - w;
 		if (ev->data.l[0] & 1 << 11)
-			h -= ev->data.l[4];
+			h = (ev->data.l[4] + c->y + c->border) - h;
 
 		if (x || y)
 			client_move(c, x, y);
 		if (w || h)
-			client_resize(c, NW, w, h);
-		printf("%d, %d, %d, %d\n", x, y, w, h);
+			client_resize(c, SE, w, h);
 	} else if (ev->message_type == netatom[NetWMDesktop]) {
 		if (c == NULL)
 			return;
@@ -342,6 +344,22 @@ xevent_enternotify(XEvent *e)
 		client_focus(c);
 }
 
+/* redraw client decoration */
+void
+xevent_expose(XEvent *e)
+{
+	XExposeEvent *ev = &e->xexpose;
+	struct Client *c;
+	int state;
+
+	if ((c = getclient(ev->window)) == NULL)
+		return;
+	if (ev->window == c->dec) {
+		state = client_getstate(c);
+		decor_draw(c, state);
+	}
+}
+
 void
 xevent_focusin(XEvent *e)
 {
@@ -351,6 +369,18 @@ xevent_focusin(XEvent *e)
 	                    || ev->detail == NotifyPointer
 	                    || ev->detail == NotifyPointerRoot))
 		client_focus(wm.selmon->focused);
+}
+
+/* key press event on focuswin */
+void
+xevent_keypress(XEvent *e)
+{
+	XKeyPressedEvent *ev = &e->xkey;
+
+	if (ev->window == focuswin) {
+		printf("ASDA\n");
+		XSendEvent(dpy, root, False, KeyPressMask, e);
+	}
 }
 
 /* handle map request event */
@@ -403,6 +433,23 @@ xevent_motionnotify(XEvent *e)
 		x = ev->x - motionx;
 		y = ev->y - motiony;
 		client_move(c, x, y);
+	}
+}
+
+/* update client properties */
+void
+xevent_propertynotify(XEvent *e)
+{
+	XPropertyEvent *ev = &e->xproperty;
+	struct Client *c;
+	int state;
+
+	if ((c = getclient(ev->window)) == NULL)
+		return;
+	if (ev->atom == XA_WM_NAME || ev->atom == netatom[NetWMName]) {
+		client_updatetitle(c);
+		state = client_getstate(c);
+		decor_draw(c, state);
 	}
 }
 

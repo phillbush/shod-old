@@ -23,13 +23,22 @@ void xevent_destroynotify(XEvent *e);
 /* focus window when cursor enter it, if fflag is set */
 void xevent_enternotify(XEvent *e);
 
+/* redraw client decoration */
+void xevent_expose(XEvent *e);
+
 void xevent_focusin(XEvent *e);
+
+/* key press event on focuswin */
+void xevent_keypress(XEvent *e);
 
 /* handle map request event */
 void xevent_maprequest(XEvent *e);
 
 /* run moving/resizing action */
 void xevent_motionnotify(XEvent *e);
+
+/* update client properties */
+void xevent_propertynotify(XEvent *e);
 
 /* forget about client */
 void xevent_unmapnotify(XEvent *e);

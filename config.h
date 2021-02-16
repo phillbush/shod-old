@@ -1,9 +1,15 @@
 struct Config config = {
-	.urgent_color = "#2E3436",
-	.focused_color = "#3584E4",
-	.unfocused_color = "#E6E6E6",
+	/* font, separate different fonts with comma */
+	.font = "monospace:size=9,DejaVuSansMono:size=9",
 
-	.title_height = 30,     /* width of the title bar on the top of windows */
+	.urgentBG_color = "#2E3436",
+	.urgentFG_color = "#000000",
+	.focusedBG_color = "#3584E4",
+	.focusedFG_color = "#000000",
+	.unfocusedBG_color = "#E6E6E6",
+	.unfocusedFG_color = "#000000",
+
+	.title_height = 20,     /* width of the title bar on the top of windows */
 	.border_width = 3,      /* width of the border around windows */
 	.gapleft = 9,           /* gap to the left */
 	.gapright = 9,          /* gap to the right */
@@ -16,10 +22,13 @@ struct Config config = {
 	.focusbuttons = 1,      /* bit mask of mousebuttons that focus windows */
 	.raisebuttons = 1,      /* bit mask of mousebuttons that raise windows */
 
-	/* ignores */
+	/* behavior of single maximized windows */
 	.ignoregaps = 1,        /* whether to ignore outer gaps when a single window is maximized */
 	.ignoreborders = 1,     /* whether to ignore borders when a single window is maximized */
-	.ignoretitle = 0,       /* whether to ignore title bars of windows */
+
+	/* titlebar configuration */
+	.ignoretitle = 1,       /* whether to ignore title bars of windows */
+	.titlealign = TitleCenter,
 
 	/* dock configuration */
 	.dockmode = DockBelow,  /* DockBelow or DockAside */

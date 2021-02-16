@@ -41,6 +41,33 @@ getcardinalprop(Window win, Atom atom, unsigned long size)
 	return values;
 }
 
+/* get text property atom from window win into array text */
+int
+gettextprop(Window win, Atom atom, char *text, unsigned int size)
+{
+	/* this routine was get from dwm */
+	char **list = NULL;
+	int n;
+	XTextProperty name;
+
+	if (!text || size == 0)
+		return 0;
+	text[0] = '\0';
+	if (!XGetTextProperty(dpy, win, &name, atom) || !name.nitems)
+		return 0;
+	if (name.encoding == XA_STRING)
+		strncpy(text, (char *)name.value, size - 1);
+	else {
+		if (XmbTextPropertyToTextList(dpy, &name, &list, &n) >= Success && n > 0 && *list) {
+			strncpy(text, *list, size - 1);
+			XFreeStringList(list);
+		}
+	}
+	text[size - 1] = '\0';
+	XFree(name.value);
+	return 1;
+}
+
 /* return client position, width and height */
 void
 getgeom(struct Client *c, int *x_ret, int *y_ret, int *w_ret, int *h_ret)
@@ -48,14 +75,24 @@ getgeom(struct Client *c, int *x_ret, int *y_ret, int *w_ret, int *h_ret)
 	if (c == NULL)
 		return;
 
-	if (x_ret)
+	if (x_ret) {
 		*x_ret = (c->isfullscreen) ? c->mon->mx : (c->state & ISMAXIMIZED) ? c->mx : c->ux;
-	if (y_ret)
+	}
+	if (y_ret) {
 		*y_ret = (c->isfullscreen) ? c->mon->my : (c->state & ISMAXIMIZED) ? c->my : c->uy;
-	if (w_ret)
+	}
+	if (w_ret) {
 		*w_ret = (c->isfullscreen) ? c->mon->mw : (c->state & ISMAXIMIZED) ? c->mw : c->uw;
-	if (h_ret)
-		*h_ret = (c->isfullscreen) ? c->mon->mh : (c->state & ISMAXIMIZED) ? c->mh : c->uh;
+	}
+	if (h_ret) {
+		if (c->isfullscreen) {
+			*h_ret = c->mon->mh;
+		} else if (c->isshaded) {
+			*h_ret = c->y + c->border;
+		} else {
+			*h_ret = (c->state & ISMAXIMIZED) ? c->mh : c->uh;
+		}
+	}
 }
 
 struct Monitor *

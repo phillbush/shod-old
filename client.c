@@ -1,5 +1,6 @@
 #include <err.h>
 #include <stdlib.h>
+#include <string.h>
 #include <X11/Xutil.h>
 #include "shod.h"
 #include "decor.h"
@@ -148,28 +149,38 @@ addfocus(struct Client *c)
 static void
 moveresize(struct Client *c, int x, int y, int w, int h, int incsize)
 {
-	int contentw, contenth;
+	int contentx, contenty, contentw, contenth;
 
-	contentw = w - c->x - c->border;
-	contentw = MAX(contentw, 1);
-	contenth = h - c->y - c->border;
-	contenth = MAX(contenth, 1);
-	if (incsize & INCSIZEW && c->incw > 0 && c->basew < w) {
-		contentw -= c->basew;
-		contentw /= c->incw;
-		contentw *= c->incw;
-		contentw += c->basew;
+	if (!c->isshaded) {
+		contentx = c->x;
+		contenty = c->y;
+		contentw = w - c->x - c->border;
+		contentw = MAX(contentw, 1);
+		contenth = h - c->y - c->border;
+		contenth = MAX(contenth, 1);
+		if (incsize & INCSIZEW && c->incw > 0 && c->basew < w) {
+			contentw -= c->basew;
+			contentw /= c->incw;
+			contentw *= c->incw;
+			contentw += c->basew;
+		}
+		if (incsize & INCSIZEH && c->inch > 0 && c->baseh < h) {
+			contenth -= c->baseh;
+			contenth /= c->inch;
+			contenth *= c->inch;
+			contenth += c->baseh;
+		}
+		w = contentw + c->x + c->border;
+		h = contenth + c->y + c->border;
+	} else {
+		contentx = c->x;
+		contenty = c->y + c->border;
 	}
-	if (incsize & INCSIZEH && c->inch > 0 && c->baseh < h) {
-		contenth -= c->baseh;
-		contenth /= c->inch;
-		contenth *= c->inch;
-		contenth += c->baseh;
-	}
-	w = contentw + c->x + c->border;
-	h = contenth + c->y + c->border;
 	XMoveResizeWindow(dpy, c->dec, x, y, w, h);
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, contentw, contenth);
+	if (c->isshaded)
+		XMoveWindow(dpy, c->win, contentx, contenty);
+	else
+		XMoveResizeWindow(dpy, c->win, contentx, contenty, contentw, contenth);
 }
 
 /* check whether window size is acceptable after adding x and y */
@@ -213,19 +224,16 @@ setsizehints(struct Client *c)
 	if (!XGetWMNormalHints(dpy, c->win, &size, &msize))
 		/* size is uninitialized, ensure that size.flags aren't used */
 		size.flags = PSize;
-
 	if (size.flags & PResizeInc) {
 		c->incw = size.width_inc;
 		c->inch = size.height_inc;
 	} else
 		c->incw = c->inch = 0;
-
 	if (size.flags & PMaxSize) {
 		c->maxw = size.max_width;
 		c->maxh = size.max_height;
 	} else
 		c->maxw = c->maxh = 0;
-
 	if (size.flags & PBaseSize) {
 		c->basew = size.base_width;
 		c->baseh = size.base_height;
@@ -234,7 +242,6 @@ setsizehints(struct Client *c)
 		c->baseh = size.min_height;
 	} else
 		c->basew = c->baseh = 0;
-
 	if (size.flags & PMinSize) {
 		c->minw = size.min_width;
 		c->minh = size.min_height;
@@ -243,15 +250,12 @@ setsizehints(struct Client *c)
 		c->minh = size.base_height;
 	} else
 		c->minw = c->minh = 0;
-
 	if (size.flags & PAspect) {
 		c->mina = (float)size.min_aspect.y / size.min_aspect.x;
 		c->maxa = (float)size.max_aspect.x / size.max_aspect.y;
 	} else
 		c->maxa = c->mina = 0.0;
-
 	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
-
 	return size.flags;
 }
 
@@ -321,14 +325,16 @@ client_add(Window win, XWindowAttributes *wa)
 	c->win = win;
 	c->border = config.border_width;
 	c->x = c->border;
-	c->y = c->border + ((config.ignoretitle) ? c->border : config.title_height);
+	c->y = c->border + ((config.ignoretitle) ? 0 : config.title_height);
 	c->ux = wa->x - c->border;
-	c->uy = wa->y - c->border - (config.ignoretitle ? c->border : config.title_height);
+	c->uy = wa->y - c->border - (config.ignoretitle ? 0 : config.title_height);
 	c->uw = wa->width + c->border * 2;
-	c->uh = wa->height + c->border * 2 + (config.ignoretitle ? c->border : config.title_height);
+	c->uh = wa->height + c->border * 2 + (config.ignoretitle ? 0 : config.title_height);
 	c->isfullscreen = 0;
+	c->isshaded = 0;
 	flags = setsizehints(c);
 	c->isuserplaced = (flags & USPosition) ? 1 : 0;
+	client_updatetitle(c);
 	c->dec = decor_createwin(c);
 
 	client_raise(c);
@@ -588,7 +594,6 @@ client_configure(struct Client *c, XWindowChanges wc, unsigned valuemask)
 void
 client_focus(struct Client *c)
 {
-	static struct Client *focused = NULL;
 	struct Client *prevfocused;
 	struct Monitor *mon;
 	struct WS *ws;
@@ -597,29 +602,32 @@ client_focus(struct Client *c)
 	if (showingdesk)
 		client_showdesktop(0);
 
-	if (focused)
-		decor_drawunfocus(focused);
+	if (wm.focused)
+		decor_draw(wm.focused, DecorUnfocused);
 
 	if (c == NULL || c->state & ISMINIMIZED) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmh_setactivewindow(None);
-		focused = NULL;
+		wm.focused = NULL;
 		return;
 	}
 
-	prevfocused = focused;
+	prevfocused = wm.focused;
 	wm.selmon = c->mon;
 	if (c->state & ISBOUND)
 		wm.selmon->selws = c->ws;
 	addfocus(c);
-	focused = c;
+	wm.focused = c;
 
-	decor_drawfocus(c);
+	decor_draw(c, DecorFocused);
 
 	if (c->state & ISMINIMIZED)
 		client_minimize(c, 0);
 
-	XSetInputFocus(dpy, c->win, RevertToParent, CurrentTime);
+	if (c->isshaded)
+		XSetInputFocus(dpy, c->dec, RevertToParent, CurrentTime);
+	else
+		XSetInputFocus(dpy, c->win, RevertToParent, CurrentTime);
 
 	winlist_focus(c->win);
 
@@ -665,6 +673,15 @@ client_fullscreen(struct Client *c, int fullscreen)
 			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
 		client_raise(c);
 	}
+}
+
+/* get client decoration state */
+int
+client_getstate(struct Client *c)
+{
+	if (wm.focused == c)
+		return DecorFocused;
+	return DecorUnfocused;
 }
 
 /* go to workspace */
@@ -750,6 +767,7 @@ void
 client_maximize(struct Client *c, int maximize)
 {
 	struct Column *col;
+	int x, y, w, h;
 
 	if (c == NULL || (c->state & ISMINIMIZED) || c->isfixed || c->isfullscreen)
 		return;
@@ -803,13 +821,13 @@ client_maximize(struct Client *c, int maximize)
 			c->ws->floating->prev = c;
 		c->ws->floating = c;
 
+		c->state = ISNORMAL;
+
 		/* restore client's border width and stacking order (maximizing may change them) */
 		decor_borderadd(c);
-
+		getgeom(c, &x, &y, &w, &h);
 		if (ISVISIBLE(c))
-			moveresize(c, c->ux, c->uy, c->uw, c->uh, INCSIZEWH);
-
-		c->state = ISNORMAL;
+			moveresize(c, x, y, w, h, INCSIZEWH);
 	}
 	client_raise(c);
 	client_tile(c->ws, 1);
@@ -862,6 +880,7 @@ client_move(struct Client *c, int x, int y)
 {
 	struct Monitor *monto;  /* monitor to move the client to */
 	int focus = 0;          /* whether to refocus client */
+	int w, h;               /* window hight */
 
 	if (c == NULL || c->state & ISMINIMIZED || c->isfullscreen)
 		return;
@@ -966,11 +985,13 @@ client_move(struct Client *c, int x, int y)
 		c->ux += x;
 		c->uy += y;
 
+		getgeom(c, NULL, NULL, &w, &h);
+
 		if (ISVISIBLE(c))
-			moveresize(c, c->ux, c->uy, c->uw, c->uh, NOTINCSIZE);
+			moveresize(c, c->ux, c->uy, w, h, NOTINCSIZE);
 
 		if (c->state & ISNORMAL) {
-			monto = getmon(c->ux + c->uw / 2, c->uy + c->uh / 2);
+			monto = getmon(c->ux + w / 2, c->uy + h / 2);
 			if (monto && monto != c->mon) {
 				if (c->mon->focused == c)
 					focus = 1;
@@ -1034,16 +1055,17 @@ client_place(struct Client *c, struct WS *ws)
 			for (j = 0; j < DIV; j++) {
 				int ha, hb, wa, wb;
 				int ya, yb, xa, xb;
+				int ux, uy, uw, uh;     /* geometry of unmaximized windows */
 
 				ha = mon->wy + (mon->wh * i)/DIV;
 				hb = mon->wy + (mon->wh * (i + 1))/DIV;
 				wa = mon->wx + (mon->ww * j)/DIV;
 				wb = mon->wx + (mon->ww * (j + 1))/DIV;
-
-				ya = tmp->uy;
-				yb = tmp->uy + tmp->uh;
-				xa = tmp->ux;
-				xb = tmp->ux + tmp->uw;
+				getgeom(tmp, &ux, &uy, &uw, &uh);
+				ya = uy;
+				yb = uy + uh;
+				xa = ux;
+				xb = ux + uw;
 
 				if (ya <= hb && ha <= yb && xa <= wb && wa <= xb) {
 					grid[i][j]++;
@@ -1371,6 +1393,34 @@ client_sendtows(struct Client *c, struct WS *ws, int new, int place, int move)
 	XSync(dpy, False);
 }
 
+/* shade/unshade client */
+void
+client_shade(struct Client *c, int shade)
+{
+	int x, y, w, h;
+
+	if (c == NULL || c->state & ISMINIMIZED || c->isfullscreen)
+		return;
+	if (shade && !c->isshaded) {
+		c->isshaded = 1;
+		decor_borderadd(c);
+		if (config.ignoretitle)
+			decor_titleadd(c);
+	} else if (!shade && c->isshaded) {
+		c->isshaded = 0;
+		if (config.ignoretitle)
+			decor_titledel(c);
+	}
+	if (ISVISIBLE(c)) {
+		getgeom(c, &x, &y, &w, &h);
+		moveresize(c, x, y, w, h, 1);
+	}
+	if (c->state & ISMAXIMIZED)
+		client_tile(c->ws, 1);
+	if (wm.focused == c)
+		client_focus(c);
+}
+
 /* hide all windows and show the desktop */
 void
 client_showdesktop(int n)
@@ -1455,6 +1505,7 @@ client_tile(struct WS *ws, int recalc)
 	int zerow = 0, zeroh = 0;
 	int ncol, nrow;
 	int x, y;
+	int mw, mh;
 	int w, h;
 
 	mon = ws->mon;
@@ -1475,19 +1526,38 @@ client_tile(struct WS *ws, int recalc)
 	if (!(recalc && sumw != mon->ww) || (sumw == mon->ww && !zerow))
 		recol = 1;
 
-	w = (mon->ww - config.gapinner * (ncol - 1)) / ncol;
+	mw = (mon->ww - config.gapinner * (ncol - 1)) / ncol;
 	x = mon->wx;
 	for (col = ws->col; col; col = col->next) {
 		/* the last column gets the remaining width */
 		if (!col->next)
-			w = mon->ww + mon->wx - x;
+			mw = mon->ww + mon->wx - x;
 
 		/* get number of clients in current column and sum their heights */
-		for (nrow = 0, c = col->row; c; c = c->next, nrow++) {
-			sumh += c->mh;
-			if (c->mh == 0) {
+		nrow = 0;
+		c = col->row;
+		while (c) {
+			struct Client *next;
+
+			next = c->next;
+			getgeom(c, NULL, NULL, NULL, &h);
+			sumh += h;
+			if (h == 0) {
 				zeroh = 1;
 			}
+			if (c->isshaded && c->prev) {
+				/* move shaded clients to beginning of column */
+				c->prev->next = c->next;
+				if (c->next) {
+					c->next->prev = c->prev;
+				}
+				c->prev = NULL;
+				c->next = col->row;
+				col->row->prev = c;
+				col->row = c;
+			}
+			c = next;
+			nrow++;
 		}
 		if (nrow == 0)
 			continue;
@@ -1498,7 +1568,7 @@ client_tile(struct WS *ws, int recalc)
 		if (!(recalc && sumh != mon->wh) || (sumh == mon->wh && !zeroh))
 			rerow = 1;
 
-		h = (mon->wh - config.gapinner * (nrow - 1)) / nrow;
+		mh = (mon->wh - config.gapinner * (nrow - 1)) / nrow;
 		y = mon->wy;
 		for (c = col->row; c; c = c->next) {
 			if (c->isfullscreen)
@@ -1506,20 +1576,20 @@ client_tile(struct WS *ws, int recalc)
 
 			/* the last client gets the remaining height */
 			if (!c->next)
-				h = mon->wh + mon->wy - y;
+				mh = mon->wh + mon->wy - y;
 
 			c->mx = x;
 			c->my = y;
 			if (!recol || !col->next)
-				c->mw = w;
+				c->mw = mw;
 			else
 				c->mw = col->row->mw;
 			if (!rerow || !c->next)
-				c->mh = h;
+				c->mh = mh;
 
 			/* if there is only one tiled window, borders or gaps can be ignored */
 			if (nrow == 1 && ncol == 1) {
-				if (config.ignoreborders) {
+				if (config.ignoreborders && !c->isshaded) {
 					decor_borderdel(c);
 				}
 				if (config.ignoregaps) {
@@ -1532,12 +1602,23 @@ client_tile(struct WS *ws, int recalc)
 				decor_borderadd(c);
 			}
 
+			getgeom(c, NULL, NULL, &w, &h);
 			if (ISVISIBLE(c))
-				moveresize(c, c->mx, c->my, c->mw, c->mh, NOTINCSIZE);
+				moveresize(c, c->mx, c->my, w, h, NOTINCSIZE);
 
-			y += c->mh + config.gapinner;
+			y += h + config.gapinner;
 		}
 
 		x += col->row->mw + config.gapinner;
 	}
+}
+
+/* update client title */
+void
+client_updatetitle(struct Client *c)
+{
+	if (!gettextprop(c->win, netatom[NetWMName], c->name, sizeof c->name))
+		gettextprop(c->win, XA_WM_NAME, c->name, sizeof c->name);
+	if (c->name[0] == '\0') /* hack to mark broken clients */
+		strcpy(c->name, "broken");
 }
