@@ -643,9 +643,13 @@ getfocused(void)
 {
 	struct Client *c;
 
-	for (c = clients; c; c = c->next)
-		if (c->state != Minimized && c->mon == selmon && (c->desk == selmon->seldesk || c->state == Sticky))
+	for (c = focused; c; c = c->fnext) {
+		if ((c->state == Sticky && c->mon == selmon) ||
+		    ((c->state == Normal || c->state == Tiled || c->state == Fullscreen) &&
+		    c->desk == selmon->seldesk)) {
 			return c;
+		}
+	}
 	return NULL;
 }
 
@@ -1539,7 +1543,8 @@ clientfocus(struct Client *c)
 		return;
 	}
 	prevfocused = focused;
-	selmon = c->mon;
+	if (c->mon)
+		selmon = c->mon;
 	if (c->state != Sticky && c->state != Minimized)
 		selmon->seldesk = c->desk;
 	if (showingdesk)
@@ -1876,6 +1881,7 @@ clientdel(struct Client *c)
 static void
 deskchange(struct Desktop *desk)
 {
+	struct Monitor *mon;
 	struct Desktop *tmp;
 	struct Client *c;
 	int cursorx, cursory;
@@ -1909,10 +1915,12 @@ deskchange(struct Desktop *desk)
 	}
 
 	/* if moving between desks in the same monitor, we can delete a desk */
-	for (tmp = selmon->desks; tmp && tmp->next; tmp = tmp->next) {
-		if (tmp->nclients == 0) {
-			deskdel(tmp);
-			break;
+	for (mon = mons; mon; mon = mon->next) {
+		for (tmp = mon->desks; tmp && tmp->next; tmp = tmp->next) {
+			if (tmp->nclients == 0) {
+				deskdel(tmp);
+				break;
+			}
 		}
 	}
 
