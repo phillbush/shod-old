@@ -1177,7 +1177,7 @@ clientdelfocus(struct Client *c)
 	}
 	if (c->fprev) {
 		c->fprev->fnext = c->fnext;
-	} else {
+	} else if (focused == c) {
 		focused = c->fnext;
 	}
 }
@@ -1728,8 +1728,6 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 			/* nothing */
 			break;
 		}
-		printf("x: %d, %d/%d\n", x, c->fw, c->w);
-		printf("y: %d, %d/%d\n", y, c->fh, c->h);
 		clientresize(c);
 		clientmove(c);
 	}
