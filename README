@@ -1,17 +1,12 @@
                                   Shod
 
 Shod is a window manager for X.
-Shod is an hybrid (tiling and floating) that support dockapps,
-that sets no keybindings, uses no configuration (other than
-.Xresources), and works only by responding to client messages
-with EWMH hints.
-
-The main features of SHOD are:
-• Being controlled entirely via ICCCM events and EWMH hints.
-• Using maximized hints to implement tiled windows.
-• No configuration file.
-• Support to dockapps
-• Optional title bars
+Shod is an hybrid (tiling and floating) that sets no keybindings, uses
+no configuration (other than .Xresources), and works only by responding
+to client messages with EWMH hints.  Shod uses EWMH-based maximization
+to implement tiled windows; that is, when you maximize a window, it is
+tiled rather than maximized (that means that classic maximization isn't
+possible with shod).
 
 Shod's manual can be read at its Github repository wiki page.
 Read the examples on the manual.
@@ -21,8 +16,7 @@ window manager and understand better how X11 works, Shod is only meant
 for me for educational purposes.  Shod is an experimental project, and
 should be used with caution.
 
-WARNING: You must have wmctrl(1) and wmutils(1) installed in order to
-control Shod.
+WARNING: You must have wmctrl(1) installed in order to control Shod.
 
 § On the name Shod
 
@@ -52,18 +46,10 @@ X resources support.
 The configuration (size and color) of window borders and the size of the
 gaps are read from X Resources.
 
-Dockapps support.
-Shod creates a dock for dockapps to be reparented into.
-You can just invoke a dockapp and shod will place it into the dock.
-
 Controllable by wmctrl(1) and wmutils(1).
 Shod does not have a default remote control client.  Instead, you
 should use third party tools like wmctrl(1) and wmutils(1) in order
 to manipulate windows in Shod.
-
-Docks, panels and bars.
-Shod reserves space in the edge of the screen for panels and docks.  See
-the section on limitations below, though.
 
 Dynamically created workspaces per monitor.
 Shod starts with a single workspace on each monitor.  When you open a
@@ -140,31 +126,9 @@ Shod does not provide any way for binding keys for managing windows.
 You should use an application such as sxhkd(1) in order to bind keys
 to wmctrl(1) commands.
 
-
-§ Files
-
-The files are:
-• ./examples/:    Directory containing example of how to integrate shod
-                  with other programs.
-• ./README:       This file.
-• ./Makefile:     The makefile.
-• ./config.h:     The hardcoded default configuration for Shod.
-• ./config.mk:    The setup for the makefile.
-• ./shod.1:       The manual file (man page) for Shod.
-• ./shod.c:       The source code of Shod.
-• ./shod.h:       The global variables and structures of Shod.
-• ./client.*:     Routines for controlling regular clients.
-• ./desktop.*:    Routines for controlling desktop clients.
-• ./dockapp.*:    Routines for controlling dockapp clients.
-• ./ewmh.*:       Routines for setting ewmh hints.
-• ./manage.*      Routines for adopting and releasing clients.
-• ./menu.*        routines for controlling menu clients (TODO).
-• ./monitor.*:    Routines for manipulating monitor structures.
-• ./panel.*:      Routines for controlling panel clients.
-• ./util.*:       Routines for general utilities.
-• ./winlist.*:    Routines for controlling the list of focused windows.
-• ./workspace.*:  Routines for manipulating workspace structures.
-• ./xevent.*:     Routines for handling X events.
+Docks, panels and bars.
+Shod reserves space in the edge of the screen for panels and docks.  See
+the section on limitations below, though.
 
 
 § Installation
