@@ -428,7 +428,7 @@ ewmhsetframeextents(struct Client *c)
 {
 	unsigned long data[4];
 
-	if (c->state & IsFullScreen)
+	if (c->state == Fullscreen)
 		data[0] = data[1] = data[2] = data[3] = 0;
 	else
 		data[0] = data[1] = data[2] = data[3] = config.border_width;
@@ -448,22 +448,29 @@ ewmhsetshowingdesktop(int n)
 static void
 ewmhsetstate(struct Client *c)
 {
-	Atom data[7];
+	Atom data[4];
 	int n = 0;
 
 	if (c == NULL)
 		return;
 	if (focused == c)
 		data[n++] = netatom[NetWMStateFocused];
-	if (c->state & IsFullScreen)
+	switch (c->state) {
+	case Fullscreen:
 		data[n++] = netatom[NetWMStateFullscreen];
-	if (c->state & IsMinimized)
-		data[n++] = netatom[NetWMStateHidden];
-	if (c->state & IsSticky)
-		data[n++] = netatom[NetWMStateSticky];
-	if (c->state & IsTiled) {
+		break;
+	case Tiled:
 		data[n++] = netatom[NetWMStateMaximizedVert];
 		data[n++] = netatom[NetWMStateMaximizedHorz];
+		break;
+	case Sticky:
+		data[n++] = netatom[NetWMStateSticky];
+		break;
+	case Minimized:
+		data[n++] = netatom[NetWMStateHidden];
+		break;
+	default:
+		break;
 	}
 	if (c->layer > 0)
 		data[n++] = netatom[NetWMStateAbove];
@@ -488,7 +495,7 @@ ewmhsetwmdesktop(void)
 	desk = 0;
 
 	for (c = clients; c; c = c->next) {
-		if (c->state & IsFree) {
+		if (c->state == Sticky || c->state == Minimized) {
 			ewmhsetdesktop(c->win, 0xFFFFFFFF);
 		} else {
 			ewmhsetdesktop(c->win, getdesknum(c->desk));
@@ -541,19 +548,19 @@ ewmhsetclientsstacking(void)
 	if (nwins)
 		wins = ecalloc(nwins, sizeof *wins);
 	for (c = clients; c; c = c->next)
-		if (c->state & IsTiled)
+		if (c->state == Tiled)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (!(c->state & (IsTiled | IsFullScreen)) && c->layer < 0)
+		if (c->state != Tiled && c->state != Fullscreen && c->layer < 0)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (!(c->state & (IsTiled | IsFullScreen)) && c->layer == 0)
+		if (c->state != Tiled && c->state != Fullscreen && c->layer == 0)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (!(c->state & (IsTiled | IsFullScreen)) && c->layer > 0)
+		if (c->state != Tiled && c->state != Fullscreen && c->layer > 0)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (c->state & IsFullScreen)
+		if (c->state == Fullscreen)
 			wins[i++] = c->win;
 	XChangeProperty(dpy, root, netatom[NetClientListStacking], XA_WINDOW, 32,
 	                PropModeReplace, (unsigned char *)wins, nwins);
@@ -601,10 +608,8 @@ updatesizehints(struct Client *c)
 		c->maxa = (float)size.max_aspect.x / size.max_aspect.y;
 	} else
 		c->maxa = c->mina = 0.0;
-	if (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh)
-		c->state |= IsFixed;
-	if (size.flags & USPosition)
-		c->state |= IsUserPlaced;
+	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
+	c->isuserplaced = (size.flags & USPosition);
 }
 
 /* get client given a window */
@@ -639,7 +644,7 @@ getfocused(void)
 	struct Client *c;
 
 	for (c = clients; c; c = c->next)
-		if (!(c->state & IsMinimized) && c->mon == selmon && (c->desk == selmon->seldesk || c->state & IsSticky))
+		if (c->state != Minimized && c->mon == selmon && (c->desk == selmon->seldesk || c->state == Sticky))
 			return c;
 	return NULL;
 }
@@ -648,11 +653,9 @@ getfocused(void)
 static int
 clientisvisible(struct Client *c)
 {
-	if (c->state & IsMinimized)
+	if (c == NULL || c->state == Minimized)
 		return 0;
-	if (c->state & IsSticky)
-		return 1;
-	if (c->desk == c->desk->mon->seldesk)
+	if (c->state == Sticky || (c->desk && c->desk == c->desk->mon->seldesk))
 		return 1;
 	return 0;
 }
@@ -746,7 +749,7 @@ desktile(struct Desktop *desk)
 		y = mon->gy;
 
 		for (row = col->row; row; row = row->next) {
-			if (row->c->state & IsFullScreen)
+			if (row->c->state == Fullscreen)
 				continue;
 
 			/* the last client gets the remaining height */
@@ -846,7 +849,7 @@ mondel(struct Monitor *mon)
 	else
 		mons = mon->next;
 	for (c = clients; c; c = c->next)
-		if (!(c->state & IsMinimized) && c->mon == mon) 
+		if (c->state != Minimized && c->mon == mon) 
 			c->mon = NULL;
 	free(mon);
 }
@@ -914,9 +917,8 @@ monupdate(void)
 
 	/* send clients with do not belong to a window to selected desktop */
 	for (c = clients; c; c = c->next) {
-		if (!(c->state & IsMinimized) && c->mon == NULL) {
-			c->state &= ~IsSticky;
-			c->state &= ~IsTiled;
+		if (c->state != Minimized && c->mon == NULL) {
+			c->state = Normal;
 			c->layer = 0;
 			clientsendtodesk(c, selmon->seldesk, 1, 1);
 		}
@@ -1009,7 +1011,7 @@ rowdel(struct Row *row)
 static int
 clientisborder(struct Client *c, int x, int y)
 {
-	if (c == NULL || c->state & (IsMinimized | IsFullScreen))
+	if (c == NULL || c->state == Minimized || c->state == Fullscreen)
 		return 0;
 	if (x < 0 || x > c->w || y < 0 || y > c->h)
 		return 1;
@@ -1025,7 +1027,7 @@ clientoctant(struct Client *c, int x, int y)
 	int hm, ha, hb;
 	int w, h;
 
-	if (c == NULL || c->state == IsMinimized)
+	if (c == NULL || c->state == Minimized)
 		return SE;
 	w = c->w;
 	h = c->h;
@@ -1070,13 +1072,32 @@ clientoctant(struct Client *c, int x, int y)
 	return N;
 }
 
-/* commit floating client size */
-static void
-clientresize(struct Client *c)
+/* check if new size is ok */
+static int
+clientchecksize(struct Client *c, int x, int y)
 {
 	int w, h;
 
-	if (c == NULL || c->state & IsFixed)
+	w = c->fw + x;
+	h = c->fh + y;
+	if (w < 1 || (c->minw && w < c->minw))
+		return 0;
+	if (c->maxw && w > c->maxw)
+		return 0;
+	if (h < 1 || (c->minh && h < c->minh))
+		return 0;
+	if (c->maxh && h > c->maxh)
+		return 0;
+	return 1;
+}
+
+/* apply size constraints */
+static void
+clientapplysize(struct Client *c)
+{
+	int w, h;
+
+	if (c == NULL || c->isfixed)
 		return;
 	
 	w = max(c->fw, 1);
@@ -1116,7 +1137,13 @@ clientresize(struct Client *c)
 		h = min(c->maxh, h);
 	c->w = w;
 	c->h = h;
-	XResizeWindow(dpy, c->win, w, h);
+}
+
+/* commit floating client size */
+static void
+clientresize(struct Client *c)
+{
+	XResizeWindow(dpy, c->win, c->w, c->h);
 }
 
 /* commit floating client position */
@@ -1155,7 +1182,7 @@ clientdelfocus(struct Client *c)
 static void
 clientaddfocus(struct Client *c)
 {
-	if (c == NULL || c->state & IsMinimized)
+	if (c == NULL || c->state == Minimized)
 		return;
 	clientdelfocus(c);
 	c->fnext = focused;
@@ -1171,9 +1198,11 @@ clientraise(struct Client *c)
 {
 	Window wins[2];
 
-	if (c == NULL || c->state & (IsMinimized | IsFullScreen))
+	if (c == NULL || c->state == Minimized || c->state == Fullscreen)
 		return;
-	if (c->state & IsTiled)
+	if (c->state == Fullscreen)
+		wins[0] = layerwin[LayerFullscreen];
+	else if (c->state == Tiled)
 		wins[0] = layerwin[LayerTiled];
 	else if (c->layer < 0)
 		wins[0] = layerwin[LayerBelow];
@@ -1209,9 +1238,9 @@ clientshowdesk(int show)
 
 	showingdesk = show;
 	for (c = clients; c; c = c->next) {
-		if (!(c->state & IsMinimized) &&
-		   ((c->state & IsSticky && c->mon == selmon) ||
-		   (!(c->state & IsSticky) && c->desk == selmon->seldesk))) {
+		if (c->state != Minimized &&
+		   ((c->state == Sticky && c->mon == selmon) ||
+		   (c->state != Sticky && c->desk == selmon->seldesk))) {
 			clienthide(c, show);
 		}
 	}
@@ -1224,14 +1253,14 @@ clientstick(struct Client *c, int stick)
 {
 	void clientsendtodesk(struct Client *, struct Desktop *, int, int);
 
-	if (c == NULL || c->state & (IsMinimized | IsTiled | IsFullScreen))
+	if (c == NULL || c->state == Fullscreen || c->state == Minimized || c->state == Tiled)
 		return;
 
-	if (stick && !(c->state & IsSticky)) {
-		c->state |= IsSticky;
+	if (stick && c->state != Sticky) {
+		c->state = Sticky;
 		c->desk = NULL;
-	} else if (!stick && (c->state &IsSticky)) {
-		c->state &= ~IsSticky;
+	} else if (!stick && c->state == Sticky) {
+		c->state = Normal;
 		clientsendtodesk(c, c->mon->seldesk, 0, 0);
 	}
 	ewmhsetwmdesktop();
@@ -1246,12 +1275,12 @@ clienttile(struct Client *c, int tile)
 	struct Column *col;
 	struct Row *row;
 
-	if (c == NULL || c->state & (IsMinimized | IsFixed | IsFullScreen))
+	if (c == NULL || c->isfixed || c->state == Minimized || c->state == Fullscreen)
 		return;
 
 	desk = c->desk;
 
-	if (tile && !(c->state & IsTiled)) {
+	if (tile && c->state != Tiled) {
 		if (desk->col == NULL) {
 			col = coladd(desk, 1);
 		} else if (desk->col->next == NULL) {
@@ -1264,13 +1293,14 @@ clienttile(struct Client *c, int tile)
 		c->row = row;
 		c->layer = 0;
 		clientstick(c, 0);
-		c->state |= IsTiled;
-	} else if (!tile && (c->state & IsTiled)) {
+		c->state = Tiled;
+	} else if (!tile && c->state == Tiled) {
 		clientstick(c, 0);
-		c->state &= ~IsTiled;
+		c->state = Normal;
 		rowdel(c->row);
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
 		if (clientisvisible(c)) {
+			clientapplysize(c);
 			clientresize(c);
 			clientmove(c);
 		}
@@ -1293,19 +1323,19 @@ clientminimize(struct Client *c, int minimize)
 
 	if (c == NULL)
 		return;
-	if (c->state & IsTiled)
+	if (c->state == Tiled)
 		clienttile(c, 0);
-	if (minimize && !(c->state &IsMinimized)) {
+	if (minimize && c->state != Minimized) {
 		focus = getfocused();
 		c->desk->nclients--;
 		c->desk = NULL;
 		c->mon = NULL;
-		c->state |= IsMinimized;
+		c->state = Minimized;
 		if (focus == c)
 			clientfocus(getfocused());
 		ewmhsetwmdesktop();
-	} else if (!minimize && (c->state & IsMinimized)) {
-		c->state &= ~IsMinimized;
+	} else if (!minimize && c->state == Minimized) {
+		c->state = Normal;
 		clientsendtodesk(c, selmon->seldesk, 1, 1);
 	}
 	clienthide(c, minimize);
@@ -1315,22 +1345,23 @@ clientminimize(struct Client *c, int minimize)
 static void
 clientfullscreen(struct Client *c, int fullscreen)
 {
-	if (c == NULL || c->state & IsMinimized)
+	if (c == NULL || c->state == Minimized)
 		return;
-	if (c->state & IsSticky)
+	if (c->state == Sticky)
 		clientstick(c, 0);
-	if (fullscreen && !(c->state & IsFullScreen)) {
-		c->state |= IsFullScreen;
+	if (fullscreen && c->state != Fullscreen) {
+		c->state = Fullscreen;
 		XSetWindowBorderWidth(dpy, c->win, 0);
 		if (clientisvisible(c))
 			XMoveResizeWindow(dpy, c->win, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
 		XRaiseWindow(dpy, c->win);
-	} else if (!fullscreen && c->state & IsFullScreen) {
-		c->state &= ~IsFullScreen;
+	} else if (!fullscreen && c->state == Fullscreen) {
+		c->state = Normal;
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
-		if (c->state & IsTiled) {
+		if (c->state == Tiled) {
 			desktile(c->desk);
 		} else if (clientisvisible(c)) {
+			clientapplysize(c);
 			clientresize(c);
 			clientmove(c);
 		}
@@ -1342,7 +1373,7 @@ clientfullscreen(struct Client *c, int fullscreen)
 static void
 clientabove(struct Client *c, int above)
 {
-	if (c == NULL || c->state & (IsTiled | IsFullScreen | IsMinimized))
+	if (c == NULL || c->state == Tiled || c->state == Fullscreen || c->state == Minimized)
 		return;
 	c->layer = (above) ? 1 : 0;
 	clientraise(c);
@@ -1352,7 +1383,7 @@ clientabove(struct Client *c, int above)
 static void
 clientbelow(struct Client *c, int below)
 {
-	if (c == NULL || c->state & (IsTiled | IsFullScreen | IsMinimized))
+	if (c == NULL || c->state == Tiled || c->state == Fullscreen || c->state == Minimized)
 		return;
 	c->layer = (below) ? -1 : 0;
 	clientraise(c);
@@ -1374,7 +1405,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 	int posi, posj;         /* position of the larger region */
 	int lw, lh;             /* larger region width and height */
 
-	if (desk == NULL || c == NULL || c->state & (IsMinimized | IsTiled | IsFullScreen))
+	if (desk == NULL || c == NULL || c->state == Tiled || c->state == Fullscreen || c->state == Minimized)
 		return;
 
 	mon = desk->mon;
@@ -1383,7 +1414,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 	c->fh = min(c->fh, mon->gh - 2 * config.border_width);
 
 	/* if the user placed the window, we should not re-place it */
-	if (c->state & IsUserPlaced)
+	if (c->isuserplaced)
 		return;
 
 	if (c->fx < mon->gx || c->fx > mon->gx + mon->gw)
@@ -1393,7 +1424,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	/* if this is the first window in the desktop, just center it */
 	for (tmp = clients; tmp; tmp = tmp->next) {
-		if (((tmp->state & IsSticky && tmp->mon == mon) || tmp->desk == desk) && tmp != c) {
+		if (((tmp->state == Sticky && tmp->mon == mon) || (tmp->state == Normal && tmp->desk == desk)) && tmp != c) {
 			center = 0;
 			break;
 		}
@@ -1406,7 +1437,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	/* increment cells of grid a window is in */
 	for (tmp = clients; tmp; tmp = tmp->next) {
-		if ((tmp->state & IsSticky && tmp->mon == mon) || tmp->desk == desk) {
+		if ((tmp->state == Sticky && tmp->mon == mon) || (tmp->state == Normal && tmp->desk == desk)) {
 			for (i = 0; i < DIV; i++) {
 				for (j = 0; j < DIV; j++) {
 					int ha, hb, wa, wb;
@@ -1501,21 +1532,21 @@ void
 clientfocus(struct Client *c)
 {
 	struct Client *prevfocused;
-	if (c == NULL || c->state & IsMinimized) {
+	clientsetborder(focused, colors.unfocused);
+	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
 		return;
 	}
-	clientsetborder(focused, colors.unfocused);
 	prevfocused = focused;
 	selmon = c->mon;
-	if (!(c->state & IsFree))
+	if (c->state != Sticky && c->state != Minimized)
 		selmon->seldesk = c->desk;
 	if (showingdesk)
 		clientshowdesk(0);
 	clientaddfocus(c);
 	clientsetborder(c, colors.focused);
-	if (c->state & IsMinimized)
+	if (c->state == Minimized)
 		clientminimize(c, 0);
 	XSetInputFocus(dpy, c->win, RevertToParent, CurrentTime);
 	ewmhsetstate(prevfocused);
@@ -1529,13 +1560,32 @@ clientfocus(struct Client *c)
 void
 clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 {
-	if (c == NULL || desk == NULL || c->desk == desk || c->state & (IsSticky | IsMinimized))
+	struct Monitor *mon;
+	int focusother = 0;
+	int hide = 0;
+
+	if (c == NULL || desk == NULL || c->desk == desk || c->state == Minimized)
 		return;
 
-	/* find last desktop in this monitor */
-	if (c->state & IsTiled)
+	if (c->state == Sticky)
+		clientstick(c, 0);
+	else if (c->state == Tiled)
 		clienttile(c, 0);
-	if (desk->nclients++ == 1)
+	if (clientisvisible(c)) {
+		hide = 1;
+		for (mon = mons; mon; mon = mon->next) {
+			if (mon->seldesk == desk) {
+				hide = 0;
+				break;
+			}
+		}
+	}
+	if (hide) {
+		if (c->desk == selmon->seldesk)
+			focusother = 1;
+		clienthide(c, 1);
+	}
+	if (desk->nclients++ == 1 && desk->next == NULL)
 		deskadd(desk->mon);
 	if (c->desk && c->desk != desk)
 		c->desk->nclients--;
@@ -1545,8 +1595,9 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 	if (desk->next == NULL)
 		deskadd(desk->mon);
 	if (place) {
-		clientplace(c, desk);
-		if (desk->mon->seldesk == desk) {
+		clientplace(c, c->desk);
+		if (clientisvisible(c)) {
+			clientapplysize(c);
 			clientresize(c);
 			clientmove(c);
 		}
@@ -1554,6 +1605,8 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 	XMapWindow(dpy, c->win);
 	if (focus)
 		clientfocus(c);
+	else if (focusother)
+		clientfocus(getfocused());
 	ewmhsetwmdesktop();
 	ewmhsetnumberofdesktops();
 	XSync(dpy, False);
@@ -1565,9 +1618,9 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 {
 	int origw, origh;
 
-	if (c == NULL || c->state & (IsFixed | IsMinimized | IsFullScreen))
+	if (c == NULL || c->isfixed || c->state == Minimized || c->state == Fullscreen)
 		return;
-	if (c->state & IsTiled) {
+	if (c->state == Tiled) {
 		switch (o) {
 		case NW:
 			if (c->row->col->prev) {
@@ -1636,11 +1689,13 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 		}
 		desktile(c->desk);
 	} else {
+		if (!clientchecksize(c, x, y))
+			return;
 		origw = c->w;
 		origh = c->h;
 		c->fw += x;
 		c->fh += y;
-		clientresize(c);
+		clientapplysize(c);
 		switch (o) {
 		case NW:
 			c->fx -= c->w - origw;
@@ -1668,6 +1723,9 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 			/* nothing */
 			break;
 		}
+		printf("x: %d, %d/%d\n", x, c->fw, c->w);
+		printf("y: %d, %d/%d\n", y, c->fh, c->h);
+		clientresize(c);
 		clientmove(c);
 	}
 }
@@ -1680,9 +1738,9 @@ clientincrmove(struct Client *c, int x, int y)
 	struct Column *col = NULL;
 	struct Row *row = NULL;
 
-	if (c == NULL || c->state & (IsMinimized | IsFullScreen))
+	if (c == NULL || c->state == Minimized || c->state == Fullscreen)
 		return;
-	if (c->state & IsTiled) {
+	if (c->state == Tiled) {
 		row = c->row;
 		if (x > 0) {
 			if (row->col->next)
@@ -1729,7 +1787,7 @@ clientincrmove(struct Client *c, int x, int y)
 		c->fx += x;
 		c->fy += y;
 		clientmove(c);
-		if (!(c->state & IsSticky)) {
+		if (c->state != Sticky) {
 			monto = getmon(c->fx + c->fw / 2, c->fy + c->fh / 2);
 			if (monto && monto != c->mon) {
 				clientsendtodesk(c, monto->seldesk, 0, 1);
@@ -1756,7 +1814,9 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->mon = NULL;
 	c->desk = NULL;
 	c->row = NULL;
-	c->state = 0;
+	c->isuserplaced = 0;
+	c->isfixed = 0;
+	c->state = Normal;
 	c->layer = 0;
 	c->x = c->fx = wa->x;
 	c->y = c->fy = wa->y;
@@ -1781,7 +1841,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 	f = getfocused();
-	if (focus && f != NULL && f->state & IsFullScreen && !(f->state & IsMinimized))
+	if (focus && f != NULL && f->state == Fullscreen)
 		focus = 0;
 	clientsendtodesk(c, selmon->seldesk, 1, focus);
 }
@@ -1797,14 +1857,14 @@ clientdel(struct Client *c)
 		c->prev->next = c->next;
 	else
 		clients = c->next;
-	if (c->state & IsTiled) {
+	if (c->state == Tiled) {
 		rowdel(c->row);
 	}
-	if (!(c->state & IsMinimized) && c->mon == selmon)
+	if (c->state != Minimized && c->mon == selmon)
 		clientfocus(getfocused());
-	if (!(c->state & (IsMinimized | IsSticky)))
+	if (c->state != Minimized && c->state != Sticky)
 		c->desk->nclients--;
-	if (c->state & IsTiled)
+	if (c->state == Tiled)
 		desktile(c->desk);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
@@ -1816,6 +1876,7 @@ clientdel(struct Client *c)
 static void
 deskchange(struct Desktop *desk)
 {
+	struct Desktop *tmp;
 	struct Client *c;
 	int cursorx, cursory;
 	Window da, db;          /* dummy variables */
@@ -1836,14 +1897,24 @@ deskchange(struct Desktop *desk)
 		/* unhide clientsof new current desktop */
 		for (c = clients; c; c = c->next) {
 			if (c->desk == desk) {
-				clienthide(c, 0);
+				if (c->state == Normal) {
+					clientapplysize(c);
+					clientresize(c);
+					clientmove(c);
+				} else {
+					clienthide(c, 0);
+				}
 			}
 		}
 	}
 
 	/* if moving between desks in the same monitor, we can delete a desk */
-	if (desk->mon == selmon && selmon->seldesk->next && selmon->seldesk->nclients == 0) 
-		deskdel(selmon->seldesk);
+	for (tmp = selmon->desks; tmp && tmp->next; tmp = tmp->next) {
+		if (tmp->nclients == 0) {
+			deskdel(tmp);
+			break;
+		}
+	}
 
 	/* if changing focus to a new monitor and the cursor isn't there, warp it */
 	XQueryPointer(dpy, root, &da, &db, &cursorx, &cursory, &dx, &dy, &du);
@@ -1870,9 +1941,9 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 {
 	int x, y, w, h;
 
-	if (c == NULL || c->state & (IsMinimized | IsFullScreen | IsFixed))
+	if (c == NULL || c->isfixed || c->state == Minimized | c->state == Fullscreen)
 		return;
-	if (c->state & IsTiled) {
+	if (c->state == Tiled) {
 		x = y = w = h = 0;
 		if (valuemask & CWX)
 			x = wc->x - c->x;
@@ -1896,6 +1967,7 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 		if (valuemask & CWHeight)
 			c->fh = wc->height;
 		if (clientisvisible(c)) {
+			clientapplysize(c);
 			clientresize(c);
 			clientmove(c);
 		}
@@ -2029,8 +2101,8 @@ xeventbuttonpress(XEvent *e)
 		XGrabPointer(dpy, c->win, False,
 		             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 		             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
-		motionx = ev->x;
-		motiony = ev->y;
+		motionx = ev->x_root;
+		motiony = ev->y_root;
 	}
 
 	/* focus client */
@@ -2111,15 +2183,15 @@ xeventclientmessage(XEvent *e)
 		     (Atom)ev->data.l[1] == netatom[NetWMStateMaximizedHorz]) &&
 		    ((Atom)ev->data.l[2] == netatom[NetWMStateMaximizedVert]  ||
 		     (Atom)ev->data.l[2] == netatom[NetWMStateMaximizedHorz])) {
-			clienttile(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & IsTiled))));
+			clienttile(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Tiled)));
 		}
 		for (i = 0; i < 2; i++) {
 			if ((Atom)ev->data.l[i] == netatom[NetWMStateFullscreen])
-				clientfullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & IsFullScreen))));
+				clientfullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Fullscreen)));
 			else if ((Atom)ev->data.l[i] == netatom[NetWMStateSticky])
-				clientstick(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & IsSticky))));
+				clientstick(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Sticky)));
 			else if ((Atom)ev->data.l[i] == netatom[NetWMStateHidden])
-				clientminimize(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !(c->state & IsMinimized))));
+				clientminimize(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Minimized)));
 			else if ((Atom)ev->data.l[i] == netatom[NetWMStateAbove])
 				clientabove(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && (c->layer <= 0))));
 			else if ((Atom)ev->data.l[i] == netatom[NetWMStateBelow])
@@ -2129,7 +2201,7 @@ xeventclientmessage(XEvent *e)
 	} else if (ev->message_type == netatom[NetActiveWindow]) {
 		if (c == NULL)
 			return;
-		if (c->state & IsMinimized) {
+		if (c->state == Minimized) {
 			clientminimize(c, 0);
 		} else {
 			deskchange(c->desk);
@@ -2165,8 +2237,8 @@ xeventclientmessage(XEvent *e)
 			return;
 		if (ev->data.l[0] == 0xFFFFFFFF)
 			clientstick(c, 1);
-		else if (!(c->state & IsFree)) {
-			clientsendtodesk(c, getdesk(ev->data.l[0]), 0, 0);
+		else if (c->state != Sticky && c->state != Minimized) {
+			clientsendtodesk(c, getdesk(ev->data.l[0]), 1, 0);
 		}
 	} else if (ev->message_type == netatom[NetWMMoveresize]) {
 		/*
@@ -2378,52 +2450,48 @@ xeventmotionnotify(XEvent *e)
 	if (motionaction == Resizing) {
 		switch(octant) {
 		case NW:
-			x = motionx - ev->x;
-			y = motiony - ev->y;
+			x = motionx - ev->x_root;
+			y = motiony - ev->y_root;
 			break;
 		case NE:
-			x = ev->x - motionx;
-			y = motiony - ev->y;
-			motionx = ev->x;
+			x = ev->x_root - motionx;
+			y = motiony - ev->y_root;
 			break;
 		case SW:
-			x = motionx - ev->x;
-			y = ev->y - motiony;
-			motiony = ev->y;
+			x = motionx - ev->x_root;
+			y = ev->y_root - motiony;
 			break;
 		case SE:
-			x = ev->x - motionx;
-			y = ev->y - motiony;
-			motionx = ev->x;
-			motiony = ev->y;
+			x = ev->x_root - motionx;
+			y = ev->y_root - motiony;
 			break;
 		case N:
 			x = 0;
-			y = motiony - ev->y;
+			y = motiony - ev->y_root;
 			break;
 		case S:
 			x = 0;
-			y = ev->y - motiony;
-			motiony = ev->y;
+			y = ev->y_root - motiony;
 			break;
 		case W:
-			x = motionx - ev->x;
+			x = motionx - ev->x_root;
 			y = 0;
 			break;
 		case E:
-			x = ev->x - motionx;
+			x = ev->x_root - motionx;
 			y = 0;
-			motionx = ev->x;
 			break;
 		}
 		clientincrresize(c, octant, x, y);
 	} else if (motionaction == Moving) {
-		if (c->state & IsTiled)
+		if (c->state == Tiled)
 			return;
-		x = ev->x - motionx;
-		y = ev->y - motiony;
+		x = ev->x_root - motionx;
+		y = ev->y_root - motiony;
 		clientincrmove(c, x, y);
 	}
+	motionx = ev->x_root;
+	motiony = ev->y_root;
 }
 
 /* forget about client */

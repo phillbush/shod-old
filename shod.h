@@ -2,13 +2,14 @@
 #define MINW    10      /* minimum width of a tiled client */
 #define MINH    10      /* minimum height of a tiled client */
 
-#define IsFixed         (1 << 0)
-#define IsUserPlaced    (1 << 1)
-#define IsFullScreen    (1 << 2)
-#define IsTiled         (1 << 3)
-#define IsSticky        (1 << 4)
-#define IsMinimized     (1 << 5)
-#define IsFree          (IsSticky | IsMinimized)
+/* window states */
+enum {
+	Normal,         /* floating non-sticky window */
+	Sticky,         /* floating sticky window */
+	Tiled,          /* tiled window */
+	Fullscreen,     /* fullscreen window */
+	Minimized       /* hidden window */
+};
 
 /* motion action */
 enum {
@@ -96,6 +97,7 @@ enum {
 	LayerBelow,
 	LayerTop,
 	LayerAbove,
+	LayerFullscreen,
 	LayerLast
 };
 
@@ -137,6 +139,7 @@ struct Client {
 	struct Monitor *mon;
 	struct Desktop *desk;
 	struct Row *row;
+	int isfixed, isuserplaced;
 	int state;
 	int rh;                 /* row height */
 	int x, y, w, h;         /* current geometry */
