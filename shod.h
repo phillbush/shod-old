@@ -1,24 +1,27 @@
-#ifndef _SHOD_H_
-#define _SHOD_H_
+#define DIV     15      /* numberto divide the screen into grids */
+#define MINW    10      /* minimum width of a tiled client */
+#define MINH    10      /* minimum height of a tiled client */
 
-#include <X11/Xlib.h>
-#include <X11/Xatom.h>
-#include <X11/Xft/Xft.h>
+#define IsFixed         (1 << 0)
+#define IsUserPlaced    (1 << 1)
+#define IsFullScreen    (1 << 2)
+#define IsTiled         (1 << 3)
+#define IsSticky        (1 << 4)
+#define IsMinimized     (1 << 5)
+#define IsFree          (IsSticky | IsMinimized)
 
-/* macros */
-#define LEN(x) (sizeof (x) / sizeof (x[0]))
-#define MAX(x,y) ((x)>(y)?(x):(y))
-#define MIN(x,y) ((x)<(y)?(x):(y))
+/* motion action */
+enum {
+	NoAction,
+	Moving,
+	Resizing
+};
 
-/* window states */
-#define ISNORMAL     (1 << 0)
-#define ISMAXIMIZED  (1 << 1)
-#define ISSTICKY     (1 << 2)
-#define ISMINIMIZED  (1 << 3)
-#define ISFLOATING   (ISNORMAL | ISSTICKY)        /* Window isn't tiled nor fullscreen */
-#define ISFREE       (ISSTICKY | ISMINIMIZED)     /* Window belongs to no workspace */
-#define ISBOUND      (ISNORMAL | ISMAXIMIZED)     /* Window belongs to a workspace */
-#define HASTITLE(C)  (!config.ignoretitle || (C)->isshaded)
+/* border style */
+enum {
+	BorderSolid,
+	StyleLast
+};
 
 /* EWMH atoms */
 enum {
@@ -76,7 +79,7 @@ enum {
 	NetLast
 };
 
-/* default atoms */
+/* ICCCM atoms */
 enum {
 	WMDeleteWindow,
 	WMTakeFocus,
@@ -88,205 +91,112 @@ enum {
 /* window layers */
 enum {
 	LayerDesktop,
-	LayerDockapps,
+	LayerBars,
 	LayerTiled,
 	LayerBelow,
-	LayerBottom,
 	LayerTop,
 	LayerAbove,
 	LayerLast
 };
 
 /* cursor types */
-enum {CursMove, CursNW, CursNE, CursSW, CursSE, CursLast};
+enum {
+	CursMove,
+	CursNW,
+	CursNE,
+	CursSW,
+	CursSE,
+	CursN,
+	CursS,
+	CursW,
+	CursE,
+	CursLast
+};
 
-/* dock mode */
-enum {DockBelow, DockAside};
+/* window eight sections (aka octants) */
+enum Octant {
+	NW,
+	NE,
+	SW,
+	SE,
+	N,
+	S,
+	W,
+	E,
+};
 
-/* dock positions */
-enum {DockTop, DockBottom, DockLeft, DockRight};
-
-/* dock placement */
-enum {DockBegin, DockCenter, DockEnd};
-
-/* title alignment */
-enum {TitleLeft, TitleCenter, TitleRight};
-
-/* decoration state */
-enum {DecorFocused, DecorUnfocused, DecorUrgent};
-
-/* color enum */
-enum {ColorFG, ColorBG, ColorLast};
-
-/* configuration structure */
-struct Config {
-	const char *font;
-
-	const char *dockxpm_path;
-
-	const char *urgentBG_color;
-	const char *urgentFG_color;
-	const char *focusedBG_color;
-	const char *focusedFG_color;
-	const char *unfocusedBG_color;
-	const char *unfocusedFG_color;
-
+struct Colors {
 	unsigned long urgent;
 	unsigned long focused;
 	unsigned long unfocused;
-
-	unsigned int modifier;
-	unsigned int focusbuttons;
-	unsigned int raisebuttons;
-
-	int gapinner, gaptop, gapbottom, gapleft, gapright;
-	int border_width;
-	int title_height;
-
-	int ignoregaps;
-	int ignoreborders;
-
-	int ignoretitle;
-	int titlealign;
-
-	int dockmode;
-	int dockside;
-	int dockplace;
-	int dockinverse;
-	int dockwidth;
-	int dockborder;
 };
 
-/* draw context structure */
-struct DC {
-	XftColor focused[ColorLast];
-	XftColor unfocused[ColorLast];
-	XftColor urgent[ColorLast];
-
-	GC gc;
-
-	FcPattern *pattern;
-	XftFont **fonts;
-	size_t nfonts;
-};
-
-/* contains a list of monitors and of minimized clients */
-struct WM {
-	struct Monitor *selmon;         /* growable array of monitors */
-	struct Monitor *mon;            /* growable array of monitors */
-	struct Client *minimized;       /* list of minimized clients */
-	struct Client *focused;
-
-	int moncount;                   /* number of connected monitors */
-	int wscount;                    /* number of workspaces in each monitor */
-};
-
-/* contains a list of workspaces and of sticky clients*/
-struct Monitor {
-	struct Monitor *prev, *next;
-	struct WS *ws;
-	struct WS *selws;
-	struct Client *sticky;
-	struct Client *focused;
-	int mx, my, mw, mh;         /* Actual monitor size */
-	int wx, wy, ww, wh;         /* Size considering gaps, panels and docks */
-	int dx, dy, dw, dh;         /* Size considering panels and docks */
-	int bl, br, bt, bb;         /* Size of bar on left, right, top and bottom */
-};
-
-/* contains a list of columns and of floating clients */
-struct WS {
-	struct WS *prev, *next;
-	struct Monitor *mon;        /* monitor the workspace is connected to */
-	struct Column *col;         /* list of columns */
-	struct Client *floating;    /* list of unmaximized (stacked) clients */
-	struct Client *focused;     /* focused client */
-	size_t nclients;            /* number of clients in this workspace */
-};
-
-/* contains a list of tiled clients */
-struct Column {
-	struct Column *prev, *next;
-	struct Client *row;
-	struct WS *ws;
-};
-
-/* regular client structure */
 struct Client {
 	struct Client *prev, *next;
 	struct Client *fprev, *fnext;
 	struct Monitor *mon;
-	struct WS *ws;
+	struct Desktop *desk;
+	struct Row *row;
+	int state;
+	int rh;                 /* row height */
+	int x, y, w, h;         /* current geometry */
+	int fx, fy, fw, fh;     /* floating geometry */
+	int tx, ty, tw, th;     /* tiled geometry */
+	int layer;              /* stacking order */
+	int basew, baseh;       /* TODO */
+	int minw, minh;         /* TODO */
+	int maxw, maxh;         /* TODO */
+	int incw, inch;         /* TODO */
+	long shflags;
+	float mina, maxa;       /* TODO */
+	Window win;
+};
+
+struct Row {
+	struct Row *prev, *next;
 	struct Column *col;
-	char name[128];
-	int x, y;               /* position of the window inside its parent decoration */
-	int ux, uy, uw, uh;     /* unmaximized (floating) geometry */
-	int mx, my, mw, mh;     /* maximized (tiling) geometry */
-	int basew, baseh;
-	int minw, minh;
-	int maxw, maxh;
-	int incw, inch;
-	int isfixed, isuserplaced, isfullscreen, isshaded;
-	int layer;
-	int border;
-	unsigned char state;
-	float mina, maxa;
-	Window win;
-	Window dec;
+	struct Client *c;
+	int h;          /* row height */
 };
 
-/* panel client structure */
-struct Panel {
-	struct Panel *prev, *next;
+struct Column {
+	struct Column *prev, *next;
+	struct Desktop *desk;
+	struct Row *row;
+	int w;          /* column width */
+};
+
+struct Desktop {
+	struct Desktop *prev, *next;
 	struct Monitor *mon;
-	Window win;
-	int left, right, top, bottom;
+	struct Column *col;
+	size_t nclients;
 };
 
-/* dockapp client structure */
-struct Dockapp {
-	struct Dockapp *prev, *next;
-	Window parent;
-	Window win;
-	int w, h;
-	unsigned int pos;
+struct Monitor {
+	struct Monitor *prev, *next;
+	struct Desktop *desks;
+	struct Desktop *seldesk;
+	int mx, my, mw, mh;     /* screen size */
+	int wx, wy, ww, wh;     /* window area */
+	int gx, gy, gw, gh;     /* window area with gaps */
 };
 
-/* dock whither dockapps are mapped */
-struct Dock {
-	char *xpmfile;
-	Pixmap xpm;
-	Window win;
-	size_t num;
+struct Config {
+	const char *urgent_color;
+	const char *focused_color;
+	const char *unfocused_color;
 
-	char **dockapps;
-	size_t ndockapps;
+	int border_style;               /* TODO */
+	int border_width;
+	int corner_width;               /* TODO */
+	int ignoregaps;
+	int ignoreborders;
 
-	struct Dockapp *list;
+	int gapinner;
+	int gapouter;
+
+	unsigned int modifier;
+	unsigned int focusbuttons;
+	unsigned int raisebuttons;
 };
-
-/* X stuff */
-extern struct DC dc;
-extern Display *dpy;
-extern Window root, wmcheckwin;
-extern Colormap colormap;
-extern Visual *visual;
-extern Cursor cursor[CursLast];
-extern Atom utf8string;
-extern Atom wmatom[WMLast];
-extern Atom netatom[NetLast];
-extern Window layerwin[LayerLast];
-extern Window focuswin;
-extern int (*xerrorxlib)(Display *, XErrorEvent *);
-extern int screen;
-extern int screenw, screenh;
-
-/* clients */
-extern struct Panel *panels;
-extern struct WM wm;
-extern struct Dock dock;
-
-/* configuration */
-extern struct Config config;
-
-#endif /* _SHOD_H_ */
