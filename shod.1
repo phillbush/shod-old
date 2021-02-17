@@ -229,12 +229,7 @@ shod
 move the specified window to the specified desktop.
 .SS Manipulating via configure request
 .B shod
-acts upon configure request events sent to windows via utilities like
-wmutils'
-.IR wrs (1)
-and
-.IR wmv (1),
-by resizing and moving windows
+acts upon configure request events sent to windows via utilities by resizing and moving windows
 just as if the user have resized or moved them with the mouse.
 For more information, on how to do this, see the manual of these utilities.
 .PP
@@ -250,16 +245,16 @@ Each tiled window ocupies a row in a column.
 .PP
 In order to move a tiled window from one column to another
 just move the window left or right with
-.IR wmv (1).
+.IR wmctrl (1).
 This will move the window from its current column to the column to its
 left or right, or it will create a new column, if needed.
 .PP
 In order to move a tiled window up or down a column,
 just move the window up or down with
-.IR wmv (1).
+.IR wmctrl (1).
 .PP
 Resizing a tiled window with
-.IR wrs (1)
+.IR wmctrl (1)
 or with the Modifier plus the mouse button 3
 will change the size of the window, the size of the column it is in,
 and the size of the neighboring windows.
@@ -329,50 +324,38 @@ This example uses
 for sending EWMH hints to
 .BR shod.
 It uses
-.IR wmv (1)
-and
-.IR wrs (1)
-for moving and resizing windows, respectively.
-And it also uses
-.IR pfw (1)
-to obtain the numeric ID of the focused window.
-.IR wmv (1),
-.IR wrs (1),
-and
-.IR pfw (1)
-are utilities from the
-.IR wmutils (1)
-set of window manipulation utilities.
+.IR wmr (1)
+(a script shown below) for moving and resizing windows, respectively.
 .IP
 .EX
 # Start terminal (urxvt)
-mod4 + Enter
+mod1 + Return
 	xterm
 
 # Killing windows
-mod4 + shift + q
+mod1 + shift + q
 	wmctrl -c :ACTIVE:
 
 # Workspace
-mod4 + {1,2,3,4,5,6,7,8,9,0}
+mod1 + {1,2,3,4,5,6,7,8,9}
 	wmctrl -s {0,1,2,3,4,5,6,7,8,9}
-mod4 + shift + {1,2,3,4,5,6,7,8,9,0}
-	wmctrl -r :ACTIVE: -t {0,1,2,3,4,5,6,7,8,9}
+mod1 + shift + {1,2,3,4,5,6,7,8,9}
+	wmctrl -r :ACITVE: -t {0,1,2,3,4,5,6,7,8,9}
 
-# Resize/move windows
-mod4 + {c, v, shift + c, shift + v}
-	wrs {-25 0, 0 -25, +25 0, 0 +25} $(pfw)
-mod4 + shift + {h, j, k, l}
-	wmv {-10 0, 0 10, 0 -10, 10 0} $(pfw)
+# Resize/move windows with wmr
+mod1 + {c, v, shift + c, shift + v}
+	wmr 0 0 {-25 0, 0 -25, +25 0, 0 +25}
+mod1 + shift + {h, j, k, l}
+	wmr {-10 0, 0 10, 0 -10, 10 0} 0 0
 
 # Change window status to sticky/above/below/minimized/fullscreen/maximized
-mod4 + shift + {s, a, b, z, f}
+mod1 + shift + {s, a, b, z, f}
 	wmctrl -r :ACTIVE: -b toggle,{sticky,above,below,hidden,fullscreen}
-mod4 + shift + t
+mod1 + shift + t
 	wmctrl -r :ACTIVE: -b toggle,maximized_vert,maximized_horz
 
 # Call the unminimize.sh script
-mod4 + shift + u
+mod1 + shift + u
 	unminimize.sh
 .EE
 .PP
@@ -484,11 +467,35 @@ dmenu -i -l 8 -p "unminimize window:" |\e
 cut -d: -f1 |\e
 xargs wmctrl -b toggle,hidden -ir
 .EE
+.PP
+The following script moves and resize the active window by a relative amount of pixels.
+.IP
+.EX
+#!/bin/sh
+# wmr: move and resize window relative to its current position and size
+
+set -e
+
+usage() {
+	echo "usage: wmr x y w h" >&2
+	exit 1
+}
+
+[ $# -ne 4 ] && usage
+eval $(xdotool getactivewindow getwindowgeometry --shell)
+xadd=$1
+yadd=$2
+wadd=$3
+hadd=$4
+X=$(( X + xadd ))
+Y=$(( Y + yadd ))
+WIDTH=$(( WIDTH + wadd ))
+HEIGHT=$(( HEIGHT + hadd ))
+wmctrl -r :ACTIVE: -e 0,$X,$Y,$WIDTH,$HEIGHT
+.EE
 .SH SEE ALSO
 .IR dmenu (1),
 .IR sxhkd (1),
 .IR wmctrl (1),
-.IR wmutils (1),
-.IR xprop (1)
 .SH BUGS
 Yes.

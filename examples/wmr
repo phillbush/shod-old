@@ -1,0 +1,21 @@
+#!/bin/sh
+# wmr: move and resize window relative to its current position and size
+
+set -e
+
+usage() {
+	echo "usage: wmr x y w h" >&2
+	exit 1
+}
+
+[ $# -ne 4 ] && usage
+eval $(xdotool getactivewindow getwindowgeometry --shell)
+xadd=$1
+yadd=$2
+wadd=$3
+hadd=$4
+X=$(( X + xadd ))
+Y=$(( Y + yadd ))
+WIDTH=$(( WIDTH + wadd ))
+HEIGHT=$(( HEIGHT + hadd ))
+wmctrl -r :ACTIVE: -e 0,$X,$Y,$WIDTH,$HEIGHT

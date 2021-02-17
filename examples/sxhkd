@@ -1,0 +1,29 @@
+# Start terminal (urxvt)
+mod1 + Return
+	xterm
+
+# Killing windows
+mod1 + shift + q
+	wmctrl -c :ACTIVE:
+
+# Workspace
+mod1 + {1,2,3,4,5,6,7,8,9}
+	wmctrl -s {0,1,2,3,4,5,6,7,8,9}
+mod1 + shift + {1,2,3,4,5,6,7,8,9}
+	wmctrl -r :ACITVE: -t {0,1,2,3,4,5,6,7,8,9}
+
+# Resize/move windows with wmr
+mod1 + {c, v, shift + c, shift + v}
+	wmr 0 0 {-25 0, 0 -25, +25 0, 0 +25}
+mod1 + shift + {h, j, k, l}
+	wmr {-10 0, 0 10, 0 -10, 10 0} 0 0
+
+# Change window status to sticky/above/below/minimized/fullscreen/maximized
+mod1 + shift + {s, a, b, z, f}
+	wmctrl -r :ACTIVE: -b toggle,{sticky,above,below,hidden,fullscreen}
+mod1 + shift + t
+	wmctrl -r :ACTIVE: -b toggle,maximized_vert,maximized_horz
+
+# Call the unminimize.sh script
+mod1 + shift + u
+	unminimize.sh
