@@ -806,7 +806,7 @@ monisuniquegeom(XineramaScreenInfo *unique, size_t n, XineramaScreenInfo *info)
 static void
 monadd(XineramaScreenInfo *info)
 {
-	struct Monitor *mon;
+	struct Monitor *mon, *lastmon;
 
 	mon = emalloc(sizeof *mon);
 	mon->prev = NULL;
@@ -823,10 +823,14 @@ monadd(XineramaScreenInfo *info)
 	mon->gh = mon->wh - config.gapouter * 2;
 	deskadd(mon);
 	mon->seldesk = mon->desks;
-	if (mons)
-		mons->prev = mon;
-	mon->next = mons;
-	mons = mon;
+	for (lastmon = mons; lastmon && lastmon->next; lastmon = lastmon->next)
+		;
+	if (lastmon) {
+		lastmon->next = mon;
+		mon->prev = lastmon;
+	} else {
+		mons = mon;
+	}
 }
 
 /* delete monitor and set monitor of clients on it to NULL */
@@ -1402,7 +1406,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	/* increment cells of grid a window is in */
 	for (tmp = clients; tmp; tmp = tmp->next) {
-		if (c->mon == mon) {
+		if ((tmp->state & IsSticky && tmp->mon == mon) || tmp->desk == desk) {
 			for (i = 0; i < DIV; i++) {
 				for (j = 0; j < DIV; j++) {
 					int ha, hb, wa, wb;
