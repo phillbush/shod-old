@@ -1,173 +1,57 @@
-                                  Shod
+                                Shod
 
-Shod is a window manager for X.
-Shod is an hybrid (tiling and floating) that sets no keybindings, uses
-no configuration (other than .Xresources), and works only by responding
-to client messages with EWMH hints.  Shod uses EWMH-based maximization
-to implement tiled windows; that is, when you maximize a window, it is
-tiled rather than maximized (that means that classic maximization isn't
-possible with shod).
+Shod is an hybrid (tiling and floating) multimonitor X11 window manager.
+Shod sets no keybindings; reads no configuration other than X resources;
+and works only via mouse with a given key modifier (Alt by default), and
+by responding to client messages with EWMH hints (so you must use wmctrl
+to control shod).
 
-Shod's manual can be read at its Github repository wiki page.
-Read the examples on the manual.
-
-WARNING: This WM and this repository are an attempt of mine to write a
-window manager and understand better how X11 works, Shod is only meant
-for me for educational purposes.  Shod is an experimental project, and
-should be used with caution.
+WARNING: Shod is attempt of mine to write a Wm and better understand how
+         X11 works, Shod is only meant for me for educational purposes.
+         Shod is an experimental project, and should be used with caution.
 
 WARNING: You must have wmctrl(1) installed in order to control Shod.
 
-§ On the name Shod
+Non-features:
+• No maximization (Shod uses maximization hints to implement tiling).
+• No tags/groups (Shod uses desktops rather than dwm-like tags).
+• No viewports (Shod does not support fvwm-like viewports).
+• No keybindings (Use sxhkd(1) for binding keys).
+• No bar/panels (I do not use panels, so I add no support for them).
 
-“Shod” is an acronym (or abbreviation, idk) for “sheets on desk”.
+Features:
+• Shod uses EWMH-based maximization to implement tiled windows; that is,
+  when you maximize a window (seting BOTH '_NET_WM_STATE_MAXIMIZED_HORZ'
+  and '_NET_WM_STATE_MAXIMIZED_VERT') it is tiled rather than maximized
+  (that means that classic maximization isn't possible with shod).
 
-The window metaphor and the desktop metaphor developed independently.
-In the desktop metaphor, the computer monitor is interpreted as if it
-is the top of the user's desk, upon which objects such as documents and
-folders can be placed.  In the window metaphor, each application frame
-is interpreted as if it is a window through which you can see the
-application's content.  Both metaphors are incompatible; the window
-metaphor makes no sence in the desktop metaphor (you do not place
-windows over your desk in real life).
+• Shod uses a columnated window tiling style (the same used by wmii(1)
+  and acme(1)).  In this style, each window occupies a row in a column.
+  In order to change the column of a window, just move it left or right
+  with wmctrl(1); and to swap a window with the one above or below, just
+  move it up or down.
 
-If windows were invented as part of the desktop metaphor, windows would
-be interpreted as sheets of paper placed upon the desk, over which the
-application draws its contents.
+• Shod places floating windows in unoccupied regions of the monitor.
+  The first floating window is spawned in the center of the monitor.
 
-Thinking on that, I decided to call my window manager “sheets on desk”,
-or “Shod” for short; because that's what windows are on the desktop
-metaphor.
+• Shod manages desktops just like how GNOME implements “actions”.  If a
+  window is open on an empty desktop, it creates a new empty desktop on
+  that monitor.   When a desktop has no window, this desktop is deleted.
 
+• Each monitor has its own set of workspaces.  For example, if you have
+  two monitors you will have two desktops being shown at the same time,
+  one on each monitor.  In order to change the selected monitor just
+  click on a window or on the root window of that monitor.  In order to
+  change the monitor of a window just move this window to another
+  monitor or move this window to a workspace bound to another monitor.
 
-§ Features
+• You can use the .focusbuttons compile-time option (set in config.h) to
+  use either a focus-follow-pointer style or a click-to-focus style.
+  You can even specify which mouse button triggers the click-to-focus
+  style.  The related .raisebuttons option specify which mouse buttons
+  raise a window.
 
-X resources support.
-The configuration (size and color) of window borders and the size of the
-gaps are read from X Resources.
-
-Controllable by wmctrl(1) and wmutils(1).
-Shod does not have a default remote control client.  Instead, you
-should use third party tools like wmctrl(1) and wmutils(1) in order
-to manipulate windows in Shod.
-
-Dynamically created workspaces per monitor.
-Shod starts with a single workspace on each monitor.  When you open a
-window on an empty workspace, it creates a new empty workspace on that
-monitor.  When you close the last window on a workspace, this workspace
-will be deleted.  Each monitor has its own set of workspaces.
-
-Tiling windows.
-Shod do not maximize windows, it tiles them.
-By toggling or adding 'maximized_vert' or 'maximized_horz' to a window
-via wmctrl(1) this window is tiled.
-
-Columnated tiling layout.
-The only style of window tiling supported by Shod is the columnated
-style, the same used by wmii and acme.  In this style, each window
-occupies a row in a column.  In order to change the column of a window,
-just move it left or right; and to swap a window with the window above
-or below, just move the window up or down.  Use wmctrl(1) for this.
-
-Intuitively placing of new windows in unoccupied spaces.
-Shod tries to place new windows in unoccupied spaces on the screen.  The
-first window on the screen is spawned in the center of the screen, the
-other windows are spawned on an unoccupied space.
-
-Multimonitor.
-Shod supports multiple monitors.  Each monitor has a set of workspaces.
-For example, if you have two monitors you will have two workspaces being
-shown at the same time, one on each monitor.  In order to change the
-selected monitor just click on a window or on the root desktop of that
-monitor.  In order to change the monitor of a window just move this
-window to another monitor or move this window to a workspace bound to
-another monitor.
-
-Sticky windows.
-By toggling or adding 'sticky' to a window via wmctrl(1) this window is
-made sticky, that is, it will be shown on all workspaces on the monitor
-the window is in.
-
-Hidding windows.
-By toggling or adding 'hidden' to a window via wmctrl(1) this window is
-hidden, and can be unhidden by removing the 'hidden' property via
-wmctrl(1).
-
-Window gaps.
-You can control the top, left, right and bottom gaps, as well as the gap
-between tiled clients.
-
-Two focus style.
-You can use the -f option to use either a focus-follow-pointer style
-or a click-to-focus style.  You can even specify which mouse button
-triggers the click-to-focus style.  The related -r option specify which
-mouse buttons raise a window.
-
-Show desktop.
-Invoking `wmctrl -k on` or `wmctrl -k off` show/hide the desktop.
-
-
-§ Non-features
-
-Maximization.
-Shod uses maximization hints to implement tiling.  In order to actually
-maximize a window, tile it in a new empty workspace; a tiled window
-alone in a workspace occupies the entire screen, just like a maximized
-window.
-
-Window tags/groups.
-Shod implements desktops/workspaces rather than tags or window groups.
-
-Viewports.
-Shod does not implement viewports and ignores any viewport-related hint.
-
-Keybindings.
-Shod does not provide any way for binding keys for managing windows.
-You should use an application such as sxhkd(1) in order to bind keys
-to wmctrl(1) commands.
-
-Docks, panels and bars.
-Shod reserves space in the edge of the screen for panels and docks.  See
-the section on limitations below, though.
-
-
-§ Installation
-
-First, edit ./config.mk to match your local setup.
-
-In order to build Shod you need the Xlib header files.
-The default configuration for Shod is specified in the file config.h,
-you can edit it, but most configuration can be changed at runtime via
-X resources and command line options.  Enter the following command to
-build Shod.  This command creates the binary file ./shod.
-
-	make
-
-By default, Shod is installed into the /usr/local prefix.  Enter the
-following command to install Shod (if necessary as root).  This command
-installs the binary file ./shod into the ${PREFIX}/bin/ directory, and
-the manual file ./shod.1 into ${MANPREFIX}/man1/ director.
-
-	make install
-
-
-§ Running Shod
-
-The following is a sample invokation of shod.  It uses the Mod4 modifier
-as modifier key (which is normally the Windows key) for resizing and moving
-windows, uses the Button1 (left mouse button) and Button3 (right mouse
-button) for focusing windows, and the Button1 for raising them.  It also
-ignores gaps and borders when there is only a single tiled window, for
-optimizing the space.
-
-	shod -m Mod4 -f 13 -r 1 -g -b
-
-See the “EXAMPLES” section of Shod's manual to see an example of how to
-set sxhkd(1) and other utilities to work together with Shod.
-
-
-§ Thanks
-
+Thanks.
 Shod was written based on code and/or inspiration from the following
 window managers.  I'd like to thank their authors for their work that
 helped me writing Shod.
@@ -176,5 +60,3 @@ helped me writing Shod.
 • i3:       https://i3wm.org
 • katriawm: https://www.uninformativ.de/git/katriawm/file/README.html
 • sowm:     https://github.com/dylanaraps/sowm
-
-

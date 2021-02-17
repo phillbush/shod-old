@@ -1,108 +1,76 @@
 .TH SHOD 1
 .SH NAME
 .B shod
-\- hybrid window manager with dockapp support
+\- hybrid window manager
 .SH SYNOPSIS
 .B shod
-.RB [ \-bg ]
-.RB [ \-d
-.IR dockapps ]
-.RB [ \-f
-.IR buttons ]
-.RB [ \-m
-.IR modifier ]
-.RB [ \-r
-.IR buttons ]
 .SH DESCRIPTION
 .B shod
-is an hybrid (tiling and floating) window manager for X11.
+is an hybrid (tiling and floating) multimonitor X11 window manager.
 .B shod
-is controlled by responding to client messages with EWMH hints and regular ICCCM events,
-and by using a given key modifier with the mouse pointer.
-.PP
-The options are as follows:
-.TP
-.B \-b
-If this option is set, shod ignores borders when a single window is maximized on the screen.
-By default, borders are always drawn, except on fullscreen windows.
-.TP
-.BI \-d " dockapps"
-Specify a semicolon-separated list of names of dockapps that should be displayed in the dock.
-This option does not spawn the dockapps, the dockapps must be invoked by other means.
-This option only specify the order in which the dockapps should appear in the dock.
-.TP
-.BI \-f " buttons"
-Specify which mouse buttons can be used to focus a window when clicking on it.
-The
-.I buttons
-string
-is a string of numbers 1 to 5 that specify the mouse buttons 1 to 5.
-For example,
-.B -f 13
-make windows be focused when clicking on them with the mouse buttons 1 and 3
-(the left and the right mouse buttons, respectively).
-If this is set to a blank string, no mouse button is used to focus window,
-and Shod uses the focus-follow-cursor focusing style.
-By default, focus follows mouse click on button 1.
-.TP
-.B \-g
-If this option is set, shod ignores gaps when a single window is maximized on the screen.
-By default, gaps are always computed when tiling windows.
-.TP
-.BI \-m " modifier"
-Specify which modifier, from
-.B Mod1
-to
-.B Mod5
-is used to move and resize windows with the mouse pointer.
-.TP
-.BI \-r " buttons"
-Specify which mouse buttons can be used to raise a window when clicking on it.
-The
-.I buttons
-string
-is a string of numbers 1 to 5 that specify the mouse buttons 1 to 5.
-For example,
-.B -r 13
-make windows be raised when clicking on them with the mouse buttons 1 and 3
-(the left and the right mouse buttons, respectively).
-By default, raise occurs on mouse click on button 1.
-.SS Desktop organization
-The desktop is made up of a set of monitors and a set of hidden windows.
-One of the monitors is the focused one, where new windows go to when they are created.
-Hidden windows do not belong to any monitor.
-When a hidden window is unhidden, it goes to the focused monitor.
+sets no keybindings;
+reads no configuration other than X resources;
+and works only via mouse with a given key modifier (Alt by default)
+and by responding to client messages with EWMH hints
+(so you have to use
+.IR wmctrl (1)
+to control shod).
 .PP
 .B shod
 maintains one monitor for each physical monitor found by
 .IR Xinerama (1).
-Each monitor is made up of a set of workspaces and a set of sticky
-windows.
-One of the workspaces of a monitor is the focused workspace for that monitor.
-Sticky windows are windows that do not belong to any workspace,
-instead, they are "sticked" to the monitor, and they appear on the
-screen no matter which workspace is shown for that monitor.
-.PP
+One of the monitors is the focused one, where new windows go to when they are created.
+Each monitor contains a set of desktops.
+One of the desktops of a monitor is the focused desktop for that monitor.
 .B shod
-maintains one set of workspaces for each monitor.
-Each workspace is made up of a set of columns, where tiled windows
-belong to, and a set of floating windows.
-The currently focused workspace of a given monitor contains the windows
-that are shown on that monitor together with that monitor's sticky windows.
-.PP
+manages desktop just like how GNOME implements \(lqactions\(rq.
+If a window is open on the last empty desktop,
 .B shod
-maintains a set of columns for each workspace.
-Columns are created on the fly,
-when windows are tiled or when tiled windows are moved around via configure request events.
-Each column contains a set of tiled windows that are tiled in a vertical fashion,
-one above the other.
-The columns are displayed one next to the other.
+creates a new empty desktop on that monitor.
+When a desktop has no window, this desktop is deleted.
 .PP
-.B shod
-maintains a dock, that is, a panel into which dockapps windows are reparented.
-Dockapps are small windows that appear to reside inside an icon.
-They are normally used to monitor things in the background such as the CPU usage.
-The dock only appears on the first monitor.
+Each window has one of the following four states:
+.TP
+Minimized
+Minimized windows belong to no monitor or desktop.
+When a minimized window is unminimized,
+it goes becomes a normal window on the focused desktop of the focused monitor.
+.TP
+Sticky
+Sticky windows belong only to a monitor; but they do not belong to any desktop.
+Instead, they are \(dqsticked\(dq to the monitor, and they appear on the screen
+no matter which desktop is focused on that monitor.
+.TP
+Tiled
+Tiled windows belong to a desktop and its monitor.
+The monitor is divided into columns, each window occupies a row in a column.
+(This tiling style is the same used by the old wmii(1) window manager and the acme(1) editor).
+.TP
+Normal
+Normal windows belong to a desktop and its monitor.
+Normal windows, just like sticky windows, are floating windows.
+Normal windows appear only when its desktop is the focused one for its monitor.
+.PP
+A non-minimized window can also be made fullscreen.
+A floating (sticky or normal) window can also be raised above other floating windows
+or lowered below other floating windows.
+.PP
+When a new window spawns, it is set as
+.BR Normal ,
+and it is placed in an unoccupied region of the monitor.
+The window in a monitor is spawned in the center of the monitor.
+.PP
+The window stacking order is the following (from bottom-to-top):
+.IP \(bu 2
+Tiled windows appear below any other windows.
+.IP \(bu 2
+Lowered floating windows appear on top of tiled windows.
+.IP \(bu 2
+Regular floating windows appear on top of lowered floating windows.
+.IP \(bu 2
+Raised floating windows appear on top of regular floating windows.
+.IP \(bu 2
+Fullscreen windows appear on top of raised floating windows.
 .SH USAGE
 .B shod
 has several ways of manipulating windows.
@@ -115,24 +83,29 @@ for controlling shod.
 The main method for controlling windows is the mouse.
 .PP
 The
-.BI \-f " buttons"
+.B config.focusbuttons
+variable (set at compile time in config.h)
 specifies which mouse buttons can be used to focus a window when clicking on it.
-If this option is set to an empty string, the focus follow the mouse pointer.
+Each bit represents a button.
+For example, if it is set to 5 (0101 in binary),
+a window is focused when clicking on it with the first or the third mouse button.
+If this variable is set to 0, the focus follows the mouse pointer.
 .PP
 The
-.BI \-r " buttons"
+.B config.raisebuttons
+variable (set at compile time in config.h)
 specifies which mouse buttons can be used to raise a window when clicking on it.
+Each bit represents a button.
+If this variable is set to 0, all buttons raises a window.
 .PP
-Pressing the modifier key specified by the
-.B -m
-option and dragging a window with the Button 1 (the left mouse button) will move that window.
-.PP
-Pressing the modifier key specified by the
-.B -m
-option and dragging a window corner with the Button 3 (the right mouse button)
-will resize that window in the direction of the corner.
-.PP
-By default, the modifier is Mod1 (which is normally Alt).
+The
+.B config.modifier
+variable (set at compile time in config.h)
+specifies the modifier key.
+Pressing the modifier key and dragging a window with the Button 1
+(the left mouse button) will move that window.
+Pressing the modifier key and dragging a corner or side of a window with the Button 3
+(the right mouse button) will resize that window in the direction of that corner or side.
 .PP
 Resizing windows can also be performed by dragging a window border with the Button 1,
 without pressing any modifier.
@@ -151,67 +124,59 @@ on the active window.
 .EX
 $ wmctrl -r :ACTIVE: -b toggle,sticky
 .EE
-.PP
+.IP \(bu 2
 If the
 .B sticky
-property is set on a window, this window is displayed on all workspaces
-of the monitor the window is in.
-.PP
+property is set on a window, this window becomes sticky
+(it is displayed on all desktops of the monitor the window is in).
+.IP \(bu 2
 If the
-.BR maximize_vert " or " maximize_horz
+.BR maximize_vert " and " maximize_horz
 properties are set on a window, the window is tiled.
-For more information for manipulating tiled windows, see the section
+For more information on manipulating tiled windows, see the section
 .B Manipulating tiled windows
 below.
-.PP
+.IP \(bu 2
 If the
 .B hidden
-property is set on a window, the window is hidden and won't be displayed on any workspace or on any monitor.
-After unhiding a window, the window will appear on the current workspace of the current monitor.
-.PP
+property is set on a window,
+the window becomes minimized
+(it won't be displayed on any desktop or on any monitor).
+.IP \(bu 2
 If the
 .B fullscreen
 property is set on a window, the window is maximized to fit the entire screen.
-.PP
+.IP \(bu 2
 If the
 .B above
-property is set on a window, the window is raised above all other windows.
-.PP
+property is set on a floating window, the window is raised above all other floating windows.
+.IP \(bu 2
 If the
 .B below
-property is set on a window, the window is lowered below all other windows.
+property is set on a floating window, the window is lowered below all other floating windows.
 .PP
-The
-.B shaded
-property is ignored, since
-.B shod
-does not have title bars for shading windows.
+All other properties are ignored.
 .SS Manipulating via other client messages
 .B shod
 acts upon other client messages sent to windows and to the root window.
 Most client messages can be sent via
 .IR wmctrl (1)
 with a specific option.
-The options and the message they send are specified below.
-Note that what
-.B wmctrl
-calls \(lqdesktop\(rq
-.B shod
-calls \(lqworkspace\(rq.
-.PP
+The options and the messages they send are specified below.
+.IP \(bu 2
 A message sent with the
 .BI -s " NUMBER"
 option of
 .IR wmctrl (1)
 makes
 .B shod
-changes the workspace.
+changes the desktop.
 That is,
-hide the windows on the current workspace and show the windows on a new workspace.
-If the workspace is on another monitor,
+hide the windows on the current desktop and show the windows on a new desktop.
+If the desktop is on another monitor,
 .B shod
 instead move the pointer to that monitor and focus a window on it.
-.PP
+.IP \(bu 2
 A message sent with the
 .B -k on
 or
@@ -221,7 +186,7 @@ options of
 makes
 .B shod
 show or hide the desktop, respectively.
-.PP
+.IP \(bu 2
 A message sent with the
 .BI -a " WINDOW"
 option of
@@ -230,7 +195,7 @@ makes
 .B shod
 change the active window.
 That is, focus and raise the specified window.
-.PP
+.IP \(bu 2
 A message sent with the
 .BI -c " WINDOW"
 option of
@@ -238,7 +203,7 @@ option of
 makes
 .B shod
 close gently the specified window.
-.PP
+.IP \(bu 2
 A message sent with the
 .BI -e " POSITION"
 option of
@@ -246,22 +211,22 @@ option of
 makes
 .B shod
 change the position and geometry of the specified window.
-.PP
+.IP \(bu 2
 A message sent with the
 .BI -s " NUMBER"
 option of
 .IR wmctrl (1)
 makes
 .B shod
-send a specified window to a specified workspace.
-.PP
+send a specified window to a specified desktop.
+.IP \(bu 2
 A message sent with the
 .BI -t " NUMBER"
 option of
 .IR wmctrl (1)
 makes
 shod
-move the specified window to the specified workspace.
+move the specified window to the specified desktop.
 .SS Manipulating via configure request
 .B shod
 acts upon configure request events sent to windows via utilities like
@@ -273,8 +238,8 @@ by resizing and moving windows
 just as if the user have resized or moved them with the mouse.
 For more information, on how to do this, see the manual of these utilities.
 .PP
-When a window is moved from a monitor to a new monitor,
-that window moves from the workspace it is in to the focused workspace
+When a window is moved from one monitor to another,
+that window moves from the desktop it is in to the focused desktop
 of the monitor it is moved to.
 .SS Manipulating tiled windows
 When a window is maximized, it is tiled by
@@ -313,69 +278,17 @@ understands the following X resources.
 .B shod.borderWidth
 The size in pixels of the border around windows.
 .TP
-.B shod.dock
-The path to a .xpm file containing the background of the dock.
-.TP
-.B shod.dockBorder
-TODO
-.TP
-.B shod.dockInverse
-If set to
-.RB \(lq true \(rq,
-map dockapps from end to beginning.
-For example, if the dock is horizontal, and this resource is set to
-.RB true ,
-then the dockapps are mapped from right to left,
-rather than from left to right (which is the normal behavior).
-And if the dock is vertical, and this resource is set to
-.RB true ,
-then the dockapps are mapped from bottom to top,
-rather than from top to bottom.
-.TP
-.B shod.dockMode
-This resource can be set to
-.BR Below ,
-in which case the dock will appear bellow the windows;
-or
-.BR Aside ,
-in which case the dock will appear at the side of the windows.
-.TP
-.B shod.dockPlace
-This resource can be set to
-.BR Begin ,
-.BR Center ,
-or
-.BR End ,
-indicating that the dockapps should appear at the beginning
-(left tip of a horizontal dock or top of a vertical dock),
-the center, or the end of the dock, respectively.
-.TP
-.B shod.dockSide
-This resource can be set to
-.BR Top ,
-.BR Bottom ,
-.BR Left ,
-or
-.BR Right ,
-indicating that the dock should be displayed at the top, bottom, left or right edge of the first monitor.
-.TP
-.B shod.dockWidth
-The width, in pixels, of the dock.
-.TP
-.B shod.gapLeft
-The gap in pixels between the left border of the monitor and the windows.
-.TP
-.B shod.gapRight
-The gap in pixels between the right border of the monitor and the windows.
-.TP
-.B shod.gapTop
-The gap in pixels between the top border of the monitor and the windows.
-.TP
-.B shod.gapBottom
-The gap in pixels between the bottom border of the monitor and the windows.
+.B shod.gapOuter
+The gap in pixels between the sides of the monitor and the windows.
 .TP
 .B shod.gapInner
 The gap in pixels between the tiled windows.
+.TP
+.B shod.ignoreGaps
+If set to \(lqtrue\(rq, a single tiled window ingores the gaps.
+.TP
+.B shod.ignoreBorders
+If set to \(lqtrue\(rq, a single tiled window does not have borders.
 .TP
 .B shod.focused
 The color of the focused window.
@@ -385,41 +298,7 @@ The color of the regular, non-focused windows.
 .TP
 .B shod.urgent
 The color of urgent windows.
-.SH EXIT STATUS
-.TP
-.B 0
-Success.
-.TP
-.B >0
-Error occurred.
 .SH EXAMPLES
-The following is a sample invokation of shod.
-It uses the Mod4 modifier as modifier key (which is normally the Windows key) for resizing and moving windows,
-uses the Button1 (left mouse button) and Button3 (right mouse button) for focusing windows,
-and the Button1 for raising them.
-It also ignores gaps and borders when there is only a single tiled window, for optimizing the space.
-.IP
-.EX
-$ shod -m Mod4 -f 13 -r 1 -g -b
-.EE
-.PP
-The following is a sample content of the
-.B .xinitrc
-file.
-It first invokes four dockapps;
-and then invokes shod, telling it to map the two of the dockapps at the beginning of the dock,
-in the order specified.
-The two unlisted dockapps (bubblemon and wmcube) will appear at the end of the dock,
-in the order they are mapped to the screen.
-.IP
-.EX
-wmwlmon
-wmcube
-wmclock
-bubblemon
-exec shod -d "wmclock;wmwlmon"
-.EE
-.PP
 The following is a sample configuration for X resources.
 It must be placed in
 .B $HOME/.Xresources
@@ -432,24 +311,14 @@ and a 7 pixels wide gap around and between tiled windows.
 It sets the color of the border of urgent windows to red;
 the border of the focused window to blue;
 and the border of regular windows to gray.
-It also sets a 64-pixel width dock to be below windows, at the right edge of the screen,
-and map dockapps from the end (bottom of the dock) to the beginning (top of the dock).
 .IP
 .EX
 shod.borderWidth:   3
-shod.gapLeft:       7
-shod.gapRight:      7
-shod.gapTop:        7
-shod.gapBottom:     7
+shod.gapOuter:      7
 shod.gapInner:      7
 shod.urgent:        #cc0000
 shod.focused:       #3465a4
 shod.unfocused:     #555753
-shod.dockWidth:     64
-shod.dockMode:      Below
-shod.dockSide:      Right
-shod.dockPlace:     End
-shod.dockInverse:   True
 .EE
 .PP
 The following is a sample configuration for
@@ -497,12 +366,14 @@ mod4 + shift + {h, j, k, l}
 	wmv {-10 0, 0 10, 0 -10, 10 0} $(pfw)
 
 # Change window status to sticky/above/below/minimized/fullscreen/maximized
-mod4 + shift + {s, a, b, z, f, m}
-	wmctrl -r :ACTIVE: -b toggle,{sticky,above,below,hidden,fullscreen,maximized_vert}
+mod4 + shift + {s, a, b, z, f}
+	wmctrl -r :ACTIVE: -b toggle,{sticky,above,below,hidden,fullscreen}
+mod4 + shift + t
+	wmctrl -r :ACTIVE: -b toggle,maximized_vert,maximized_horz
 
-# Call the unhide.sh script
+# Call the unminimize.sh script
 mod4 + shift + u
-	unhide.sh
+	unminimize.sh
 .EE
 .PP
 The previous example binds the following keys to the following commands:
@@ -514,10 +385,10 @@ Spawns a terminal emulator window.
 Gently closes the active windows.
 .TP
 .B Mod4 + <N>
-Go to the N-th workspace.
+Go to the N-th desktop.
 .TP
 .B Mod4 + Shift + <N>
-Send active window to the N-th workspace.
+Send active window to the N-th desktop.
 .TP
 .B Mod4 + C
 Shrink the active window horizontally by 25 pixels.
@@ -562,16 +433,16 @@ Hide the active window.
 Make the active window fullscreen;
 or make it normal if it was already fullscreen.
 .TP
-.B Mod4 + Shift + M
+.B Mod4 + Shift + T
 Tile the active window;
 or make it floating if it was already tiled.
 .TP
 .B Mod4 + Shift + U
-Call the unhide.sh script (see below).
+Call the unminimize.sh script (see below).
 .PP
 The following is a sample script for
 .IR dmenu (1).
-This script lists the hidden (minimized) windows and unhides the selected one.
+This script lists the minimized windows and unminimizes the selected one.
 This script uses
 .IR xprop (1)
 to obtain the X properties set by
@@ -581,35 +452,35 @@ to obtain the X properties set by
 #!/bin/sh
 
 lsw() {
-	xprop -notype -f "_NET_CLIENT_LIST" 0x ' $0+\en' -root "_NET_CLIENT_LIST" |\e
-	cut -d' ' -f2- |\e
-	sed 's/, */\e
-/g'
+	xprop -notype -f "_NET_CLIENT_LIST" 0x \(aq $0+\en\(aq -root "_NET_CLIENT_LIST" |\e
+	cut -d\(aq \(aq -f2- |\e
+	sed \(aqs/, */\e
+/g\(aq
 }
 
 ishidden() {
-	xprop -notype -f "_NET_WM_STATE" 32a ' $0+\en' -id "$1" "_NET_WM_STATE" |\e
-	cut -d' ' -f2- |\e
-	sed 's/, */\e
-/g' | grep -q "_NET_WM_STATE_HIDDEN"
+	xprop -notype -f "_NET_WM_STATE" 32a \(aq $0+\en\(aq -id "$1" "_NET_WM_STATE" |\e
+	cut -d\(aq \(aq -f2- |\e
+	sed \(aqs/, */\e
+/g\(aq | grep -q "_NET_WM_STATE_HIDDEN"
 }
 
 printname() {
-	name="$(xprop -notype -f "_NET_WM_NAME" 8s ' $0+\en' -id "$1" "_NET_WM_NAME" 2>/dev/null)"
+	name="$(xprop -notype -f "_NET_WM_NAME" 8s \(aq $0+\en\(aq -id "$1" "_NET_WM_NAME" 2>/dev/null)"
 	[ "$(echo $name)" = "_NET_WM_NAME: not found." ] && \e
-	name="$(xprop -notype -f "WM_NAME" 8s ' $0+\en' -id "$1" "WM_NAME" 2>/dev/null)"
+	name="$(xprop -notype -f "WM_NAME" 8s \(aq $0+\en\(aq -id "$1" "WM_NAME" 2>/dev/null)"
 
 	echo $name |\e
-	cut -d' ' -f2- |\e
-	sed 's/, */\e
-/g'
+	cut -d\(aq \(aq -f2- |\e
+	sed \(aqs/, */\e
+/g\(aq
 }
 
 for win in $(lsw)
 do
 	ishidden $win && printf "%s: " $win && printname $win
 done |\e
-dmenu -i -l 8 -p "unhide window:" |\e
+dmenu -i -l 8 -p "unminimize window:" |\e
 cut -d: -f1 |\e
 xargs wmctrl -b toggle,hidden -ir
 .EE
