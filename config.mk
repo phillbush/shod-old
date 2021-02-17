@@ -2,8 +2,8 @@
 PROG = shod
 
 # paths
-PREFIX = ../../usr/local
-MANPREFIX = ${PREFIX}/man
+PREFIX = /usr/local
+MANPREFIX = ${PREFIX}/share/man
 
 LOCALINC = /usr/local/include
 LOCALLIB = /usr/local/lib
