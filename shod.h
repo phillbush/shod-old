@@ -1,7 +1,3 @@
-#define DIV     15      /* numberto divide the screen into grids */
-#define MINW    10      /* minimum width of a tiled client */
-#define MINH    10      /* minimum height of a tiled client */
-
 /* window states */
 enum {
 	Normal,         /* floating non-sticky window */
@@ -126,12 +122,14 @@ enum Octant {
 	E,
 };
 
+/* color pixels for borders */
 struct Colors {
 	unsigned long urgent;
 	unsigned long focused;
 	unsigned long unfocused;
 };
 
+/* client structure */
 struct Client {
 	struct Client *prev, *next;
 	struct Client *fprev, *fnext;
@@ -154,6 +152,7 @@ struct Client {
 	Window win;
 };
 
+/* row in a column of tiled windows */
 struct Row {
 	struct Row *prev, *next;
 	struct Column *col;
@@ -161,6 +160,7 @@ struct Row {
 	int h;          /* row height */
 };
 
+/* column of tiled windows */
 struct Column {
 	struct Column *prev, *next;
 	struct Desktop *desk;
@@ -168,6 +168,7 @@ struct Column {
 	int w;          /* column width */
 };
 
+/* desktop of a monitor */
 struct Desktop {
 	struct Desktop *prev, *next;
 	struct Monitor *mon;
@@ -175,6 +176,7 @@ struct Desktop {
 	size_t nclients;
 };
 
+/* data of a monitor */
 struct Monitor {
 	struct Monitor *prev, *next;
 	struct Desktop *desks;
@@ -184,6 +186,7 @@ struct Monitor {
 	int gx, gy, gw, gh;     /* window area with gaps */
 };
 
+/* configuration set in config.h */
 struct Config {
 	const char *urgent_color;
 	const char *focused_color;

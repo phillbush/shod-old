@@ -1332,12 +1332,11 @@ clienttile(struct Client *c, int tile)
 	desk = c->desk;
 
 	if (tile && c->state != Tiled) {
-		if (desk->col == NULL) {
-			col = coladd(desk, 1);
-		} else if (desk->col->next == NULL) {
+		if (desk->col == NULL || desk->col->next == NULL) {
 			col = coladd(desk, 1);
 		} else {
-			col = desk->col->next;
+			for (col = desk->col; col->next; col = col->next)
+				;
 		}
 		row = rowadd(col);
 		row->c = c;
@@ -1440,7 +1439,8 @@ clientbelow(struct Client *c, int below)
 	clientraise(c);
 }
 
-#define WIDTH(x) ((x)->fw + 2 * config.border_width)
+#define DIV       15      /* number to divide the screen into grids */
+#define WIDTH(x)  ((x)->fw + 2 * config.border_width)
 #define HEIGHT(x) ((x)->fh + 2 * config.border_width)
 
 /* find best position to place a client on screen */
