@@ -825,8 +825,8 @@ desktile(struct Desktop *desk)
 				if (config.ignoregaps) {
 					x = mon->wx;
 					y = mon->wy;
-					col->w = mon->mw - ((!config.ignoreborders) ? 2 * config.border_width : 0);
-					row->h = mon->mh - ((!config.ignoreborders) ? 2 * config.border_width : 0);
+					col->w = mon->ww - ((!config.ignoreborders) ? 2 * config.border_width : 0);
+					row->h = mon->wh - ((!config.ignoreborders) ? 2 * config.border_width : 0);
 				}
 			} else {
 				XSetWindowBorderWidth(dpy, row->c->win, config.border_width);
