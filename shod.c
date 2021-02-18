@@ -445,7 +445,7 @@ ewmhsetnumberofdesktops(void)
 static void
 ewmhsetcurrentdesktop(unsigned long n)
 {
-	if (n < 0 || n >= deskcount)
+	if (n >= deskcount)
 		return;
 
 	XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32,
