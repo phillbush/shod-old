@@ -267,18 +267,20 @@ siginthandler(int signo)
 	running = 0;
 }
 
-/* remove zombies, we may inherit children when exec shod in .xinitrc */
+/* initialize signals */
 static void
 initsignal(void)
 {
 	struct sigaction sa;
 
+	/* remove zombies, we may inherit children when exec'ing shod in .xinitrc */
 	sa.sa_handler = SIG_IGN;
 	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
 	if (sigaction(SIGCHLD, &sa, NULL) == -1)
 		err(1, "sigaction");
 
+	/* set running to 0 */
 	sa.sa_handler = siginthandler;
 	sa.sa_flags = 0;
 	sigemptyset(&sa.sa_mask);
