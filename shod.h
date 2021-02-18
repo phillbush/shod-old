@@ -7,7 +7,6 @@ enum {
 	Normal,         /* floating non-sticky window */
 	Sticky,         /* floating sticky window */
 	Tiled,          /* tiled window */
-	Fullscreen,     /* fullscreen window */
 	Minimized       /* hidden window */
 };
 
@@ -139,7 +138,7 @@ struct Client {
 	struct Monitor *mon;
 	struct Desktop *desk;
 	struct Row *row;
-	int isfixed, isuserplaced;
+	int isfixed, isuserplaced, isfullscreen;
 	int state;
 	int rh;                 /* row height */
 	int x, y, w, h;         /* current geometry */

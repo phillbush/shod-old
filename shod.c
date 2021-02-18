@@ -428,7 +428,7 @@ ewmhsetframeextents(struct Client *c)
 {
 	unsigned long data[4];
 
-	if (c->state == Fullscreen)
+	if (c->isfullscreen)
 		data[0] = data[1] = data[2] = data[3] = 0;
 	else
 		data[0] = data[1] = data[2] = data[3] = config.border_width;
@@ -448,17 +448,16 @@ ewmhsetshowingdesktop(int n)
 static void
 ewmhsetstate(struct Client *c)
 {
-	Atom data[4];
+	Atom data[5];
 	int n = 0;
 
 	if (c == NULL)
 		return;
 	if (focused == c)
 		data[n++] = netatom[NetWMStateFocused];
-	switch (c->state) {
-	case Fullscreen:
+	if (c->isfullscreen)
 		data[n++] = netatom[NetWMStateFullscreen];
-		break;
+	switch (c->state) {
 	case Tiled:
 		data[n++] = netatom[NetWMStateMaximizedVert];
 		data[n++] = netatom[NetWMStateMaximizedHorz];
@@ -548,19 +547,19 @@ ewmhsetclientsstacking(void)
 	if (nwins)
 		wins = ecalloc(nwins, sizeof *wins);
 	for (c = clients; c; c = c->next)
-		if (c->state == Tiled)
+		if (c->state == Tiled && !c->isfullscreen)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (c->state != Tiled && c->state != Fullscreen && c->layer < 0)
+		if (c->state != Tiled && !c->isfullscreen && c->layer < 0)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (c->state != Tiled && c->state != Fullscreen && c->layer == 0)
+		if (c->state != Tiled && !c->isfullscreen && c->layer == 0)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (c->state != Tiled && c->state != Fullscreen && c->layer > 0)
+		if (c->state != Tiled && !c->isfullscreen && c->layer > 0)
 			wins[i++] = c->win;
 	for (c = clients; c; c = c->next)
-		if (c->state == Fullscreen)
+		if (c->isfullscreen)
 			wins[i++] = c->win;
 	XChangeProperty(dpy, root, netatom[NetClientListStacking], XA_WINDOW, 32,
 	                PropModeReplace, (unsigned char *)wins, nwins);
@@ -645,7 +644,7 @@ getfocused(void)
 
 	for (c = focused; c; c = c->fnext) {
 		if ((c->state == Sticky && c->mon == selmon) ||
-		    ((c->state == Normal || c->state == Tiled || c->state == Fullscreen) &&
+		    ((c->state == Normal || c->state == Tiled) &&
 		    c->desk == selmon->seldesk)) {
 			return c;
 		}
@@ -753,7 +752,7 @@ desktile(struct Desktop *desk)
 		y = mon->gy;
 
 		for (row = col->row; row; row = row->next) {
-			if (row->c->state == Fullscreen)
+			if (row->c->isfullscreen)
 				continue;
 
 			/* the last client gets the remaining height */
@@ -1015,7 +1014,7 @@ rowdel(struct Row *row)
 static int
 clientisborder(struct Client *c, int x, int y)
 {
-	if (c == NULL || c->state == Minimized || c->state == Fullscreen)
+	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return 0;
 	if (x < 0 || x > c->w || y < 0 || y > c->h)
 		return 1;
@@ -1202,9 +1201,9 @@ clientraise(struct Client *c)
 {
 	Window wins[2];
 
-	if (c == NULL || c->state == Minimized || c->state == Fullscreen)
+	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return;
-	if (c->state == Fullscreen)
+	if (c->isfullscreen)
 		wins[0] = layerwin[LayerFullscreen];
 	else if (c->state == Tiled)
 		wins[0] = layerwin[LayerTiled];
@@ -1257,7 +1256,7 @@ clientstick(struct Client *c, int stick)
 {
 	void clientsendtodesk(struct Client *, struct Desktop *, int, int);
 
-	if (c == NULL || c->state == Fullscreen || c->state == Minimized || c->state == Tiled)
+	if (c == NULL || c->isfullscreen || c->state == Minimized || c->state == Tiled)
 		return;
 
 	if (stick && c->state != Sticky) {
@@ -1279,7 +1278,7 @@ clienttile(struct Client *c, int tile)
 	struct Column *col;
 	struct Row *row;
 
-	if (c == NULL || c->isfixed || c->state == Minimized || c->state == Fullscreen)
+	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
 		return;
 
 	desk = c->desk;
@@ -1353,14 +1352,14 @@ clientfullscreen(struct Client *c, int fullscreen)
 		return;
 	if (c->state == Sticky)
 		clientstick(c, 0);
-	if (fullscreen && c->state != Fullscreen) {
-		c->state = Fullscreen;
+	if (fullscreen && !c->isfullscreen) {
+		c->isfullscreen = 1;
 		XSetWindowBorderWidth(dpy, c->win, 0);
 		if (clientisvisible(c))
 			XMoveResizeWindow(dpy, c->win, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
 		XRaiseWindow(dpy, c->win);
-	} else if (!fullscreen && c->state == Fullscreen) {
-		c->state = Normal;
+	} else if (!fullscreen && c->isfullscreen) {
+		c->isfullscreen = 0;
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
 		if (c->state == Tiled) {
 			desktile(c->desk);
@@ -1377,7 +1376,7 @@ clientfullscreen(struct Client *c, int fullscreen)
 static void
 clientabove(struct Client *c, int above)
 {
-	if (c == NULL || c->state == Tiled || c->state == Fullscreen || c->state == Minimized)
+	if (c == NULL || c->state == Tiled || c->isfullscreen || c->state == Minimized)
 		return;
 	c->layer = (above) ? 1 : 0;
 	clientraise(c);
@@ -1387,7 +1386,7 @@ clientabove(struct Client *c, int above)
 static void
 clientbelow(struct Client *c, int below)
 {
-	if (c == NULL || c->state == Tiled || c->state == Fullscreen || c->state == Minimized)
+	if (c == NULL || c->state == Tiled || c->isfullscreen || c->state == Minimized)
 		return;
 	c->layer = (below) ? -1 : 0;
 	clientraise(c);
@@ -1409,7 +1408,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 	int posi, posj;         /* position of the larger region */
 	int lw, lh;             /* larger region width and height */
 
-	if (desk == NULL || c == NULL || c->state == Tiled || c->state == Fullscreen || c->state == Minimized)
+	if (desk == NULL || c == NULL || c->state == Tiled || c->isfullscreen || c->state == Minimized)
 		return;
 
 	mon = desk->mon;
@@ -1623,7 +1622,7 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 {
 	int origw, origh;
 
-	if (c == NULL || c->isfixed || c->state == Minimized || c->state == Fullscreen)
+	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
 		return;
 	if (c->state == Tiled) {
 		switch (o) {
@@ -1741,7 +1740,7 @@ clientincrmove(struct Client *c, int x, int y)
 	struct Column *col = NULL;
 	struct Row *row = NULL;
 
-	if (c == NULL || c->state == Minimized || c->state == Fullscreen)
+	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return;
 	if (c->state == Tiled) {
 		row = c->row;
@@ -1817,6 +1816,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->mon = NULL;
 	c->desk = NULL;
 	c->row = NULL;
+	c->isfullscreen = 0;
 	c->isuserplaced = 0;
 	c->isfixed = 0;
 	c->state = Normal;
@@ -1844,8 +1844,10 @@ clientadd(Window win, XWindowAttributes *wa)
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 	f = getfocused();
-	if (focus && f != NULL && f->state == Fullscreen)
+	if (focus && f != NULL && f->isfullscreen)
 		focus = 0;
+	else
+		clientsetborder(focused, colors.unfocused);
 	clientsendtodesk(c, selmon->seldesk, 1, focus);
 }
 
@@ -1947,7 +1949,7 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 {
 	int x, y, w, h;
 
-	if (c == NULL || c->isfixed || c->state == Minimized | c->state == Fullscreen)
+	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
 		return;
 	if (c->state == Tiled) {
 		x = y = w = h = 0;
@@ -2193,7 +2195,7 @@ xeventclientmessage(XEvent *e)
 		}
 		for (i = 0; i < 2; i++) {
 			if ((Atom)ev->data.l[i] == netatom[NetWMStateFullscreen])
-				clientfullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Fullscreen)));
+				clientfullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !c->isfullscreen)));
 			else if ((Atom)ev->data.l[i] == netatom[NetWMStateSticky])
 				clientstick(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Sticky)));
 			else if ((Atom)ev->data.l[i] == netatom[NetWMStateHidden])
