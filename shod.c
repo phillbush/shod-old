@@ -743,8 +743,23 @@ deskadd(struct Monitor *mon)
 static void
 deskdel(struct Desktop *desk)
 {
+	struct Column *col, *tcol;
+	struct Row *row, *trow;
+
 	if (desk == NULL)
 		return;
+	col = desk->col;
+	while (col) {
+		row = col->row;
+		while (row) {
+			trow = row;
+			row = row->next;
+			free(trow);
+		}
+		tcol = col;
+		col = col->next;
+		free(tcol);
+	}
 	if (desk->next)
 		desk->next->prev = desk->prev;
 	if (desk->prev)
@@ -893,8 +908,15 @@ monadd(XineramaScreenInfo *info)
 static void
 mondel(struct Monitor *mon)
 {
+	struct Desktop *desk, *tmp;
 	struct Client *c;
 
+	desk = mon->desks;
+	while (desk) {
+		tmp = desk;
+		desk = desk->next;
+		deskdel(tmp);
+	}
 	if (mon->next)
 		mon->next->prev = mon->prev;
 	if (mon->prev)
