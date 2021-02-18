@@ -729,13 +729,14 @@ desktile(struct Desktop *desk)
 	struct Column *col;
 	struct Row *row;
 	int recol = 0, rerow = 0;       /* whether to resize columns and rows */
-	int sumw = 0, sumh = 0;
+	int sumw, sumh;
 	int ncols, nrows;
 	int x, y, w, h;
 
 	mon = desk->mon;
 
 	/* get number of columns and sum their widths with borders and gaps applied */
+	sumw = 0;
 	for (ncols = 0, col = desk->col; col; col = col->next, ncols++)
 		sumw += col->w + config.border_width * 2;
 	sumw += config.gapinner * (ncols - 1);
@@ -753,6 +754,7 @@ desktile(struct Desktop *desk)
 			w = mon->gw + mon->gx - x - 2 * config.border_width;
 
 		/* get number of clients in current column and sum their heights */
+		sumh = 0;
 		for (nrows = 0, row = col->row; row; row = row->next, nrows++)
 			sumh += row->h + config.border_width * 2;
 		sumh += config.gapinner * (nrows - 1);
@@ -1934,7 +1936,8 @@ deskchange(struct Desktop *desk)
 	for (mon = mons; mon; mon = mon->next) {
 		for (tmp = mon->desks; tmp && tmp->next; tmp = tmp->next) {
 			if (tmp->nclients == 0) {
-				deskdel(tmp);
+				if (tmp != desk)
+					deskdel(tmp);
 				break;
 			}
 		}
