@@ -1933,6 +1933,7 @@ deskchange(struct Desktop *desk)
 	struct Desktop *tmp;
 	struct Client *c;
 	int cursorx, cursory;
+	int deleted = 0;
 	Window da, db;          /* dummy variables */
 	int dx, dy;             /* dummy variables */
 	unsigned int du;        /* dummy variable */
@@ -1966,8 +1967,10 @@ deskchange(struct Desktop *desk)
 	for (mon = mons; mon; mon = mon->next) {
 		for (tmp = mon->desks; tmp && tmp->next; tmp = tmp->next) {
 			if (tmp->nclients == 0) {
-				if (tmp != desk)
+				if (tmp != desk) {
 					deskdel(tmp);
+					deleted = 1;
+				}
 				break;
 			}
 		}
@@ -1986,7 +1989,10 @@ deskchange(struct Desktop *desk)
 	if (showingdesk)
 		clientshowdesk(0);
 	ewmhsetcurrentdesktop(getdesknum(desk));
-	ewmhsetnumberofdesktops();
+	if (deleted) {
+		ewmhsetnumberofdesktops();
+		ewmhsetwmdesktop();
+	}
 
 	/* focus client on the new current desktop */
 	clientfocus(getfocused());
