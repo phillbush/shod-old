@@ -747,6 +747,8 @@ deskdel(struct Desktop *desk)
 		desk->prev->next = desk->next;
 	else
 		desk->mon->desks = desk->next;
+	if (desk->mon->seldesk == desk)
+		desk->mon->seldesk = desk->mon->desks;
 	deskcount--;
 	free(desk);
 }
