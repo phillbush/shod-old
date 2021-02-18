@@ -2220,7 +2220,6 @@ xeventclientmessage(XEvent *e)
 	unsigned value_mask = 0;
 	struct Client *c;
 	Cursor curs = None;
-	Window dw;
 	int i;
 
 	c = getclient(ev->window);
@@ -2376,10 +2375,8 @@ xeventclientmessage(XEvent *e)
 			default:
 				return;
 			}
-			if (XTranslateCoordinates(dpy, root, c->win, ev->data.l[0], ev->data.l[1],
-				                  &motionx, &motiony, &dw) == False ) {
-				motionx = motiony = 0;
-			}
+			motionx = ev->data.l[0];
+			motiony = ev->data.l[1];
 			XGrabPointer(dpy, c->win, False,
 			             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 			             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
