@@ -567,27 +567,30 @@ ewmhsetclients(void)
 static void
 ewmhsetclientsstacking(void)
 {
-	struct Client *c;
+	struct Client *c, *last;
 	Window *wins = NULL;
 	size_t i = 0, nwins = 0;
 
-	for (c = clients; c; c = c->next)
+	last = NULL;
+	for (c = focused; c; c = c->fnext) {
+		last = c;
 		nwins++;
+	}
 	if (nwins)
 		wins = ecalloc(nwins, sizeof *wins);
-	for (c = clients; c; c = c->next)
+	for (c = last; c; c = c->fprev)
 		if (c->state == Tiled && !c->isfullscreen)
 			wins[i++] = c->win;
-	for (c = clients; c; c = c->next)
+	for (c = last; c; c = c->fprev)
 		if (c->state != Tiled && !c->isfullscreen && c->layer < 0)
 			wins[i++] = c->win;
-	for (c = clients; c; c = c->next)
+	for (c = last; c; c = c->fprev)
 		if (c->state != Tiled && !c->isfullscreen && c->layer == 0)
 			wins[i++] = c->win;
-	for (c = clients; c; c = c->next)
+	for (c = last; c; c = c->fprev)
 		if (c->state != Tiled && !c->isfullscreen && c->layer > 0)
 			wins[i++] = c->win;
-	for (c = clients; c; c = c->next)
+	for (c = last; c; c = c->fprev)
 		if (c->isfullscreen)
 			wins[i++] = c->win;
 	XChangeProperty(dpy, root, netatom[NetClientListStacking], XA_WINDOW, 32,
