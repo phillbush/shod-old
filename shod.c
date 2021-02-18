@@ -691,7 +691,9 @@ getfullscreen(struct Monitor *mon, struct Desktop *desk)
 	struct Client *c;
 
 	for (c = focused; c; c = c->fnext)
-		if (c->isfullscreen && ((desk && c->desk == desk) || c->mon == mon))
+		if (c->isfullscreen &&
+		    (((c->state == Normal || c->state == Tiled) && c->desk == desk) ||
+		     (c->state == Sticky && c->mon == mon)))
 			return c;
 	return NULL;
 }
@@ -1402,8 +1404,12 @@ clientfullscreen(struct Client *c, int fullscreen)
 	if (fullscreen && !c->isfullscreen) {
 		c->isfullscreen = 1;
 		XSetWindowBorderWidth(dpy, c->win, 0);
+		c->x = c->mon->mx;
+		c->y = c->mon->my;
+		c->w = c->mon->mw;
+		c->h = c->mon->mh;
 		if (clientisvisible(c))
-			XMoveResizeWindow(dpy, c->win, c->mon->mx, c->mon->my, c->mon->mw, c->mon->mh);
+			XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 		XRaiseWindow(dpy, c->win);
 	} else if (!fullscreen && c->isfullscreen) {
 		c->isfullscreen = 0;
@@ -1956,7 +1962,7 @@ deskchange(struct Desktop *desk)
 		/* unhide clientsof new current desktop */
 		for (c = clients; c; c = c->next) {
 			if (c->desk == desk) {
-				if (c->state == Normal) {
+				if (!c->isfullscreen && c->state == Normal) {
 					clientapplysize(c);
 					clientresize(c);
 					clientmove(c);
