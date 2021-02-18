@@ -636,7 +636,7 @@ getmon(int x, int y)
 	return NULL;
 }
 
-/* get focused client in given monitor and desktop */
+/* get focused client */
 static struct Client *
 getfocused(void)
 {
@@ -649,6 +649,18 @@ getfocused(void)
 			return c;
 		}
 	}
+	return NULL;
+}
+
+/* get focused fullscreen window in given monitor and desktop */
+static struct Client *
+getfullscreen(struct Monitor *mon, struct Desktop *desk)
+{
+	struct Client *c;
+
+	for (c = focused; c; c = c->fnext)
+		if (c->isfullscreen && ((desk && c->desk == desk) || c->mon == mon))
+			return c;
 	return NULL;
 }
 
@@ -1534,13 +1546,17 @@ clientplace(struct Client *c, struct Desktop *desk)
 void
 clientfocus(struct Client *c)
 {
-	struct Client *prevfocused;
+	struct Client *prevfocused, *fullscreen;
+
 	clientsetborder(focused, colors.unfocused);
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
 		return;
 	}
+	fullscreen = getfullscreen(c->mon, c->desk);
+	if (fullscreen != NULL && fullscreen != c)
+		return;         /* we should not focus a client below a fullscreen client */
 	prevfocused = focused;
 	if (c->mon)
 		selmon = c->mon;
