@@ -1,4 +1,5 @@
 #include <err.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,7 +51,7 @@ static int showingdesk = 0;
 static int moncount = 0;
 
 /* other variables */
-static int running = 1;
+volatile sig_atomic_t running = 1;
 
 /* include default configuration */
 #include "config.h"
@@ -256,6 +257,33 @@ xerror(Display *dpy, XErrorEvent *e)
 
 	errx(1, "Fatal request. Request code=%d, error code=%d", e->request_code, e->error_code);
 	return xerrorxlib(dpy, e);
+}
+
+/* stop running */
+static void
+siginthandler(int signo)
+{
+	(void)signo;
+	running = 0;
+}
+
+/* remove zombies, we may inherit children when exec shod in .xinitrc */
+static void
+initsignal(void)
+{
+	struct sigaction sa;
+
+	sa.sa_handler = SIG_IGN;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGCHLD, &sa, NULL) == -1)
+		err(1, "sigaction");
+
+	sa.sa_handler = siginthandler;
+	sa.sa_flags = 0;
+	sigemptyset(&sa.sa_mask);
+	if (sigaction(SIGINT, &sa, NULL) == -1)
+		err(1, "sigaction");
 }
 
 /* create dummy windows used for controlling focus and the layer of clients */
@@ -2598,6 +2626,7 @@ main(void)
 	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
 
 	/* initialize */
+	initsignal();
 	initdummywindows();
 	initcursors();
 	initcolors();
