@@ -12,7 +12,6 @@
 #include <X11/cursorfont.h>
 #include <X11/extensions/Xinerama.h>
 #include "shod.h"
-#include "util.h"
 
 /* X stuff */
 static Display *dpy;
