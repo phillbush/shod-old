@@ -51,6 +51,14 @@ Features:
   style.  The related .raisebuttons option specify which mouse buttons
   raise a window.
 
+TODO.
+• Handle window urgency and _NET_WM_STATE_DEMANDS_ATTENTION state.
+• Add support to panels/bars.
+• Draw decorations on borders based on a .xpm file.
+• Add support for window rules.
+• Read config.modifier, config.focusbuttons and config.raisebuttons from
+  X resources.
+
 See also.
 For a better experience with shod see also focus[1], which include tools
 to change the focused window, focused desktop and focused monitor;  With
