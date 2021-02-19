@@ -1273,7 +1273,7 @@ clientraise(struct Client *c)
 {
 	Window wins[2];
 
-	if (c == NULL || c->state == Minimized || c->isfullscreen)
+	if (c == NULL || c->state == Minimized)
 		return;
 	if (c->isfullscreen)
 		wins[0] = layerwin[LayerFullscreen];
