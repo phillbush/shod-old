@@ -1432,7 +1432,6 @@ clientfullscreen(struct Client *c, int fullscreen)
 		c->h = c->mon->mh;
 		if (clientisvisible(c))
 			XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-		XRaiseWindow(dpy, c->win);
 	} else if (!fullscreen && c->isfullscreen) {
 		c->isfullscreen = 0;
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
@@ -1443,8 +1442,8 @@ clientfullscreen(struct Client *c, int fullscreen)
 			clientresize(c);
 			clientmove(c);
 		}
-		clientraise(c);
 	}
+	clientraise(c);
 }
 
 /* raise client above others */

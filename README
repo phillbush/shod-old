@@ -53,12 +53,18 @@ Features:
 
 See also.
 For a better experience with shod see also focus[1], which include tools
-to change the focused window, focused desktop and focused monitor.  With
-focus, you can focus the tiled window on the right, for instnace.  Also,
-check out lsd[2] and lsc[3], which can be useful in scripts.
+to change the focused window, focused desktop and focused monitor;  With
+this utility, you can focus the tiled window on the right, for instance.
+For scripting, see also lsd[2] and lsc[3], which list useful information
+about desktop and clients.  For a desktop menu and desktop prompt, check
+out xmenu[4] and xprompt[5].  For other handful utilities for X11, check
+out xutils[6].
 [1] https://github.com/phillbush/focus
 [2] https://github.com/phillbush/lsd
 [3] https://github.com/phillbush/lsc
+[4] https://github.com/phillbush/xmenu
+[5] https://github.com/phillbush/xprompt
+[5] https://github.com/phillbush/xutils
 
 Thanks.
 Shod was written based on code and/or inspiration from the following
