@@ -1925,7 +1925,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	f = getfocused();
 	if (focus && f != NULL && f->isfullscreen)
 		focus = 0;
-	else
+	if (!focus)
 		clientsetborder(c, colors.unfocused);
 	clientsendtodesk(c, selmon->seldesk, 1, focus);
 }
