@@ -54,7 +54,6 @@ Features:
 TODO.
 • Handle window urgency and _NET_WM_STATE_DEMANDS_ATTENTION state.
 • Add support to panels/bars.
-• Draw decorations on borders based on a .xpm file.
 • Add support for window rules.
 • Read config.modifier, config.focusbuttons and config.raisebuttons from
   X resources.
