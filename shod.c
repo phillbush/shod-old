@@ -395,6 +395,18 @@ initatoms(void)
 }
 
 static void
+icccmwmstate(Window win, int state)
+{
+	long data[2];
+
+	data[0] = state;
+	data[1] = None;
+
+	XChangeProperty(dpy, win, wmatom[WMState], wmatom[WMState], 32,
+	                PropModeReplace, (unsigned char *)&data, 2);
+}
+
+static void
 ewmhinit(void)
 {
 	unsigned long data[2];
@@ -1433,15 +1445,15 @@ clientraise(struct Client *c)
 static void
 clienthide(struct Client *c, int hide)
 {
-	int incw, x;
-
 	if (c == NULL)
 		return;
-	incw = (c->incw > 0) ? c->incw : 0;
-	x = c->x;
-	if (hide)
-		x = (c->w + 2 * config.border_width + incw) * -2;
-	XMoveResizeWindow(dpy, c->win, x, c->y, c->w, c->h);
+	if (hide) {
+		XUnmapWindow(dpy, c->win);
+		icccmwmstate(c->win, IconicState);
+	} else {
+		XMapWindow(dpy, c->win);
+		icccmwmstate(c->win, NormalState);
+	}
 }
 
 /* hide all windows and show the desktop */
@@ -1919,6 +1931,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	            ButtonPressMask | ButtonReleaseMask,
 	            GrabModeSync, GrabModeSync, None, None);
 	XSetWindowBorderWidth(dpy, win, config.border_width);
+	icccmwmstate(c->win, NormalState);
 	ewmhsetframeextents(c);
 	ewmhsetallowedactions(win);
 	ewmhsetclients();
@@ -1988,9 +2001,8 @@ deskchange(struct Desktop *desk)
 					clientapplysize(c);
 					clientresize(c);
 					clientmove(c);
-				} else {
-					clienthide(c, 0);
 				}
+				clienthide(c, 0);
 			}
 		}
 	}
@@ -2586,17 +2598,6 @@ xeventmotionnotify(XEvent *e)
 	motiony = ev->y_root;
 }
 
-/* forget about client */
-static void
-xeventunmapnotify(XEvent *e)
-{
-	XUnmapEvent *ev = &e->xunmap;
-	struct Client *c;
-
-	if ((c = getclient(ev->window)) != NULL)
-		clientdel(c);
-}
-
 /* destroy dummy windows */
 static void
 cleandummywindows(void)
@@ -2635,8 +2636,7 @@ main(void)
 		[FocusIn]          = xeventfocusin,
 		[KeyPress]         = xeventkeypress,
 		[MapRequest]       = xeventmaprequest,
-		[MotionNotify]     = xeventmotionnotify,
-		[UnmapNotify]      = xeventunmapnotify
+		[MotionNotify]     = xeventmotionnotify
 	};
 
 	/* open connection to server and set X variables */
