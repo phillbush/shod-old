@@ -721,6 +721,24 @@ clientisvisible(struct Client *c)
 	return 0;
 }
 
+/* set client border color */
+static void
+clientbordercolor(struct Client *c, unsigned long color)
+{
+	if (c == NULL)
+		return;
+	XSetWindowBorder(dpy, c->win, color);
+}
+
+/* set client border width */
+static void
+clientborderwidth(struct Client *c, int border)
+{
+	if (c == NULL)
+		return;
+	XSetWindowBorderWidth(dpy, c->win, border);
+}
+
 /* check if desktop is visible */
 static int
 deskisvisible(struct Desktop *desk)
@@ -847,7 +865,7 @@ desktile(struct Desktop *desk)
 				if (config.ignoreborders) {
 					col->w += 2 * config.border_width;
 					row->h += 2 * config.border_width;
-					XSetWindowBorderWidth(dpy, row->c->win, 0);
+					clientborderwidth(row->c, 0);
 				}
 				if (config.ignoregaps) {
 					x = mon->wx;
@@ -856,7 +874,7 @@ desktile(struct Desktop *desk)
 					row->h = mon->wh - ((!config.ignoreborders) ? 2 * config.border_width : 0);
 				}
 			} else {
-				XSetWindowBorderWidth(dpy, row->c->win, config.border_width);
+				clientborderwidth(row->c, config.border_width);
 			}
 
 			row->c->x = x;
@@ -1374,15 +1392,6 @@ clientmoveresize(struct Client *c)
 	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 }
 
-/* set client border */
-static void
-clientsetborder(struct Client *c, unsigned long color)
-{
-	if (c == NULL)
-		return;
-	XSetWindowBorder(dpy,c->win, color);
-}
-
 /* remove client from the focus list */
 static void
 clientdelfocus(struct Client *c)
@@ -1517,7 +1526,7 @@ clienttile(struct Client *c, int tile)
 		c->state = Normal;
 		rowdel(c->row);
 		clientplace(c, c->desk);
-		XSetWindowBorderWidth(dpy, c->win, config.border_width);
+		clientborderwidth(c, config.border_width);
 		clientapplysize(c);
 		if (clientisvisible(c)) {
 			clientmoveresize(c);
@@ -1569,7 +1578,7 @@ clientfullscreen(struct Client *c, int fullscreen)
 		clientstick(c, 0);
 	if (fullscreen && !c->isfullscreen) {
 		c->isfullscreen = 1;
-		XSetWindowBorderWidth(dpy, c->win, 0);
+		clientborderwidth(c, 0);
 		c->x = c->mon->mx;
 		c->y = c->mon->my;
 		c->w = c->mon->mw;
@@ -1578,7 +1587,7 @@ clientfullscreen(struct Client *c, int fullscreen)
 			XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 	} else if (!fullscreen && c->isfullscreen) {
 		c->isfullscreen = 0;
-		XSetWindowBorderWidth(dpy, c->win, config.border_width);
+		clientborderwidth(c, config.border_width);
 		if (c->state == Tiled) {
 			desktile(c->desk);
 		} else if (clientisvisible(c)) {
@@ -1615,7 +1624,7 @@ clientfocus(struct Client *c)
 {
 	struct Client *prevfocused, *fullscreen;
 
-	clientsetborder(focused, colors.unfocused);
+	clientbordercolor(focused, colors.unfocused);
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
@@ -1632,7 +1641,7 @@ clientfocus(struct Client *c)
 	if (showingdesk)
 		clientshowdesk(0);
 	clientaddfocus(c);
-	clientsetborder(c, colors.focused);
+	clientbordercolor(c, colors.focused);
 	if (c->state == Minimized)
 		clientminimize(c, 0);
 	XSetInputFocus(dpy, c->win, RevertToParent, CurrentTime);
@@ -1931,7 +1940,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	if (focus && f != NULL && f->isfullscreen)
 		focus = 0;
 	if (!focus)
-		clientsetborder(c, colors.unfocused);
+		clientbordercolor(c, colors.unfocused);
 	clientsendtodesk(c, selmon->seldesk, 1, focus);
 }
 
