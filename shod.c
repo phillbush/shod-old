@@ -1880,6 +1880,8 @@ clientincrmove(struct Client *c, int x, int y)
 	} else {
 		c->fx += x;
 		c->fy += y;
+		c->x = c->fx;
+		c->y = c->fy;
 		clientmoveresize(c);
 		if (c->state != Sticky) {
 			monto = getmon(c->fx + c->fw / 2, c->fy + c->fh / 2);
