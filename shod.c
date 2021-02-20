@@ -739,6 +739,13 @@ clientborderwidth(struct Client *c, int border)
 	XSetWindowBorderWidth(dpy, c->win, border);
 }
 
+/* commit floating client size and position */
+static void
+clientmoveresize(struct Client *c)
+{
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+}
+
 /* check if desktop is visible */
 static int
 deskisvisible(struct Desktop *desk)
@@ -882,7 +889,7 @@ desktile(struct Desktop *desk)
 			row->c->w = col->w;
 			row->c->h = row->h;
 			if (clientisvisible(row->c)) {
-				XMoveResizeWindow(dpy, row->c->win, x, y, col->w, row->h);
+				clientmoveresize(row->c);
 			}
 
 			y += row->h + config.gapinner + config.border_width * 2;
@@ -1385,13 +1392,6 @@ clientapplysize(struct Client *c)
 	c->y = c->fy;
 }
 
-/* commit floating client size and position */
-static void
-clientmoveresize(struct Client *c)
-{
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
-}
-
 /* remove client from the focus list */
 static void
 clientdelfocus(struct Client *c)
@@ -1584,7 +1584,7 @@ clientfullscreen(struct Client *c, int fullscreen)
 		c->w = c->mon->mw;
 		c->h = c->mon->mh;
 		if (clientisvisible(c))
-			XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+			clientmoveresize(c);
 	} else if (!fullscreen && c->isfullscreen) {
 		c->isfullscreen = 0;
 		clientborderwidth(c, config.border_width);
