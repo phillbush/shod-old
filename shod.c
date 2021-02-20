@@ -1363,22 +1363,15 @@ clientapplysize(struct Client *c)
 		h = min(c->maxh, h);
 	c->w = w;
 	c->h = h;
-}
-
-/* commit floating client size */
-static void
-clientresize(struct Client *c)
-{
-	XResizeWindow(dpy, c->win, c->w, c->h);
-}
-
-/* commit floating client position */
-static void
-clientmove(struct Client *c)
-{
 	c->x = c->fx;
 	c->y = c->fy;
-	XMoveWindow(dpy, c->win, c->x, c->y);
+}
+
+/* commit floating client size and position */
+static void
+clientmoveresize(struct Client *c)
+{
+	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
 }
 
 /* set client border */
@@ -1525,10 +1518,9 @@ clienttile(struct Client *c, int tile)
 		rowdel(c->row);
 		clientplace(c, c->desk);
 		XSetWindowBorderWidth(dpy, c->win, config.border_width);
+		clientapplysize(c);
 		if (clientisvisible(c)) {
-			clientapplysize(c);
-			clientresize(c);
-			clientmove(c);
+			clientmoveresize(c);
 		}
 	}
 	clientraise(c);
@@ -1591,8 +1583,7 @@ clientfullscreen(struct Client *c, int fullscreen)
 			desktile(c->desk);
 		} else if (clientisvisible(c)) {
 			clientapplysize(c);
-			clientresize(c);
-			clientmove(c);
+			clientmoveresize(c);
 		}
 	}
 	clientraise(c);
@@ -1692,10 +1683,9 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 		deskadd(desk->mon);
 	if (place) {
 		clientplace(c, c->desk);
+		clientapplysize(c);
 		if (clientisvisible(c)) {
-			clientapplysize(c);
-			clientresize(c);
-			clientmove(c);
+			clientmoveresize(c);
 		}
 	}
 	XMapWindow(dpy, c->win);
@@ -1819,8 +1809,9 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 			/* nothing */
 			break;
 		}
-		clientresize(c);
-		clientmove(c);
+		c->x = c->fx;
+		c->y = c->fy;
+		clientmoveresize(c);
 	}
 }
 
@@ -1880,7 +1871,7 @@ clientincrmove(struct Client *c, int x, int y)
 	} else {
 		c->fx += x;
 		c->fy += y;
-		clientmove(c);
+		clientmoveresize(c);
 		if (c->state != Sticky) {
 			monto = getmon(c->fx + c->fw / 2, c->fy + c->fh / 2);
 			if (monto && monto != c->mon) {
@@ -1999,8 +1990,7 @@ deskchange(struct Desktop *desk)
 			if (c->desk == desk) {
 				if (!c->isfullscreen && c->state == Normal) {
 					clientapplysize(c);
-					clientresize(c);
-					clientmove(c);
+					clientmoveresize(c);
 				}
 				clienthide(c, 0);
 			}
@@ -2073,10 +2063,9 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 			c->fw = wc->width;
 		if (valuemask & CWHeight)
 			c->fh = wc->height;
+		clientapplysize(c);
 		if (clientisvisible(c)) {
-			clientapplysize(c);
-			clientresize(c);
-			clientmove(c);
+			clientmoveresize(c);
 		}
 	}
 }
