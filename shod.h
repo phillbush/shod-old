@@ -19,8 +19,18 @@ enum {
 	StyleLast
 };
 
-/* EWMH atoms */
+/* atoms */
 enum {
+	/* utf8 */
+	Utf8String,
+
+	/* ICCCM atoms */
+	WMDeleteWindow,
+	WMTakeFocus,
+	WMProtocols,
+	WMState,
+
+	/* EWMH atoms */
 	NetSupported,
 	NetClientList,
 	NetClientListStacking,
@@ -72,16 +82,8 @@ enum {
 	NetWMStateAttention,
 	NetFrameExtents,
 	NetDesktopViewport,
-	NetLast
-};
 
-/* ICCCM atoms */
-enum {
-	WMDeleteWindow,
-	WMTakeFocus,
-	WMProtocols,
-	WMState,
-	WMLast
+	AtomLast
 };
 
 /* window layers */

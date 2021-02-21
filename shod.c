@@ -20,6 +20,7 @@ static XrmDatabase xdb;
 static char *xrm;
 static int screen, screenw, screenh;
 static int (*xerrorxlib)(Display *, XErrorEvent *);
+static Atom atoms[AtomLast];
 
 /* visual */
 static struct Colors colors;
@@ -29,11 +30,6 @@ static Cursor cursor[CursLast];
 static int motionx = 0, motiony = 0;
 static int motionaction = NoAction;
 static enum Octant octant = SE;
-
-/* atoms */
-static Atom utf8string;
-static Atom netatom[NetLast];
-static Atom wmatom[WMLast];
 
 /* dummy windows */
 static Window wmcheckwin;
@@ -181,7 +177,7 @@ getstate(Window w)
 	unsigned long n, extra;
 	Atom real;
 
-	if (XGetWindowProperty(dpy, w, wmatom[WMState], 0L, 2L, False, wmatom[WMState],
+	if (XGetWindowProperty(dpy, w, atoms[WMState], 0L, 2L, False, atoms[WMState],
 		&real, &format, &n, &extra, (unsigned char **)&p) != Success)
 		return -1;
 	if (n != 0)
@@ -332,66 +328,68 @@ initcolors(void)
 static void
 initatoms(void)
 {
-	utf8string = XInternAtom(dpy, "UTF8_STRING", False);
+	char *atomnames[AtomLast] = {
+		[Utf8String]                 = "UTF8_STRING",
 
-	/* ewmh supported atoms */
-	netatom[NetSupported]               = XInternAtom(dpy, "_NET_SUPPORTED", False);
-	netatom[NetClientList]              = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
-	netatom[NetClientListStacking]      = XInternAtom(dpy, "_NET_CLIENT_LIST_STACKING", False);
-	netatom[NetNumberOfDesktops]        = XInternAtom(dpy, "_NET_NUMBER_OF_DESKTOPS", False);
-	netatom[NetCurrentDesktop]          = XInternAtom(dpy, "_NET_CURRENT_DESKTOP", False);
-	netatom[NetActiveWindow]            = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
-	netatom[NetWorkarea]                = XInternAtom(dpy, "_NET_WORKAREA", False);
-	netatom[NetSupportingWMCheck]       = XInternAtom(dpy, "_NET_SUPPORTING_WM_CHECK", False);
-	netatom[NetShowingDesktop]          = XInternAtom(dpy, "_NET_SHOWING_DESKTOP", False);
-	netatom[NetCloseWindow]             = XInternAtom(dpy, "_NET_CLOSE_WINDOW", False);
-	netatom[NetMoveresizeWindow]        = XInternAtom(dpy, "_NET_MOVERESIZE_WINDOW", False);
-	netatom[NetWMMoveresize]            = XInternAtom(dpy, "_NET_WM_MOVERESIZE", False);
-	netatom[NetRequestFrameExtents]     = XInternAtom(dpy, "_NET_REQUEST_FRAME_EXTENTS", False);
-	netatom[NetWMName]                  = XInternAtom(dpy, "_NET_WM_NAME", False);
-	netatom[NetWMWindowType]            = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
-	netatom[NetWMWindowTypeDesktop]     = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
-	netatom[NetWMWindowTypeDock]        = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", False);
-	netatom[NetWMWindowTypeToolbar]     = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_TOOLBAR", False);
-	netatom[NetWMWindowTypeMenu]        = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_MENU", False);
-	netatom[NetWMWindowTypeSplash]      = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_SPLASH", False);
-	netatom[NetWMWindowTypeDialog]      = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DIALOG", False);
-	netatom[NetWMWindowTypeUtility]     = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_UTILITY", False);
-	netatom[NetWMState]                 = XInternAtom(dpy, "_NET_WM_STATE", False);
-	netatom[NetWMStateSticky]           = XInternAtom(dpy, "_NET_WM_STATE_STICKY", False);
-	netatom[NetWMStateMaximizedVert]    = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_VERT", False);
-	netatom[NetWMStateMaximizedHorz]    = XInternAtom(dpy, "_NET_WM_STATE_MAXIMIZED_HORZ", False);
-	netatom[NetWMStateShaded]           = XInternAtom(dpy, "_NET_WM_STATE_SHADED", False);
-	netatom[NetWMStateHidden]           = XInternAtom(dpy, "_NET_WM_STATE_HIDDEN", False);
-	netatom[NetWMStateFullscreen]       = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", False);
-	netatom[NetWMStateAbove]            = XInternAtom(dpy, "_NET_WM_STATE_ABOVE", False);
-	netatom[NetWMStateBelow]            = XInternAtom(dpy, "_NET_WM_STATE_BELOW", False);
-	netatom[NetWMStateFocused]          = XInternAtom(dpy, "_NET_WM_STATE_FOCUSED", False);
-	netatom[NetWMAllowedActions]        = XInternAtom(dpy, "_NET_WM_ALLOWED_ACTIONS", False);
-	netatom[NetWMActionMove]            = XInternAtom(dpy, "_NET_WM_ACTION_MOVE", False);
-	netatom[NetWMActionResize]          = XInternAtom(dpy, "_NET_WM_ACTION_RESIZE", False);
-	netatom[NetWMActionMinimize]        = XInternAtom(dpy, "_NET_WM_ACTION_MINIMIZE", False);
-	netatom[NetWMActionStick]           = XInternAtom(dpy, "_NET_WM_ACTION_STICK", False);
-	netatom[NetWMActionMaximizeHorz]    = XInternAtom(dpy, "_NET_WM_ACTION_MAXIMIZE_HORZ", False);
-	netatom[NetWMActionMaximizeVert]    = XInternAtom(dpy, "_NET_WM_ACTION_MAXIMIZE_VERT", False);
-	netatom[NetWMActionFullscreen]      = XInternAtom(dpy, "_NET_WM_ACTION_FULLSCREEN", False);
-	netatom[NetWMActionChangeDesktop]   = XInternAtom(dpy, "_NET_WM_ACTION_CHANGE_DESKTOP", False);
-	netatom[NetWMActionClose]           = XInternAtom(dpy, "_NET_WM_ACTION_CLOSE", False);
-	netatom[NetWMActionAbove]           = XInternAtom(dpy, "_NET_WM_ACTION_ABOVE", False);
-	netatom[NetWMActionBelow]           = XInternAtom(dpy, "_NET_WM_ACTION_BELOW", False);
-	netatom[NetWMStrut]                 = XInternAtom(dpy, "_NET_WM_STRUT", False);
-	netatom[NetWMStrutPartial]          = XInternAtom(dpy, "_NET_WM_STRUT_PARTIAL", False);
-	netatom[NetWMUserTime]              = XInternAtom(dpy, "_NET_WM_USER_TIME", False);
-	netatom[NetWMStateAttention]        = XInternAtom(dpy, "_NET_WM_STATE_DEMANDS_ATTENTION", False);
-	netatom[NetWMDesktop]               = XInternAtom(dpy, "_NET_WM_DESKTOP", False);
-	netatom[NetFrameExtents]            = XInternAtom(dpy, "_NET_FRAME_EXTENTS", False);
-	netatom[NetDesktopViewport]         = XInternAtom(dpy, "_NET_DESKTOP_VIEWPORT", False);
+		[WMDeleteWindow]             = "WM_DELETE_WINDOW",
+		[WMTakeFocus]                = "WM_TAKE_FOCUS",
+		[WMProtocols]                = "WM_PROTOCOLS",
+		[WMState]                    = "WM_STATE",
 
-	/* Some icccm atoms */
-	wmatom[WMDeleteWindow] = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
-	wmatom[WMTakeFocus] = XInternAtom(dpy, "WM_TAKE_FOCUS", False);
-	wmatom[WMProtocols] = XInternAtom(dpy, "WM_PROTOCOLS", False);
-	wmatom[WMState] = XInternAtom(dpy, "WM_STATE", False);
+		[NetSupported]               = "_NET_SUPPORTED",
+		[NetClientList]              = "_NET_CLIENT_LIST",
+		[NetClientListStacking]      = "_NET_CLIENT_LIST_STACKING",
+		[NetNumberOfDesktops]        = "_NET_NUMBER_OF_DESKTOPS",
+		[NetCurrentDesktop]          = "_NET_CURRENT_DESKTOP",
+		[NetActiveWindow]            = "_NET_ACTIVE_WINDOW",
+		[NetWorkarea]                = "_NET_WORKAREA",
+		[NetSupportingWMCheck]       = "_NET_SUPPORTING_WM_CHECK",
+		[NetShowingDesktop]          = "_NET_SHOWING_DESKTOP",
+		[NetCloseWindow]             = "_NET_CLOSE_WINDOW",
+		[NetMoveresizeWindow]        = "_NET_MOVERESIZE_WINDOW",
+		[NetWMMoveresize]            = "_NET_WM_MOVERESIZE",
+		[NetRequestFrameExtents]     = "_NET_REQUEST_FRAME_EXTENTS",
+		[NetWMName]                  = "_NET_WM_NAME",
+		[NetWMWindowType]            = "_NET_WM_WINDOW_TYPE",
+		[NetWMWindowTypeDesktop]     = "_NET_WM_WINDOW_TYPE_DESKTOP",
+		[NetWMWindowTypeDock]        = "_NET_WM_WINDOW_TYPE_DOCK",
+		[NetWMWindowTypeToolbar]     = "_NET_WM_WINDOW_TYPE_TOOLBAR",
+		[NetWMWindowTypeMenu]        = "_NET_WM_WINDOW_TYPE_MENU",
+		[NetWMWindowTypeSplash]      = "_NET_WM_WINDOW_TYPE_SPLASH",
+		[NetWMWindowTypeDialog]      = "_NET_WM_WINDOW_TYPE_DIALOG",
+		[NetWMWindowTypeUtility]     = "_NET_WM_WINDOW_TYPE_UTILITY",
+		[NetWMState]                 = "_NET_WM_STATE",
+		[NetWMStateSticky]           = "_NET_WM_STATE_STICKY",
+		[NetWMStateMaximizedVert]    = "_NET_WM_STATE_MAXIMIZED_VERT",
+		[NetWMStateMaximizedHorz]    = "_NET_WM_STATE_MAXIMIZED_HORZ",
+		[NetWMStateShaded]           = "_NET_WM_STATE_SHADED",
+		[NetWMStateHidden]           = "_NET_WM_STATE_HIDDEN",
+		[NetWMStateFullscreen]       = "_NET_WM_STATE_FULLSCREEN",
+		[NetWMStateAbove]            = "_NET_WM_STATE_ABOVE",
+		[NetWMStateBelow]            = "_NET_WM_STATE_BELOW",
+		[NetWMStateFocused]          = "_NET_WM_STATE_FOCUSED",
+		[NetWMAllowedActions]        = "_NET_WM_ALLOWED_ACTIONS",
+		[NetWMActionMove]            = "_NET_WM_ACTION_MOVE",
+		[NetWMActionResize]          = "_NET_WM_ACTION_RESIZE",
+		[NetWMActionMinimize]        = "_NET_WM_ACTION_MINIMIZE",
+		[NetWMActionStick]           = "_NET_WM_ACTION_STICK",
+		[NetWMActionMaximizeHorz]    = "_NET_WM_ACTION_MAXIMIZE_HORZ",
+		[NetWMActionMaximizeVert]    = "_NET_WM_ACTION_MAXIMIZE_VERT",
+		[NetWMActionFullscreen]      = "_NET_WM_ACTION_FULLSCREEN",
+		[NetWMActionChangeDesktop]   = "_NET_WM_ACTION_CHANGE_DESKTOP",
+		[NetWMActionClose]           = "_NET_WM_ACTION_CLOSE",
+		[NetWMActionAbove]           = "_NET_WM_ACTION_ABOVE",
+		[NetWMActionBelow]           = "_NET_WM_ACTION_BELOW",
+		[NetWMStrut]                 = "_NET_WM_STRUT",
+		[NetWMStrutPartial]          = "_NET_WM_STRUT_PARTIAL",
+		[NetWMUserTime]              = "_NET_WM_USER_TIME",
+		[NetWMStateAttention]        = "_NET_WM_STATE_DEMANDS_ATTENTION",
+		[NetWMDesktop]               = "_NET_WM_DESKTOP",
+		[NetFrameExtents]            = "_NET_FRAME_EXTENTS",
+		[NetDesktopViewport]         = "_NET_DESKTOP_VIEWPORT",
+	};
+
+	XInternAtoms(dpy, atomnames, AtomLast, False, atoms);
 }
 
 static void
@@ -402,7 +400,7 @@ icccmwmstate(Window win, int state)
 	data[0] = state;
 	data[1] = None;
 
-	XChangeProperty(dpy, win, wmatom[WMState], wmatom[WMState], 32,
+	XChangeProperty(dpy, win, atoms[WMState], atoms[WMState], 32,
 	                PropModeReplace, (unsigned char *)&data, 2);
 }
 
@@ -412,25 +410,25 @@ ewmhinit(void)
 	unsigned long data[2];
 
 	/* Set window and property that indicates that the wm is ewmh compliant */
-	XChangeProperty(dpy, wmcheckwin, netatom[NetSupportingWMCheck], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&wmcheckwin, 1);
-	XChangeProperty(dpy, wmcheckwin, netatom[NetWMName], utf8string, 8, PropModeReplace, (unsigned char *) "shod", strlen("shod"));
-	XChangeProperty(dpy, root, netatom[NetSupportingWMCheck], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&wmcheckwin, 1);
+	XChangeProperty(dpy, wmcheckwin, atoms[NetSupportingWMCheck], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&wmcheckwin, 1);
+	XChangeProperty(dpy, wmcheckwin, atoms[NetWMName], atoms[Utf8String], 8, PropModeReplace, (unsigned char *) "shod", strlen("shod"));
+	XChangeProperty(dpy, root, atoms[NetSupportingWMCheck], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&wmcheckwin, 1);
 
 	/* Set properties that the window manager supports */
-	XChangeProperty(dpy, root, netatom[NetSupported], XA_ATOM, 32, PropModeReplace, (unsigned char *)netatom, NetLast);
-	XDeleteProperty(dpy, root, netatom[NetClientList]);
+	XChangeProperty(dpy, root, atoms[NetSupported], XA_ATOM, 32, PropModeReplace, (unsigned char *)atoms, AtomLast);
+	XDeleteProperty(dpy, root, atoms[NetClientList]);
 
 	/* This wm does not support viewports */
 	data[0] = data[1] = 0;
-	XChangeProperty(dpy, root, netatom[NetDesktopViewport], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 2);
+	XChangeProperty(dpy, root, atoms[NetDesktopViewport], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)data, 2);
 }
 
 static void
 ewmhsetallowedactions(Window win)
 {
-	XChangeProperty(dpy, win, netatom[NetWMAllowedActions],
+	XChangeProperty(dpy, win, atoms[NetWMAllowedActions],
 	                XA_ATOM, 32, PropModeReplace,
-	                (unsigned char *)&netatom[NetWMActionMove], 11);
+	                (unsigned char *)&atoms[NetWMActionMove], 11);
 	/*
 	 * 11 is the number of actions supported, and NetWMActionMove is the
 	 * first of them.  See the EWMH atoms enumeration in shod.h for more
@@ -441,7 +439,7 @@ ewmhsetallowedactions(Window win)
 static void
 ewmhsetactivewindow(Window w)
 {
-	XChangeProperty(dpy, root, netatom[NetActiveWindow],
+	XChangeProperty(dpy, root, atoms[NetActiveWindow],
 	                XA_WINDOW, 32, PropModeReplace,
 	                (unsigned char *)&w, 1);
 }
@@ -449,7 +447,7 @@ ewmhsetactivewindow(Window w)
 static void
 ewmhsetnumberofdesktops(void)
 {
-    XChangeProperty(dpy, root, netatom[NetNumberOfDesktops],
+    XChangeProperty(dpy, root, atoms[NetNumberOfDesktops],
                     XA_CARDINAL, 32, PropModeReplace,
                     (unsigned char *)&deskcount, 1);
 }
@@ -460,7 +458,7 @@ ewmhsetcurrentdesktop(unsigned long n)
 	if (n >= deskcount)
 		return;
 
-	XChangeProperty(dpy, root, netatom[NetCurrentDesktop], XA_CARDINAL, 32,
+	XChangeProperty(dpy, root, atoms[NetCurrentDesktop], XA_CARDINAL, 32,
 	                PropModeReplace, (unsigned char *)&n, 1);
 }
 
@@ -474,14 +472,14 @@ ewmhsetframeextents(struct Client *c)
 	else
 		data[0] = data[1] = data[2] = data[3] = config.border_width;
 
-	XChangeProperty(dpy, c->win, netatom[NetFrameExtents], XA_CARDINAL, 32,
+	XChangeProperty(dpy, c->win, atoms[NetFrameExtents], XA_CARDINAL, 32,
 	                PropModeReplace, (unsigned char *)&data, 4);
 }
 
 static void
 ewmhsetshowingdesktop(int n)
 {
-	XChangeProperty(dpy, root, netatom[NetShowingDesktop],
+	XChangeProperty(dpy, root, atoms[NetShowingDesktop],
 	                XA_CARDINAL, 32, PropModeReplace,
 	                (unsigned char *)&n, 1);
 }
@@ -495,35 +493,35 @@ ewmhsetstate(struct Client *c)
 	if (c == NULL)
 		return;
 	if (focused == c)
-		data[n++] = netatom[NetWMStateFocused];
+		data[n++] = atoms[NetWMStateFocused];
 	if (c->isfullscreen)
-		data[n++] = netatom[NetWMStateFullscreen];
+		data[n++] = atoms[NetWMStateFullscreen];
 	switch (c->state) {
 	case Tiled:
-		data[n++] = netatom[NetWMStateMaximizedVert];
-		data[n++] = netatom[NetWMStateMaximizedHorz];
+		data[n++] = atoms[NetWMStateMaximizedVert];
+		data[n++] = atoms[NetWMStateMaximizedHorz];
 		break;
 	case Sticky:
-		data[n++] = netatom[NetWMStateSticky];
+		data[n++] = atoms[NetWMStateSticky];
 		break;
 	case Minimized:
-		data[n++] = netatom[NetWMStateHidden];
+		data[n++] = atoms[NetWMStateHidden];
 		break;
 	default:
 		break;
 	}
 	if (c->layer > 0)
-		data[n++] = netatom[NetWMStateAbove];
+		data[n++] = atoms[NetWMStateAbove];
 	else if (c->layer < 0)
-		data[n++] = netatom[NetWMStateBelow];
-	XChangeProperty(dpy, c->win, netatom[NetWMState], XA_ATOM, 32,
+		data[n++] = atoms[NetWMStateBelow];
+	XChangeProperty(dpy, c->win, atoms[NetWMState], XA_ATOM, 32,
 	                PropModeReplace, (unsigned char *)data, n);
 }
 
 static void
 ewmhsetdesktop(Window win, long d)
 {
-	XChangeProperty(dpy, win, netatom[NetWMDesktop],
+	XChangeProperty(dpy, win, atoms[NetWMDesktop],
 	                XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&d, 1);
 }
 
@@ -553,7 +551,7 @@ ewmhsetworkarea(int screenw, int screenh)
 	data[2] = screenw;
 	data[3] = screenh;
 
-	XChangeProperty(dpy, root, netatom[NetWorkarea],
+	XChangeProperty(dpy, root, atoms[NetWorkarea],
 	                XA_CARDINAL, 32, PropModeReplace,
 	                (unsigned char *)&data, 4);
 }
@@ -571,7 +569,7 @@ ewmhsetclients(void)
 		wins = ecalloc(nwins, sizeof *wins);
 	for (c = clients; c; c = c->next)
 		wins[i++] = c->win;
-	XChangeProperty(dpy, root, netatom[NetClientList], XA_WINDOW, 32,
+	XChangeProperty(dpy, root, atoms[NetClientList], XA_WINDOW, 32,
 	                PropModeReplace, (unsigned char *)wins, nwins);
 	free(wins);
 }
@@ -605,7 +603,7 @@ ewmhsetclientsstacking(void)
 	for (c = last; c; c = c->fprev)
 		if (c->isfullscreen)
 			wins[i++] = c->win;
-	XChangeProperty(dpy, root, netatom[NetClientListStacking], XA_WINDOW, 32,
+	XChangeProperty(dpy, root, atoms[NetClientListStacking], XA_WINDOW, 32,
 	                PropModeReplace, (unsigned char *)wins, nwins);
 	free(wins);
 }
@@ -1920,7 +1918,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	unsigned long *values;
 	int focus = 1;          /* whether to focus window */
 
-	if ((values = getcardinalprop(win, netatom[NetWMUserTime], 1)) != NULL) {
+	if ((values = getcardinalprop(win, atoms[NetWMUserTime], 1)) != NULL) {
 		if (values[0] == 0)
 			focus = 0;
 		XFree(values);
@@ -2112,9 +2110,9 @@ clientclose(struct Client *c)
 
 	ev.type = ClientMessage;
 	ev.xclient.window = c->win;
-	ev.xclient.message_type = wmatom[WMProtocols];
+	ev.xclient.message_type = atoms[WMProtocols];
 	ev.xclient.format = 32;
-	ev.xclient.data.l[0] = wmatom[WMDeleteWindow];
+	ev.xclient.data.l[0] = atoms[WMDeleteWindow];
 	ev.xclient.data.l[1] = CurrentTime;
 
 	/*
@@ -2288,19 +2286,19 @@ xeventclientmessage(XEvent *e)
 	int i;
 
 	c = getclient(ev->window);
-	if (ev->message_type == netatom[NetCurrentDesktop]) {
+	if (ev->message_type == atoms[NetCurrentDesktop]) {
 		deskchange(getdesk(ev->data.l[0]));
-	} else if (ev->message_type == netatom[NetShowingDesktop]) {
+	} else if (ev->message_type == atoms[NetShowingDesktop]) {
 		if (ev->data.l[0]) {
 			clientshowdesk(1);
 		} else {
 			clientfocus(getfocused(NULL));
 		}
-	} else if (ev->message_type == netatom[NetRequestFrameExtents]) {
+	} else if (ev->message_type == atoms[NetRequestFrameExtents]) {
 		if (c == NULL)
 			return;
 		ewmhsetframeextents(c);
-	} else if (ev->message_type == netatom[NetWMState]) {
+	} else if (ev->message_type == atoms[NetWMState]) {
 		if (c == NULL)
 			return;
 		/*
@@ -2308,26 +2306,26 @@ xeventclientmessage(XEvent *e)
 		 * ev->data.l[0] == 1: _NET_WM_STATE_ADD
 		 * ev->data.l[0] == 2: _NET_WM_STATE_TOGGLE
 		 */
-		if (((Atom)ev->data.l[1] == netatom[NetWMStateMaximizedVert] ||
-		     (Atom)ev->data.l[1] == netatom[NetWMStateMaximizedHorz]) &&
-		    ((Atom)ev->data.l[2] == netatom[NetWMStateMaximizedVert]  ||
-		     (Atom)ev->data.l[2] == netatom[NetWMStateMaximizedHorz])) {
+		if (((Atom)ev->data.l[1] == atoms[NetWMStateMaximizedVert] ||
+		     (Atom)ev->data.l[1] == atoms[NetWMStateMaximizedHorz]) &&
+		    ((Atom)ev->data.l[2] == atoms[NetWMStateMaximizedVert]  ||
+		     (Atom)ev->data.l[2] == atoms[NetWMStateMaximizedHorz])) {
 			clienttile(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Tiled)));
 		}
 		for (i = 0; i < 2; i++) {
-			if ((Atom)ev->data.l[i] == netatom[NetWMStateFullscreen])
+			if ((Atom)ev->data.l[i] == atoms[NetWMStateFullscreen])
 				clientfullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !c->isfullscreen)));
-			else if ((Atom)ev->data.l[i] == netatom[NetWMStateSticky])
+			else if ((Atom)ev->data.l[i] == atoms[NetWMStateSticky])
 				clientstick(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Sticky)));
-			else if ((Atom)ev->data.l[i] == netatom[NetWMStateHidden])
+			else if ((Atom)ev->data.l[i] == atoms[NetWMStateHidden])
 				clientminimize(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Minimized)));
-			else if ((Atom)ev->data.l[i] == netatom[NetWMStateAbove])
+			else if ((Atom)ev->data.l[i] == atoms[NetWMStateAbove])
 				clientabove(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && (c->layer <= 0))));
-			else if ((Atom)ev->data.l[i] == netatom[NetWMStateBelow])
+			else if ((Atom)ev->data.l[i] == atoms[NetWMStateBelow])
 				clientbelow(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && (c->layer >= 0))));
 			ewmhsetstate(c);
 		}
-	} else if (ev->message_type == netatom[NetActiveWindow]) {
+	} else if (ev->message_type == atoms[NetActiveWindow]) {
 		if (c == NULL)
 			return;
 		if (c->state == Minimized) {
@@ -2337,11 +2335,11 @@ xeventclientmessage(XEvent *e)
 			clientfocus(c);
 			clientraise(c);
 		}
-	} else if (ev->message_type == netatom[NetCloseWindow]) {
+	} else if (ev->message_type == atoms[NetCloseWindow]) {
 		if (c == NULL)
 			return;
 		clientclose(c);
-	} else if (ev->message_type == netatom[NetMoveresizeWindow]) {
+	} else if (ev->message_type == atoms[NetMoveresizeWindow]) {
 		if (c == NULL)
 			return;
 		if (ev->data.l[0] & 1 << 8) {
@@ -2361,7 +2359,7 @@ xeventclientmessage(XEvent *e)
 			value_mask |= CWHeight;
 		}
 		clientconfigure(c, value_mask, &wc);
-	} else if (ev->message_type == netatom[NetWMDesktop]) {
+	} else if (ev->message_type == atoms[NetWMDesktop]) {
 		if (c == NULL)
 			return;
 		if (ev->data.l[0] == 0xFFFFFFFF)
@@ -2369,7 +2367,7 @@ xeventclientmessage(XEvent *e)
 		else if (c->state != Sticky && c->state != Minimized) {
 			clientsendtodesk(c, getdesk(ev->data.l[0]), 1, 0);
 		}
-	} else if (ev->message_type == netatom[NetWMMoveresize]) {
+	} else if (ev->message_type == atoms[NetWMMoveresize]) {
 		/*
 		 * Client-side decorated Gtk3 windows emit this signal when being
 		 * dragged by their GtkHeaderBar
@@ -2546,16 +2544,16 @@ xeventmaprequest(XEvent *e)
 		return;
 
 	wins[1] = ev->window;
-	prop = getatomprop(ev->window, netatom[NetWMWindowType]);
-	if (prop == netatom[NetWMWindowTypeToolbar] ||
-	    prop == netatom[NetWMWindowTypeUtility] ||
-	    prop == netatom[NetWMWindowTypeMenu]) {
+	prop = getatomprop(ev->window, atoms[NetWMWindowType]);
+	if (prop == atoms[NetWMWindowTypeToolbar] ||
+	    prop == atoms[NetWMWindowTypeUtility] ||
+	    prop == atoms[NetWMWindowTypeMenu]) {
 		XMapWindow(dpy, ev->window);
-	} else if (prop == netatom[NetWMWindowTypeDesktop]) {
+	} else if (prop == atoms[NetWMWindowTypeDesktop]) {
 		XMapWindow(dpy, ev->window);
 		wins[0] = layerwin[LayerDesktop];
 		XRestackWindows(dpy, wins, sizeof wins);
-	} else if (prop == netatom[NetWMWindowTypeDock]) {
+	} else if (prop == atoms[NetWMWindowTypeDock]) {
 		XMapWindow(dpy, ev->window);
 		wins[0] = layerwin[LayerBars];
 		XRestackWindows(dpy, wins, sizeof wins);
