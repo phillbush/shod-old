@@ -1670,6 +1670,30 @@ clientfocus(struct Client *c)
 	ewmhsetcurrentdesktop(getdesknum(selmon->seldesk));
 }
 
+/* send client to center of the window it is transient for */
+static void
+clientsendtransient(struct Client *c, struct Client *t)
+{
+	if (c == NULL || t == NULL)
+		return;
+
+	c->istransient = 1;
+	c->fx = c->x = t->x + t->w / 2 - c->w / 2;
+	c->fy = c->y = t->y + t->h / 2 - c->h / 2;
+	c->mon = t->mon;
+	c->desk = t->desk;
+	if (t->state == Sticky)
+		c->state = Sticky;
+	clientmoveresize(c);
+	clientraise(c);
+	if (clientisvisible(t)) {
+		clienthide(c, 0);
+		clientfocus(c);
+	}
+	ewmhsetwmdesktop();
+	ewmhsetnumberofdesktops();
+}
+
 /* send client to desk and place it */
 void
 clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
@@ -1715,7 +1739,8 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 			clientmoveresize(c);
 		}
 	}
-	XMapWindow(dpy, c->win);
+	if (!hide)
+		clienthide(c, 0);
 	if (focus)
 		clientfocus(c);
 	else if (focusother)
@@ -1914,7 +1939,8 @@ clientincrmove(struct Client *c, int x, int y)
 static void
 clientadd(Window win, XWindowAttributes *wa)
 {
-	struct Client *c, *f;
+	struct Client *c, *f, *t;
+	Window trans;
 	unsigned long *values;
 	int focus = 1;          /* whether to focus window */
 
@@ -1930,6 +1956,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->row = NULL;
 	c->isfullscreen = 0;
 	c->isuserplaced = 0;
+	c->istransient = 0;
 	c->isfixed = 0;
 	c->state = Normal;
 	c->layer = 0;
@@ -1961,7 +1988,11 @@ clientadd(Window win, XWindowAttributes *wa)
 		focus = 0;
 	if (!focus)
 		clientbordercolor(c, colors.unfocused);
-	clientsendtodesk(c, selmon->seldesk, 1, focus);
+	if (XGetTransientForHint(dpy, win, &trans) && (t = getclient(trans))) {
+		clientsendtransient(c, t);
+	} else {
+		clientsendtodesk(c, selmon->seldesk, 1, focus);
+	}
 }
 
 /* delete client */
@@ -1987,6 +2018,7 @@ clientdel(struct Client *c)
 		c->desk->nclients--;
 	if (c->state == Tiled)
 		desktile(c->desk);
+	icccmwmstate(c->win, WithdrawnState);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 	ewmhsetwmdesktop();
@@ -2619,6 +2651,16 @@ xeventmotionnotify(XEvent *e)
 	motiony = ev->y_root;
 }
 
+/* clean clients and other structures */
+static void
+cleanclients(void)
+{
+	while (clients)
+		clientdel(clients);
+	while (mons)
+		mondel(mons);
+}
+
 /* destroy dummy windows */
 static void
 cleandummywindows(void)
@@ -2717,6 +2759,7 @@ main(void)
 	/* clean up */
 	cleandummywindows();
 	cleancursors();
+	cleanclients();
 
 	/* close connection to server */
 	XUngrabPointer(dpy, CurrentTime);

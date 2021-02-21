@@ -138,7 +138,7 @@ struct Client {
 	struct Monitor *mon;
 	struct Desktop *desk;
 	struct Row *row;
-	int isfixed, isuserplaced, isfullscreen;
+	int isfixed, isuserplaced, isfullscreen, istransient;
 	int state;
 	int rh;                 /* row height */
 	int x, y, w, h;         /* current geometry */
