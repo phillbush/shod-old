@@ -980,9 +980,12 @@ mondel(struct Monitor *mon)
 		mon->prev->next = mon->next;
 	else
 		mons = mon->next;
-	for (c = clients; c; c = c->next)
-		if (c->state != Minimized && c->mon == mon) 
+	for (c = clients; c; c = c->next) {
+		if (c->state != Minimized && c->mon == mon) {
 			c->mon = NULL;
+			c->desk = NULL;
+		}
+	}
 	free(mon);
 }
 
