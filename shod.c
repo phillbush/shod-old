@@ -682,14 +682,34 @@ getmon(int x, int y)
 
 /* get focused client */
 static struct Client *
-getfocused(void)
+getfocused(struct Client *old)
 {
 	struct Client *c;
 
+	if (old != NULL) {
+		if (old->state == Tiled) {
+			if (old->row->prev) {
+				return old->row->prev->c;
+			} else if (old->row->next) {
+				return old->row->next->c;
+			} else if (old->row->col->prev) {
+				return old->row->col->prev->row->c;
+			} else if (old->row->col->next) {
+				return old->row->col->next->row->c;
+			}
+		} else if (old->state == Normal || old->state == Sticky) {
+			for (c = focused; c; c = c->fnext) {
+				if (c != old && ((c->state == Sticky && c->mon == selmon) ||
+				    (c->state == Normal && c->desk == selmon->seldesk))) {
+					return c;
+				}
+			}
+		}
+	}
 	for (c = focused; c; c = c->fnext) {
-		if ((c->state == Sticky && c->mon == selmon) ||
+		if (c != old && ((c->state == Sticky && c->mon == selmon) ||
 		    ((c->state == Normal || c->state == Tiled) &&
-		    c->desk == selmon->seldesk)) {
+		    c->desk == selmon->seldesk))) {
 			return c;
 		}
 	}
@@ -1544,7 +1564,6 @@ clienttile(struct Client *c, int tile)
 static void
 clientminimize(struct Client *c, int minimize)
 {
-	struct Client *focus;
 	void clientfocus(struct Client *c);
 	void clientsendtodesk(struct Client *, struct Desktop *, int, int);
 
@@ -1553,13 +1572,11 @@ clientminimize(struct Client *c, int minimize)
 	if (c->state == Tiled)
 		clienttile(c, 0);
 	if (minimize && c->state != Minimized) {
-		focus = getfocused();
 		c->desk->nclients--;
 		c->desk = NULL;
 		c->mon = NULL;
 		c->state = Minimized;
-		if (focus == c)
-			clientfocus(getfocused());
+		clientfocus(getfocused(c));
 		ewmhsetwmdesktop();
 	} else if (!minimize && c->state == Minimized) {
 		c->state = Normal;
@@ -1701,7 +1718,7 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 	if (focus)
 		clientfocus(c);
 	else if (focusother)
-		clientfocus(getfocused());
+		clientfocus(getfocused(NULL));
 	ewmhsetwmdesktop();
 	ewmhsetnumberofdesktops();
 	XSync(dpy, False);
@@ -1938,7 +1955,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	ewmhsetallowedactions(win);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
-	f = getfocused();
+	f = getfocused(NULL);
 	if (focus && f != NULL && f->isfullscreen)
 		focus = 0;
 	if (!focus)
@@ -1950,6 +1967,9 @@ clientadd(Window win, XWindowAttributes *wa)
 static void
 clientdel(struct Client *c)
 {
+	struct Client *focus;
+
+	focus = getfocused(c);
 	clientdelfocus(c);
 	if (c->next)
 		c->next->prev = c->prev;
@@ -1961,7 +1981,7 @@ clientdel(struct Client *c)
 		rowdel(c->row);
 	}
 	if (c->state != Minimized && c->mon == selmon)
-		clientfocus(getfocused());
+		clientfocus(focus);
 	if (c->state != Minimized && c->state != Sticky)
 		c->desk->nclients--;
 	if (c->state == Tiled)
@@ -2040,7 +2060,7 @@ deskchange(struct Desktop *desk)
 	}
 
 	/* focus client on the new current desktop */
-	clientfocus(getfocused());
+	clientfocus(getfocused(NULL));
 }
 
 /* configure client size and position */
@@ -2271,7 +2291,7 @@ xeventclientmessage(XEvent *e)
 		if (ev->data.l[0]) {
 			clientshowdesk(1);
 		} else {
-			clientfocus(getfocused());
+			clientfocus(getfocused(NULL));
 		}
 	} else if (ev->message_type == netatom[NetRequestFrameExtents]) {
 		if (c == NULL)
