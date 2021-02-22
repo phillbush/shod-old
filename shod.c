@@ -17,6 +17,7 @@
 static Display *dpy;
 static Window root;
 static XrmDatabase xdb;
+static GC gc;
 static char *xrm;
 static int screen, screenw, screenh;
 static int (*xerrorxlib)(Display *, XErrorEvent *);
@@ -304,6 +305,7 @@ initdummywindows(void)
 static void
 initcursors(void)
 {
+	cursor[CursNormal] = XCreateFontCursor(dpy, XC_left_ptr);
 	cursor[CursMove] = XCreateFontCursor(dpy, XC_fleur);
 	cursor[CursNW] = XCreateFontCursor(dpy, XC_top_left_corner);
 	cursor[CursNE] = XCreateFontCursor(dpy, XC_top_right_corner);
@@ -467,10 +469,7 @@ ewmhsetframeextents(struct Client *c)
 {
 	unsigned long data[4];
 
-	if (c->isfullscreen)
-		data[0] = data[1] = data[2] = data[3] = 0;
-	else
-		data[0] = data[1] = data[2] = data[3] = config.border_width;
+	data[0] = data[1] = data[2] = data[3] = c->b;
 
 	XChangeProperty(dpy, c->win, atoms[NetFrameExtents], XA_CARDINAL, 32,
 	                PropModeReplace, (unsigned char *)&data, 4);
@@ -660,7 +659,7 @@ getclient(Window win)
 	struct Client *c;
 
 	for (c = clients; c; c = c->next)
-		if (c->win == win)
+		if (c->win == win || c->frame == win || c->curswin == win)
 			return c;
 	return NULL;
 }
@@ -739,13 +738,37 @@ clientisvisible(struct Client *c)
 	return 0;
 }
 
+/* notify client of configuration changing */
+static void
+clientnotify(struct Client *c)
+{
+	XConfigureEvent ce;
+
+	if (c == NULL)
+		return;
+	ce.type = ConfigureNotify;
+	ce.display = dpy;
+	ce.event = c->win;
+	ce.window = c->win;
+	ce.x = c->x;
+	ce.y = c->y;
+	ce.width = c->w;
+	ce.height = c->h;
+	ce.border_width = c->b;
+	ce.above = None;
+	ce.override_redirect = False;
+	XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce);
+}
+
 /* set client border color */
 static void
 clientbordercolor(struct Client *c, unsigned long color)
 {
 	if (c == NULL)
 		return;
-	XSetWindowBorder(dpy, c->win, color);
+	XSetWindowBackground(dpy, c->frame, color);
+	XSetForeground(dpy, gc, color);
+	XFillRectangle(dpy, c->frame, gc, 0, 0, c->w + c->b * 2, c->h + c->b * 2);
 }
 
 /* set client border width */
@@ -754,14 +777,19 @@ clientborderwidth(struct Client *c, int border)
 {
 	if (c == NULL)
 		return;
-	XSetWindowBorderWidth(dpy, c->win, border);
+	c->b = border;
 }
 
 /* commit floating client size and position */
 static void
 clientmoveresize(struct Client *c)
 {
-	XMoveResizeWindow(dpy, c->win, c->x, c->y, c->w, c->h);
+	if (c == NULL)
+		return;
+	XMoveResizeWindow(dpy, c->frame, c->x - c->b, c->y - c->b, c->w + c->b * 2, c->h + c->b * 2);
+	XMoveResizeWindow(dpy, c->curswin, 0, 0, c->w + c->b * 2, c->h + c->b * 2);
+	XMoveResizeWindow(dpy, c->win, c->b, c->b, c->w, c->h);
+	clientnotify(c);
 }
 
 /* check if desktop is visible */
@@ -902,8 +930,8 @@ desktile(struct Desktop *desk)
 				clientborderwidth(row->c, config.border_width);
 			}
 
-			row->c->x = x;
-			row->c->y = y;
+			row->c->x = x + row->c->b;
+			row->c->y = y + row->c->b;
 			row->c->w = col->w;
 			row->c->h = row->h;
 			if (clientisvisible(row->c)) {
@@ -1189,7 +1217,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	/* increment cells of grid a window is in */
 	for (tmp = clients; tmp; tmp = tmp->next) {
-		if ((tmp->state == Sticky && tmp->mon == mon) || (tmp->state == Normal && tmp->desk == desk)) {
+		if (tmp != c && ((tmp->state == Sticky && tmp->mon == mon) || (tmp->state == Normal && tmp->desk == desk))) {
 			for (i = 0; i < DIV; i++) {
 				for (j = 0; j < DIV; j++) {
 					int ha, hb, wa, wb;
@@ -1277,17 +1305,6 @@ clientplace(struct Client *c, struct Desktop *desk)
 		c->fx = max(mon->gx, c->fx);
 		c->fx = min(c->fx, maxx);
 	}
-}
-
-/* check if position x,y is on client's border */
-static int
-clientisborder(struct Client *c, int x, int y)
-{
-	if (c == NULL || c->state == Minimized || c->isfullscreen)
-		return 0;
-	if (x < 0 || x > c->w || y < 0 || y > c->h)
-		return 1;
-	return 0;
 }
 
 /* get in which corner or side of window the cursor is in */
@@ -1449,7 +1466,7 @@ clientraise(struct Client *c)
 
 	if (c == NULL || c->state == Minimized)
 		return;
-	wins[1] = c->win;
+	wins[1] = c->frame;
 	if (c->trans != NULL)
 		c = c->trans;
 	if (c->isfullscreen)
@@ -1473,10 +1490,10 @@ clienthide(struct Client *c, int hide)
 	if (c == NULL)
 		return;
 	if (hide) {
-		XUnmapWindow(dpy, c->win);
+		XUnmapWindow(dpy, c->frame);
 		icccmwmstate(c->win, IconicState);
 	} else {
-		XMapWindow(dpy, c->win);
+		XMapWindow(dpy, c->frame);
 		icccmwmstate(c->win, NormalState);
 	}
 }
@@ -1941,6 +1958,11 @@ clientincrmove(struct Client *c, int x, int y)
 static void
 clientadd(Window win, XWindowAttributes *wa)
 {
+	static XSetWindowAttributes swa = {
+		.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
+		            | SubstructureRedirectMask | ButtonPressMask | FocusChangeMask
+		            | PointerMotionMask,
+	};
 	struct Client *c, *f, *t;
 	Window trans;
 	unsigned long *values;
@@ -1966,6 +1988,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->y = c->fy = wa->y;
 	c->w = c->fw = wa->width;
 	c->h = c->fh = wa->height;
+	c->b = config.border_width;
 	c->win = win;
 	c->prev = NULL;
 	if (clients)
@@ -1973,18 +1996,30 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->next = clients;
 	clients = c;
 	updatesizehints(c);
-	clientraise(c);
+	swa.background_pixel = colors.focused;
+	swa.cursor = cursor[CursNormal];
+	c->frame = XCreateWindow(dpy, root, c->x - c->b, c->y - c->b,
+	                         c->w + c->b * 2, c->h + c->b * 2, 0,
+	                         CopyFromParent, CopyFromParent, CopyFromParent,
+	                         CWEventMask | CWBackPixel | CWCursor, &swa);
+	c->curswin = XCreateWindow(dpy, c->frame, 0, 0, c->w + c->b * 2, c->h + c->b * 2, 0,
+	                           CopyFromParent, InputOnly, CopyFromParent, 0, NULL);
+	XReparentWindow(dpy, c->win, c->frame, config.border_width, config.border_width);
 	XSelectInput(dpy, win, EnterWindowMask | StructureNotifyMask
 	                     | PropertyChangeMask | FocusChangeMask);
 	XGrabButton(dpy, AnyButton, AnyModifier, win, False,
 	            ButtonPressMask | ButtonReleaseMask,
 	            GrabModeSync, GrabModeSync, None, None);
-	XSetWindowBorderWidth(dpy, win, config.border_width);
+	XSetWindowBorderWidth(dpy, win, 0);
+	XMapWindow(dpy, c->curswin);
+	XMapWindow(dpy, c->win);
 	icccmwmstate(c->win, NormalState);
 	ewmhsetframeextents(c);
 	ewmhsetallowedactions(win);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
+	clientnotify(c);
+	clientraise(c);
 	f = getfocused(NULL);
 	if (focus && f != NULL && f->isfullscreen)
 		focus = 0;
@@ -2021,6 +2056,8 @@ clientdel(struct Client *c)
 	if (c->state == Tiled)
 		desktile(c->desk);
 	icccmwmstate(c->win, WithdrawnState);
+	XReparentWindow(dpy, c->win, root, c->x, c->y);
+	XDestroyWindow(dpy, c->frame);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 	ewmhsetwmdesktop();
@@ -2032,7 +2069,7 @@ static void
 deskchange(struct Desktop *desk)
 {
 	struct Monitor *mon;
-	struct Desktop *tmp;
+	struct Desktop *d, *tmp;
 	struct Client *c;
 	int cursorx, cursory;
 	int deleted = 0;
@@ -2065,13 +2102,13 @@ deskchange(struct Desktop *desk)
 
 	/* if moving between desks in the same monitor, we can delete a desk */
 	for (mon = mons; mon; mon = mon->next) {
-		for (tmp = mon->desks; tmp && tmp->next; tmp = tmp->next) {
-			if (tmp->nclients == 0) {
-				if (tmp != desk) {
-					deskdel(tmp);
-					deleted = 1;
-				}
-				break;
+		d = mon->desks;
+		while (d && d->next) {
+			tmp = d;
+			d = d->next;
+			if (tmp->nclients == 0 && tmp != desk) {
+				deskdel(tmp);
+				deleted = 1;
 			}
 		}
 	}
@@ -2214,7 +2251,7 @@ xeventbuttonpress(XEvent *e)
 	}
 
 	/* check action performed by mouse */
-	isborder = clientisborder(c, ev->x, ev->y);
+	isborder = ev->window == c->frame && ev->subwindow != c->win;
 	if (ev->state == config.modifier && ev->button == Button1)
 		motionaction = Moving;
 	else if (ev->state == config.modifier && ev->button == Button3)
@@ -2228,7 +2265,7 @@ xeventbuttonpress(XEvent *e)
 
 	/* user is dragging window while clicking modifier or dragging window's border */
 	if (motionaction != NoAction) {
-		octant = clientoctant(c, ev->x, ev->y);
+		octant = clientoctant(c, ev->x_root - c->x, ev->y_root - c->y);
 		if (motionaction == Moving) {
 			curs = cursor[CursMove];
 		} else {
@@ -2591,7 +2628,7 @@ xeventmaprequest(XEvent *e)
 		XMapWindow(dpy, ev->window);
 		wins[0] = layerwin[LayerBars];
 		XRestackWindows(dpy, wins, sizeof wins);
-	} else {
+	} else if (getclient(ev->window) == NULL) {
 		clientadd(ev->window, &wa);
 	}
 }
@@ -2604,9 +2641,37 @@ xeventmotionnotify(XEvent *e)
 	struct Client *c;
 	int x, y;
 
-	if ((c = getclient(ev->window)) == NULL || motionaction == NoAction)
+	if ((c = getclient(ev->window)) == NULL)
 		return;
-	if (motionaction == Resizing) {
+	if (motionaction == NoAction && ev->subwindow == c->curswin) {
+		switch (clientoctant(c, ev->x - c->b, ev->y - c->b)) {
+		case NW:
+			XDefineCursor(dpy, c->curswin, cursor[CursNW]);
+			break;
+		case NE:
+			XDefineCursor(dpy, c->curswin, cursor[CursNE]);
+			break;
+		case SW:
+			XDefineCursor(dpy, c->curswin, cursor[CursSW]);
+			break;
+		case SE:
+			XDefineCursor(dpy, c->curswin, cursor[CursSE]);
+			break;
+		case N:
+			XDefineCursor(dpy, c->curswin, cursor[CursN]);
+			break;
+		case S:
+			XDefineCursor(dpy, c->curswin, cursor[CursS]);
+			break;
+		case W:
+			XDefineCursor(dpy, c->curswin, cursor[CursW]);
+			break;
+		case E:
+			XDefineCursor(dpy, c->curswin, cursor[CursE]);
+			break;
+		}
+		return;
+	} else if (motionaction == Resizing) {
 		switch(octant) {
 		case NW:
 			x = motionx - ev->x_root;
@@ -2690,6 +2755,7 @@ int
 main(void)
 {
 	XEvent ev;
+	XSetWindowAttributes swa;
 	void (*xevents[LASTEvent])(XEvent *) = {
 		[ButtonPress]      = xeventbuttonpress,
 		[ButtonRelease]    = xeventbuttonrelease,
@@ -2711,6 +2777,7 @@ main(void)
 	screenw = DisplayWidth(dpy, screen);
 	screenh = DisplayHeight(dpy, screen);
 	root = RootWindow(dpy, screen);
+	gc = XCreateGC(dpy, root, 0, NULL);
 	xerrorxlib = XSetErrorHandler(xerror);
 
 	/* initialize resources database */
@@ -2718,21 +2785,24 @@ main(void)
 	if ((xrm = XResourceManagerString(dpy)) != NULL && (xdb = XrmGetStringDatabase(xrm)) != NULL)
 		getresources();
 
-	/* Select SubstructureRedirect events on root window */
-	XSelectInput(dpy, root, SubstructureRedirectMask
-	                      | SubstructureNotifyMask
-	                      | StructureNotifyMask
-	                      | ButtonPressMask);
-
-	/* Set focus to root window */
-	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
-
 	/* initialize */
 	initsignal();
 	initdummywindows();
 	initcursors();
 	initcolors();
 	initatoms();
+
+	/* Select SubstructureRedirect events on root window */
+	swa.cursor = cursor[CursNormal];
+	swa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
+	               | SubstructureRedirectMask
+	               | SubstructureNotifyMask
+	               | StructureNotifyMask
+	               | ButtonPressMask;
+	XChangeWindowAttributes(dpy, root, CWEventMask | CWCursor, &swa);
+
+	/* Set focus to root window */
+	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
 
 	/* set up list of monitors */
 	monupdate();

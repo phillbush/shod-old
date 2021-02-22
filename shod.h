@@ -100,6 +100,7 @@ enum {
 
 /* cursor types */
 enum {
+	CursNormal,
 	CursMove,
 	CursNW,
 	CursNE,
@@ -142,7 +143,7 @@ struct Client {
 	int isfixed, isuserplaced, isfullscreen;
 	int state;
 	int rh;                 /* row height */
-	int x, y, w, h;         /* current geometry */
+	int x, y, w, h, b;      /* current geometry */
 	int fx, fy, fw, fh;     /* floating geometry */
 	int tx, ty, tw, th;     /* tiled geometry */
 	int layer;              /* stacking order */
@@ -152,6 +153,8 @@ struct Client {
 	int incw, inch;         /* TODO */
 	long shflags;
 	float mina, maxa;       /* TODO */
+	Window curswin;
+	Window frame;
 	Window win;
 };
 
