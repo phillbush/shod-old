@@ -1449,6 +1449,9 @@ clientraise(struct Client *c)
 
 	if (c == NULL || c->state == Minimized)
 		return;
+	wins[1] = c->win;
+	if (c->trans != NULL)
+		c = c->trans;
 	if (c->isfullscreen)
 		wins[0] = layerwin[LayerFullscreen];
 	else if (c->state == Tiled)
@@ -1459,7 +1462,6 @@ clientraise(struct Client *c)
 		wins[0] = layerwin[LayerAbove];
 	else
 		wins[0] = layerwin[LayerTop];
-	wins[1] = c->win;
 	XRestackWindows(dpy, wins, sizeof wins);
 	ewmhsetclientsstacking();
 }
@@ -1649,7 +1651,7 @@ clientfocus(struct Client *c)
 		return;
 	}
 	fullscreen = getfullscreen(c->mon, c->desk);
-	if (fullscreen != NULL && fullscreen != c)
+	if (fullscreen != NULL && fullscreen != c && fullscreen != c->trans)
 		return;         /* we should not focus a client below a fullscreen client */
 	prevfocused = focused;
 	if (c->mon)
@@ -1677,7 +1679,7 @@ clientsendtransient(struct Client *c, struct Client *t)
 	if (c == NULL || t == NULL)
 		return;
 
-	c->istransient = 1;
+	c->trans = t;
 	c->fx = c->x = t->x + t->w / 2 - c->w / 2;
 	c->fy = c->y = t->y + t->h / 2 - c->h / 2;
 	c->mon = t->mon;
@@ -1956,7 +1958,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->row = NULL;
 	c->isfullscreen = 0;
 	c->isuserplaced = 0;
-	c->istransient = 0;
+	c->trans = NULL;
 	c->isfixed = 0;
 	c->state = Normal;
 	c->layer = 0;

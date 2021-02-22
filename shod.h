@@ -135,10 +135,11 @@ struct Colors {
 struct Client {
 	struct Client *prev, *next;
 	struct Client *fprev, *fnext;
+	struct Client *trans;
 	struct Monitor *mon;
 	struct Desktop *desk;
 	struct Row *row;
-	int isfixed, isuserplaced, isfullscreen, istransient;
+	int isfixed, isuserplaced, isfullscreen;
 	int state;
 	int rh;                 /* row height */
 	int x, y, w, h;         /* current geometry */
