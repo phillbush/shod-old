@@ -28,7 +28,7 @@ static struct Colors colors;
 static Cursor cursor[CursLast];
 
 /* mouse manipulation variables */
-static int motionx = 0, motiony = 0;
+static int motionx = -1, motiony = -1;
 static int motionaction = NoAction;
 static enum Octant octant = SE;
 
@@ -2343,6 +2343,8 @@ xeventbuttonrelease(XEvent *e)
 	(void)e;
 	XUngrabPointer(dpy, CurrentTime);
 	motionaction = NoAction;
+	motionx = -1;
+	motiony = -1;
 }
 
 /* handle client message event */
@@ -2460,6 +2462,8 @@ xeventclientmessage(XEvent *e)
 		if (ev->data.l[2] == _NET_WM_MOVERESIZE_CANCEL) {
 			XUngrabPointer(dpy, CurrentTime);
 			motionaction = NoAction;
+			motionx = -1;
+			motiony = -1;
 		} else {
 			switch (ev->data.l[2]) {
 			case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
@@ -2676,34 +2680,54 @@ xeventmotionnotify(XEvent *e)
 		case NW:
 			x = motionx - ev->x_root;
 			y = motiony - ev->y_root;
+			if ((y > 0 && ev->y_root > c->y) || (y < 0 && ev->y_root < c->y) ||
+			    (x > 0 && ev->x_root > c->x) || (x < 0 && ev->x_root < c->x))
+				goto done;
 			break;
 		case NE:
 			x = ev->x_root - motionx;
 			y = motiony - ev->y_root;
+			if ((y > 0 && ev->y_root > c->y) || (y < 0 && ev->y_root < c->y) ||
+			    (x > 0 && ev->x_root < c->x + c->w) || (x < 0 && ev->x_root > c->x + c->w))
+				goto done;
 			break;
 		case SW:
 			x = motionx - ev->x_root;
 			y = ev->y_root - motiony;
+			if ((y > 0 && ev->y_root < c->y + c->h) || (y < 0 && ev->y_root > c->y + c->h) ||
+			    (x > 0 && ev->x_root > c->x) || (x < 0 && ev->x_root < c->x))
+				goto done;
 			break;
 		case SE:
 			x = ev->x_root - motionx;
 			y = ev->y_root - motiony;
+			if ((y > 0 && ev->y_root < c->y + c->h) || (y < 0 && ev->y_root > c->y + c->h) ||
+			    (x > 0 && ev->x_root < c->x + c->w) || (x < 0 && ev->x_root > c->x + c->w))
+				goto done;
 			break;
 		case N:
 			x = 0;
 			y = motiony - ev->y_root;
+			if (y == 0 || (y > 0 && ev->y_root > c->y) || (y < 0 && ev->y_root < c->y))
+				goto done;
 			break;
 		case S:
 			x = 0;
 			y = ev->y_root - motiony;
+			if (y == 0 || (y > 0 && ev->y_root < c->y + c->h) || (y < 0 && ev->y_root > c->y + c->h))
+				goto done;
 			break;
 		case W:
 			x = motionx - ev->x_root;
 			y = 0;
+			if (x == 0 || (x > 0 && ev->x_root > c->x) || (x < 0 && ev->x_root < c->x))
+				goto done;
 			break;
 		case E:
 			x = ev->x_root - motionx;
 			y = 0;
+			if (x == 0 || (x > 0 && ev->x_root < c->x + c->w) || (x < 0 && ev->x_root > c->x + c->w))
+				goto done;
 			break;
 		}
 		clientincrresize(c, octant, x, y);
@@ -2714,6 +2738,7 @@ xeventmotionnotify(XEvent *e)
 		y = ev->y_root - motiony;
 		clientincrmove(c, x, y);
 	}
+done:
 	motionx = ev->x_root;
 	motiony = ev->y_root;
 }
