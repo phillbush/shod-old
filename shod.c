@@ -44,7 +44,6 @@ static struct Monitor *selmon = NULL;
 static struct Monitor *mons = NULL;
 static unsigned long deskcount = 0;
 static int showingdesk = 0;
-static int moncount = 0;
 
 /* other variables */
 volatile sig_atomic_t running = 1;
@@ -991,15 +990,10 @@ monadd(XineramaScreenInfo *info)
 static void
 mondel(struct Monitor *mon)
 {
-	struct Desktop *desk, *tmp;
 	struct Client *c;
 
-	desk = mon->desks;
-	while (desk) {
-		tmp = desk;
-		desk = desk->next;
-		deskdel(tmp);
-	}
+	while (mon->desks)
+		deskdel(mon->desks);
 	if (mon->next)
 		mon->next->prev = mon->prev;
 	if (mon->prev)
@@ -1028,6 +1022,7 @@ monupdate(void)
 	int delselmon = 0;
 	int del, add;
 	int i, j, n;
+	int moncount;
 
 	info = XineramaQueryScreens(dpy, &n);
 	unique = ecalloc(n, sizeof *unique);
