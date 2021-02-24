@@ -1001,7 +1001,7 @@ mondel(struct Monitor *mon)
 	else
 		mons = mon->next;
 	for (c = clients; c; c = c->next) {
-		if (c->state != Minimized && c->mon == mon) {
+		if (c->mon == mon) {
 			c->mon = NULL;
 			c->desk = NULL;
 		}
@@ -1521,6 +1521,7 @@ clientstick(struct Client *c, int stick)
 
 	if (stick && c->state != Sticky) {
 		c->state = Sticky;
+		c->desk->nclients--;
 		c->desk = NULL;
 	} else if (!stick && c->state == Sticky) {
 		c->state = Normal;
@@ -1696,6 +1697,7 @@ clientsendtransient(struct Client *c, struct Client *t)
 	c->fy = c->y = t->y + t->h / 2 - c->h / 2;
 	c->mon = t->mon;
 	c->desk = t->desk;
+	c->desk->nclients++;
 	if (t->state == Sticky)
 		c->state = Sticky;
 	clientmoveresize(c);
@@ -1737,7 +1739,7 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 			focusother = 1;
 		clienthide(c, 1);
 	}
-	if (desk->nclients++ == 1 && desk->next == NULL)
+	if (desk->nclients++ == 0 && desk->next == NULL)
 		deskadd(desk->mon);
 	if (c->desk && c->desk != desk)
 		c->desk->nclients--;
