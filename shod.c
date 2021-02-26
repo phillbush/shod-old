@@ -753,7 +753,7 @@ clientnotify(struct Client *c)
 	ce.y = c->y;
 	ce.width = c->w;
 	ce.height = c->h;
-	ce.border_width = c->b;
+	ce.border_width = 0;
 	ce.above = None;
 	ce.override_redirect = False;
 	XSendEvent(dpy, c->win, False, StructureNotifyMask, (XEvent *)&ce);
@@ -1766,6 +1766,8 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 	XSync(dpy, False);
 }
 
+#define MINSIZE 10              /* minimum size for tiled windows */
+
 /* resize client x and y pixels out of octant o */
 static void
 clientincrresize(struct Client *c, enum Octant o, int x, int y)
@@ -1775,6 +1777,8 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
 		return;
 	if (c->state == Tiled) {
+		if (c->row->col->w + x < MINSIZE || c->row->h + y < MINSIZE)
+			return;
 		switch (o) {
 		case NW:
 			if (c->row->col->prev) {
@@ -2140,6 +2144,10 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 
 	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
 		return;
+	if (valuemask & CWX)
+		wc->x -= c->b;
+	if (valuemask & CWY)
+		wc->y -= c->b;
 	if (c->state == Tiled) {
 		x = y = w = h = 0;
 		if (valuemask & CWX)
