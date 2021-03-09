@@ -2737,10 +2737,23 @@ xeventmotionnotify(XEvent *e)
 		}
 		clientincrresize(c, octant, x, y);
 	} else if (motionaction == Moving) {
-		if (c->state == Tiled)
-			return;
-		x = ev->x_root - motionx;
-		y = ev->y_root - motiony;
+		if (c->state == Tiled) {
+			if (ev->x_root > c->x + c->w)
+				x = +1;
+			else if (ev->x_root < c->x)
+				x = -1;
+			else
+				x = 0;
+			if (ev->y_root > c->y + c->h)
+				y = +1;
+			else if (ev->y_root < c->y)
+				y = -1;
+			else
+				y = 0;
+		} else {
+			x = ev->x_root - motionx;
+			y = ev->y_root - motiony;
+		}
 		clientincrmove(c, x, y);
 	}
 done:
