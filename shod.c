@@ -2571,7 +2571,7 @@ xeventdestroynotify(XEvent *e)
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 	struct Client *c;
 
-	if ((c = getclient(ev->window)) != NULL)
+	if ((c = getclient(ev->window)) != NULL && c->win == ev->window)
 		clientdel(c);
 }
 
