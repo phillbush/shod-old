@@ -2748,6 +2748,17 @@ done:
 	motiony = ev->y_root;
 }
 
+/* forget about client */
+static void
+xeventunmapnotify(XEvent *e)
+{
+	XUnmapEvent *ev = &e->xunmap;
+	struct Client *c;
+
+	if ((c = getclient(ev->window)) != NULL && c->win == ev->window)
+		clientdel(c);
+}
+
 /* clean clients and other structures */
 static void
 cleanclients(void)
@@ -2797,7 +2808,8 @@ main(void)
 		[FocusIn]          = xeventfocusin,
 		[KeyPress]         = xeventkeypress,
 		[MapRequest]       = xeventmaprequest,
-		[MotionNotify]     = xeventmotionnotify
+		[MotionNotify]     = xeventmotionnotify,
+		[UnmapNotify]      = xeventunmapnotify
 	};
 
 	/* open connection to server and set X variables */
