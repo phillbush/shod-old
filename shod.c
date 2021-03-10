@@ -862,7 +862,9 @@ clientdecorate(struct Client *c, int style)
 		val.ts_y_origin = c->h + c->b;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
 		XFillRectangle(dpy, c->frame, gc, corner, c->h + c->b, w, c->b);
+	}
 
+	if (h > 0) {
 		val.tile = d->W;
 		val.ts_x_origin = 0;
 		val.ts_y_origin = 0;
