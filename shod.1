@@ -275,6 +275,9 @@ understands the following X resources.
 .B shod.borderWidth
 The size in pixels of the border around windows.
 .TP
+.B shod.cornerWidth
+The size in pixels of the corners of the windows.
+.TP
 .B shod.decoration
 Path to a .xpm file containing the border decorations.
 If this resource is not present,
@@ -282,6 +285,11 @@ or if the .xpm file is not in the correct format,
 .B shod
 use solid colors for the borders instead.
 A sample .xpm file is distributed with shod.
+The resources
+.B shod.borderWidth
+and
+.B shod.cornerWidth
+should be set accordingly to the size of the decoration on the .xpm file.
 .TP
 .B shod.gapOuter
 The gap in pixels between the sides of the monitor and the windows.
