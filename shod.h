@@ -15,7 +15,9 @@ enum {
 
 /* border style */
 enum {
-	BorderSolid,
+	Focused,
+	Unfocused,
+	Urgent,
 	StyleLast
 };
 
@@ -198,9 +200,13 @@ struct Config {
 	const char *focused_color;
 	const char *unfocused_color;
 
-	int border_style;               /* TODO */
+	const char *decoration_path;
+	const char *icon_path;
+
 	int border_width;
-	int corner_width;               /* TODO */
+	int corner_width;
+	int pixmap_width;
+	int edge_width;
 	int ignoregaps;
 	int ignoreborders;
 
@@ -210,4 +216,16 @@ struct Config {
 	unsigned int modifier;
 	unsigned int focusbuttons;
 	unsigned int raisebuttons;
+};
+
+/* decoration sections pixmaps */
+struct Decor {
+	Pixmap NW;      /* north west corner */
+	Pixmap N;       /* north border */
+	Pixmap NE;
+	Pixmap W;
+	Pixmap E;
+	Pixmap SW;
+	Pixmap S;
+	Pixmap SE;
 };

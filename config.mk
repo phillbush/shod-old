@@ -13,7 +13,7 @@ X11LIB = /usr/X11R6/lib
 
 # includes and libs
 INCS = -I${LOCALINC} -I${X11INC}
-LIBS = -L${LOCALLIB} -L${X11LIB} -lX11 -lXinerama
+LIBS = -L${LOCALLIB} -L${X11LIB} -lX11 -lXinerama -lXpm
 
 # flags
 CPPFLAGS =

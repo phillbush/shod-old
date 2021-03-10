@@ -6,7 +6,7 @@
 .B shod
 .SH DESCRIPTION
 .B shod
-is an hybrid (tiling and floating) multimonitor X11 window manager.
+is an hybrid (tiling and floating) reparenting and themeable multimonitor X11 window manager.
 .B shod
 sets no keybindings;
 reads no configuration other than X resources;
@@ -245,17 +245,19 @@ Each tiled window ocupies a row in a column.
 .PP
 In order to move a tiled window from one column to another
 just move the window left or right with
-.IR wmctrl (1).
+.IR wmctrl (1)
+or with the mouse.
 This will move the window from its current column to the column to its
 left or right, or it will create a new column, if needed.
 .PP
 In order to move a tiled window up or down a column,
 just move the window up or down with
-.IR wmctrl (1).
+.IR wmctrl (1)
+or with the mouse.
 .PP
 Resizing a tiled window with
 .IR wmctrl (1)
-or with the Modifier plus the mouse button 3
+or with the mouse
 will change the size of the window, the size of the column it is in,
 and the size of the neighboring windows.
 .SH ENVIRONMENT
@@ -272,6 +274,14 @@ understands the following X resources.
 .TP
 .B shod.borderWidth
 The size in pixels of the border around windows.
+.TP
+.B shod.decoration
+Path to a .xpm file containing the border decorations.
+If this resource is not present,
+or if the .xpm file is not in the correct format,
+.B shod
+use solid colors for the borders instead.
+A sample .xpm file is distributed with shod.
 .TP
 .B shod.gapOuter
 The gap in pixels between the sides of the monitor and the windows.
