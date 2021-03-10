@@ -432,6 +432,8 @@ setdecoration(void)
 		    xa.width % 2 == 0 && xa.height % 3 == 0 && xa.height / 3 == xa.width / 2 &&
 		    (int)xa.width / 2 > 2 * config.corner_width) {
 			config.pixmap_width = xa.width / 2;
+		} else {
+			XFreePixmap(dpy, pix);
 		}
 	}
 	if (config.pixmap_width) {
@@ -454,6 +456,7 @@ setdecoration(void)
 			}
 			y += config.pixmap_width;
 		}
+		XFreePixmap(dpy, pix);
 	}
 }
 
