@@ -2807,6 +2807,7 @@ xeventmotionnotify(XEvent *e)
 	XMotionEvent *ev = &e->xmotion;
 	struct Client *c;
 	int x, y;
+	int b;          /* border + inner gaps */
 
 	if ((c = getclient(ev->window)) == NULL)
 		return;
@@ -2896,15 +2897,16 @@ xeventmotionnotify(XEvent *e)
 		clientincrresize(c, octant, x, y);
 	} else if (motionaction == Moving) {
 		if (c->state == Tiled) {
-			if (ev->x_root > c->x + c->w)
+			b = c->b + config.gapinner;
+			if (ev->x_root > c->x + c->w + (c->row->col->next ? b : 0))
 				x = +1;
-			else if (ev->x_root < c->x)
+			else if (ev->x_root < c->x - (c->row->col->prev ? b : 0))
 				x = -1;
 			else
 				x = 0;
-			if (ev->y_root > c->y + c->h)
+			if (ev->y_root > c->y + c->h + (c->row->next ? b : 0))
 				y = +1;
-			else if (ev->y_root < c->y)
+			else if (ev->y_root < c->y - (c->row->prev ? b : 0))
 				y = -1;
 			else
 				y = 0;
