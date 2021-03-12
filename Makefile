@@ -8,7 +8,7 @@ all: ${PROG}
 ${PROG}: ${OBJS}
 	${CC} -o $@ ${OBJS} ${LDFLAGS}
 
-${OBJS}: shod.h config.h
+${OBJS}: shod.h config.h theme.xpm
 
 .c.o:
 	${CC} ${CFLAGS} -c $<

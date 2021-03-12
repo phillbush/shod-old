@@ -1,18 +1,12 @@
 struct Config config = {
-	/* window borders */
-	.urgent_color = "#2E3436",
-	.focused_color = "#3584E4",
-	.unfocused_color = "#E6E6E6",
-	.border_width  = 7,     /* width of the border around windows */
-	.corner_width  = 24,    /* maximum width of the border corners */
-
 	/* gaps */
 	.gapinner      = 0,     /* gap between windows */
 	.gapouter      = 0,     /* gap between window and screen edges */
 
-	/* behavior of single maximized windows */
-	.ignoregaps    = 0,     /* whether to ignore outer gaqps when a single window is maximized */
-	.ignoreborders = 0,     /* whether to ignore borders when a single window is maximized */
+	/* behavior of tiled windows */
+	.ignoregaps    = 0,     /* whether to ignore outer gaqps when a single window is tiled */
+	.ignoreborders = 0,     /* whether to ignore borders when a single window is tiled */
+	.mergeborders  = 0,     /* whether to merge borders of tiled windows */
 
 	/* mouse control (these configuration cannot be set via X resources) */
 	.modifier = Mod1Mask,   /* modifier pressed with mouse button */

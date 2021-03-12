@@ -13,6 +13,7 @@
 #include <X11/xpm.h>
 #include <X11/extensions/Xinerama.h>
 #include "shod.h"
+#include "theme.xpm"
 
 /* X stuff */
 static Display *dpy;
@@ -25,9 +26,12 @@ static int (*xerrorxlib)(Display *, XErrorEvent *);
 static Atom atoms[AtomLast];
 
 /* visual */
-static unsigned long colors[StyleLast];
 static struct Decor decor[StyleLast][2];
 static Cursor cursor[CursLast];
+static int corner;      /* size of the decoration corner */
+static int border;      /* size of the decoration border */
+static int center;      /* size of the decoration center */
+static int minsize;     /* minimum size of a window */
 
 /* mouse manipulation variables */
 static int motionx = -1, motiony = -1;
@@ -89,17 +93,6 @@ ecalloc(size_t nmemb, size_t size)
 	return p;
 }
 
-/* alloc color pixel from color name */
-static unsigned long
-ealloccolor(const char *s)
-{
-	XColor color;
-
-	if(!XAllocNamedColor(dpy, DefaultColormap(dpy, screen), s, &color, &color))
-		errx(1, "cannot allocate color: %s", s);
-	return color.pixel;
-}
-
 /* get atom property from window */
 static Atom
 getatomprop(Window win, Atom prop)
@@ -146,12 +139,6 @@ getresources(void)
 	long n;
 	char *type;
 
-	if (XrmGetResource(xdb, "shod.borderWidth", "*", &type, &xval) == True)
-		if ((n = strtol(xval.addr, NULL, 10)) > 0)
-			config.border_width = n;
-	if (XrmGetResource(xdb, "shod.cornerWidth", "*", &type, &xval) == True)
-		if ((n = strtol(xval.addr, NULL, 10)) > 0)
-			config.corner_width = n;
 	if (XrmGetResource(xdb, "shod.gapInner", "*", &type, &xval) == True)
 		if ((n = strtol(xval.addr, NULL, 10)) > 0)
 			config.gapinner = n;
@@ -164,16 +151,11 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.ignoreBorders", "*", &type, &xval) == True)
 		config.ignoreborders = (strcasecmp(xval.addr, "true") == 0 ||
 		                        strcasecmp(xval.addr, "on") == 0);
-	if (XrmGetResource(xdb, "shod.urgent", "*", &type, &xval) == True)
-		config.urgent_color = xval.addr;
-	if (XrmGetResource(xdb, "shod.focused", "*", &type, &xval) == True)
-		config.focused_color = xval.addr;
-	if (XrmGetResource(xdb, "shod.unfocused", "*", &type, &xval) == True)
-		config.unfocused_color = xval.addr;
-	if (XrmGetResource(xdb, "shod.unfocused", "*", &type, &xval) == True)
-		config.unfocused_color = xval.addr;
-	if (XrmGetResource(xdb, "shod.decoration", "*", &type, &xval) == True)
-		config.decoration_path = xval.addr;
+	if (XrmGetResource(xdb, "shod.mergeBorders", "*", &type, &xval) == True)
+		config.mergeborders = (strcasecmp(xval.addr, "true") == 0 ||
+		                       strcasecmp(xval.addr, "on") == 0);
+	if (XrmGetResource(xdb, "shod.theme", "*", &type, &xval) == True)
+		config.theme_path = xval.addr;
 }
 
 /* get window's WM_STATE property */
@@ -325,15 +307,6 @@ initcursors(void)
 	cursor[CursE] = XCreateFontCursor(dpy, XC_right_side);
 }
 
-/* initialize colors array */
-static void
-initcolors(void)
-{
-	colors[Unfocused] = ealloccolor(config.unfocused_color);
-	colors[Focused] = ealloccolor(config.focused_color);
-	colors[Urgent] = ealloccolor(config.urgent_color);
-}
-
 /* initialize atom arrays */
 static void
 initatoms(void)
@@ -415,49 +388,56 @@ copypixmap(Pixmap src, int sx, int sy, int w, int h)
 
 /* initialize decoration pixmap */
 static void
-setdecoration(void)
+settheme(void)
 {
 	XpmAttributes xa;
-	Pixmap pix, pd;
+	Pixmap pix;
 	struct Decor *d;
-	int x, y;
-	int i, j;
-	int c;
+	unsigned int size;       /* size of each square in the .xpm file */
+	unsigned int x, y;
+	unsigned int i, j;
+	int status;
 
-	config.pixmap_width = 0;
-	if (config.decoration_path &&
-	    XpmReadFileToPixmap(dpy, root, config.decoration_path, &pix, &pd, &xa) == XpmSuccess) {
-		XFreePixmap(dpy, pd);
-		if (xa.valuemask & XpmSize &&
-		    xa.width % 2 == 0 && xa.height % 3 == 0 && xa.height / 3 == xa.width / 2 &&
-		    (int)xa.width / 2 > 2 * config.corner_width) {
-			config.pixmap_width = xa.width / 2;
-		} else {
-			XFreePixmap(dpy, pix);
-		}
+	if (config.theme_path)
+		status = XpmReadFileToPixmap(dpy, root, config.theme_path, &pix, NULL, &xa);
+	else
+		status = XpmCreatePixmapFromData(dpy, root, theme, &pix, NULL, &xa);
+	if (status != XpmSuccess)
+		errx(1, "could not load theme");
+	size = 0;
+	if (xa.valuemask & (XpmSize | XpmHotspot) &&
+	    xa.width % 2 == 0 && xa.height % 3 == 0 && xa.height / 3 == xa.width / 2 &&
+	    (xa.width / 2) % 2 == 1 && (xa.height / 3) % 2 == 1 &&
+	    xa.x_hotspot < ((xa.width / 2) - 1) / 2) {
+		size = xa.width / 2;
+		border = xa.x_hotspot;
+		corner = (size - 1) / 2;
+		center = size - border * 2;
+		minsize = corner - border;
 	}
-	if (config.pixmap_width) {
-		config.edge_width = (config.pixmap_width - config.corner_width * 2 - 1) / 2;
-		c = config.corner_width + config.edge_width;
-		y = 0;
-		for (i = 0; i < StyleLast; i++) {
-			x = 0;
-			for (j = 0; j < 2; j++) {
-				d = &decor[i][j];
-				d->NW = copypixmap(pix, x, y, c, c);
-				d->N  = copypixmap(pix, x + c, y, 1, config.border_width);
-				d->NE = copypixmap(pix, x + config.pixmap_width - c, y, c, c);
-				d->W  = copypixmap(pix, x, y + c, config.border_width, 1);
-				d->E  = copypixmap(pix, x + config.pixmap_width - config.border_width, y + c, config.border_width, 1);
-				d->SW = copypixmap(pix, x, y + config.pixmap_width - c, c, c);
-				d->S  = copypixmap(pix, x + c, y + config.pixmap_width - config.border_width, 1, config.border_width);
-				d->SE = copypixmap(pix, x + config.pixmap_width - c, y + config.pixmap_width - c, c, c);
-				x += config.pixmap_width;
-			}
-			y += config.pixmap_width;
-		}
+	if (size == 0) {
 		XFreePixmap(dpy, pix);
+		errx(1, "theme in wrong format");
 	}
+	y = 0;
+	for (i = 0; i < StyleLast; i++) {
+		x = 0;
+		for (j = 0; j < 2; j++) {
+			d = &decor[i][j];
+			d->NW = copypixmap(pix, x, y, corner, corner);
+			d->N  = copypixmap(pix, x + corner, y, 1, border);
+			d->NE = copypixmap(pix, x + size - corner, y, corner, corner);
+			d->W  = copypixmap(pix, x, y + corner, border, 1);
+			d->C  = copypixmap(pix, x + border, y + border, center, center);
+			d->E  = copypixmap(pix, x + size - border, y + corner, border, 1);
+			d->SW = copypixmap(pix, x, y + size - corner, corner, corner);
+			d->S  = copypixmap(pix, x + corner, y + size - border, 1, border);
+			d->SE = copypixmap(pix, x + size - corner, y + size - corner, corner, corner);
+			x += size;
+		}
+		y += size;
+	}
+	XFreePixmap(dpy, pix);
 }
 
 static void
@@ -709,6 +689,10 @@ updatesizehints(struct Client *c)
 		c->minh = size.base_height;
 	} else
 		c->minw = c->minh = 0;
+	if (c->minw < minsize)
+		c->minw = minsize;
+	if (c->minh < minsize)
+		c->minh = minsize;
 	if (size.flags & PAspect) {
 		c->mina = (float)size.min_aspect.y / size.min_aspect.x;
 		c->maxa = (float)size.max_aspect.x / size.max_aspect.y;
@@ -832,74 +816,62 @@ clientdecorate(struct Client *c, int style)
 {
 	XGCValues val;
 	struct Decor *d;
-	int corner;
+	int origin;
 	int w, h;
 	int j;
 
-	if (config.pixmap_width == 0)
+	if (c == NULL)
 		return;
 	j = 0;
-	if (c->isfixed)
+	if (c->isfixed || ((c->state & Tiled) && config.mergeborders))
 		j = 1;
 	d = &decor[style][j];
-
-	corner = config.corner_width + config.edge_width;
-	w = c->w + c->b * 2 - corner * 2;
-	h = c->h + c->b * 2 - corner * 2;
+	origin = c->b - border;
+	w = c->w + c->b * 2 - corner * 2 - origin * 2;
+	h = c->h + c->b * 2 - corner * 2 - origin * 2;
 	val.fill_style = FillTiled;
 	XChangeGC(dpy, gc, GCFillStyle, &val);
 
 	/* draw edges */
 	if (w > 0) {
 		val.tile = d->N;
-		val.ts_x_origin = 0;
-		val.ts_y_origin = 0;
+		val.ts_x_origin = origin;
+		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-		XFillRectangle(dpy, c->frame, gc, corner, 0, w, c->b);
+		XFillRectangle(dpy, c->frame, gc, origin + corner, 0, w, c->b);
 
 		val.tile = d->S;
-		val.ts_x_origin = 0;
+		val.ts_x_origin = origin;
 		val.ts_y_origin = c->h + c->b;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
-		XFillRectangle(dpy, c->frame, gc, corner, c->h + c->b, w, c->b);
+		XFillRectangle(dpy, c->frame, gc, origin + corner, c->h + c->b, w, c->b);
 	}
 
 	if (h > 0) {
 		val.tile = d->W;
-		val.ts_x_origin = 0;
-		val.ts_y_origin = 0;
+		val.ts_x_origin = origin;
+		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
-		XFillRectangle(dpy, c->frame, gc, 0, corner, c->b, h);
+		XFillRectangle(dpy, c->frame, gc, 0, origin + corner, c->b, h);
 
 		val.tile = d->E;
 		val.ts_x_origin = c->w + c->b;
-		val.ts_y_origin = 0;
+		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
-		XFillRectangle(dpy, c->frame, gc, c->w + c->b, corner, c->b, h);
+		XFillRectangle(dpy, c->frame, gc, c->w + c->b, origin + corner, c->b, h);
 	}
 
 	/* draw corners */
-	XCopyArea(dpy, d->NW, c->frame, gc, 0, 0, corner, corner, 0, 0);
-	XCopyArea(dpy, d->NE, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner, 0);
-	XCopyArea(dpy, d->SW, c->frame, gc, 0, 0, corner, corner, 0, c->h + c->b * 2 - corner);
-	XCopyArea(dpy, d->SE, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner, c->h + c->b * 2 - corner);
+	XCopyArea(dpy, d->NW, c->frame, gc, 0, 0, corner, corner, origin, origin);
+	XCopyArea(dpy, d->NE, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, origin);
+	XCopyArea(dpy, d->SW, c->frame, gc, 0, 0, corner, corner, origin, c->h + c->b * 2 - corner - origin);
+	XCopyArea(dpy, d->SE, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, c->h + c->b * 2 - corner - origin);
 
-	val.fill_style = FillSolid;
-	val.foreground = colors[style];
-	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
+	val.tile = d->C;
+	val.ts_x_origin = c->b;
+	val.ts_y_origin = c->b;
+	XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
 	XFillRectangle(dpy, c->frame, gc, c->b, c->b, c->w, c->h);
-}
-
-/* set client border color */
-static void
-clientbordercolor(struct Client *c, int style)
-{
-	if (c == NULL)
-		return;
-	XSetWindowBackground(dpy, c->frame, colors[style]);
-	XSetForeground(dpy, gc, colors[style]);
-	XFillRectangle(dpy, c->frame, gc, 0, 0, c->w + c->b * 2, c->h + c->b * 2);
-	clientdecorate(c, style);
 }
 
 /* set client border width */
@@ -1005,37 +977,40 @@ desktile(struct Desktop *desk)
 	int sumw, sumh;
 	int ncols, nrows;
 	int x, y, w, h;
+	int b, g;                       /* border and gaps for tiled windows */
 
 	mon = desk->mon;
+	b = (config.mergeborders ? (border + 1) / 2 : border);
+	g = (config.mergeborders ? 0 : config.gapinner);
 
 	/* get number of columns and sum their widths with borders and gaps applied */
 	sumw = 0;
 	for (ncols = 0, col = desk->col; col; col = col->next, ncols++)
-		sumw += col->w + config.border_width * 2;
-	sumw += config.gapinner * (ncols - 1);
+		sumw += col->w + b * 2;
+	sumw += g * (ncols - 1);
 	if (ncols == 0)
 		return;
 
 	/* decide whether to recalculate columns widths */
 	recol = (sumw != mon->gw);
 
-	w = (mon->gw - config.gapinner * (ncols - 1) - config.border_width * 2 * ncols) / ncols;
+	w = (mon->gw - g * (ncols - 1) - b * 2 * ncols) / ncols;
 	x = mon->gx;
 	for (col = desk->col; col; col = col->next) {
 		/* the last column gets the remaining width */
 		if (!col->next)
-			w = mon->gw + mon->gx - x - 2 * config.border_width;
+			w = mon->gw + mon->gx - x - 2 * b;
 
 		/* get number of clients in current column and sum their heights */
 		sumh = 0;
 		for (nrows = 0, row = col->row; row; row = row->next, nrows++)
-			sumh += row->h + config.border_width * 2;
-		sumh += config.gapinner * (nrows - 1);
+			sumh += row->h + b * 2;
+		sumh += g * (nrows - 1);
 
 		/* decide whether to recalculate client heights */
 		rerow = (sumh != mon->gh);
 
-		h = (mon->gh - config.gapinner * (nrows - 1) - config.border_width * 2 * nrows) / nrows;
+		h = (mon->gh - g * (nrows - 1) - b * 2 * nrows) / nrows;
 		y = mon->gy;
 
 		for (row = col->row; row; row = row->next) {
@@ -1044,7 +1019,7 @@ desktile(struct Desktop *desk)
 
 			/* the last client gets the remaining height */
 			if (!row->next)
-				h = mon->gh + mon->gy - y - 2 * config.border_width;
+				h = mon->gh + mon->gy - y - 2 * b;
 
 			/* set new width and heights */
 			if (recol || !col->next)
@@ -1053,20 +1028,19 @@ desktile(struct Desktop *desk)
 				row->h = h;
 
 			/* if there is only one tiled window, borders or gaps can be ignored */
+			clientborderwidth(row->c, b);
 			if (nrows == 1 && ncols == 1) {
 				if (config.ignoreborders) {
-					col->w += 2 * config.border_width;
-					row->h += 2 * config.border_width;
+					col->w += 2 * b;
+					row->h += 2 * b;
 					clientborderwidth(row->c, 0);
 				}
 				if (config.ignoregaps) {
 					x = mon->wx;
 					y = mon->wy;
-					col->w = mon->ww - ((!config.ignoreborders) ? 2 * config.border_width : 0);
-					row->h = mon->wh - ((!config.ignoreborders) ? 2 * config.border_width : 0);
+					col->w = mon->ww - ((!config.ignoreborders) ? 2 * b : 0);
+					row->h = mon->wh - ((!config.ignoreborders) ? 2 * b : 0);
 				}
-			} else {
-				clientborderwidth(row->c, config.border_width);
 			}
 
 			row->c->x = x + row->c->b;
@@ -1077,10 +1051,10 @@ desktile(struct Desktop *desk)
 				clientmoveresize(row->c);
 			}
 
-			y += row->h + config.gapinner + config.border_width * 2;
+			y += row->h + g + b * 2;
 		}
 
-		x += col->w + config.gapinner + config.border_width * 2;
+		x += col->w + g + b * 2;
 	}
 }
 
@@ -1304,8 +1278,8 @@ rowdel(struct Row *row)
 }
 
 #define DIV       15      /* number to divide the screen into grids */
-#define WIDTH(x)  ((x)->fw + 2 * config.border_width)
-#define HEIGHT(x) ((x)->fh + 2 * config.border_width)
+#define WIDTH(x)  ((x)->fw + 2 * border)
+#define HEIGHT(x) ((x)->fh + 2 * border)
 
 /* find best position to place a client on screen */
 static void
@@ -1325,8 +1299,8 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	mon = desk->mon;
 
-	c->fw = min(c->fw, mon->gw - 2 * config.border_width);
-	c->fh = min(c->fh, mon->gh - 2 * config.border_width);
+	c->fw = min(c->fw, mon->gw - 2 * border);
+	c->fh = min(c->fh, mon->gh - 2 * border);
 
 	/* if the user placed the window, we should not re-place it */
 	if (c->isuserplaced)
@@ -1456,10 +1430,10 @@ clientoctant(struct Client *c, int x, int y)
 	w = c->w;
 	h = c->h;
 	wm = w / 2;
-	wa = min(wm, config.corner_width);
+	wa = min(wm, corner);
 	wb = w - wa;
 	hm = h / 2;
-	ha = min(hm, config.corner_width);
+	ha = min(hm, corner);
 	hb = h - ha;
 	tan = (double)h/w;
 	if (tan == 0.0)
@@ -1702,7 +1676,7 @@ clienttile(struct Client *c, int tile)
 		c->state = Normal;
 		rowdel(c->row);
 		clientplace(c, c->desk);
-		clientborderwidth(c, config.border_width);
+		clientborderwidth(c, border);
 		clientapplysize(c);
 		if (clientisvisible(c)) {
 			clientmoveresize(c);
@@ -1760,7 +1734,7 @@ clientfullscreen(struct Client *c, int fullscreen)
 			clientmoveresize(c);
 	} else if (!fullscreen && c->isfullscreen) {
 		c->isfullscreen = 0;
-		clientborderwidth(c, config.border_width);
+		clientborderwidth(c, border);
 		if (c->state == Tiled) {
 			desktile(c->desk);
 		} else if (clientisvisible(c)) {
@@ -1797,7 +1771,7 @@ clientfocus(struct Client *c)
 {
 	struct Client *prevfocused, *fullscreen;
 
-	clientbordercolor(focused, Unfocused);
+	clientdecorate(focused, Unfocused);
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
@@ -1814,7 +1788,7 @@ clientfocus(struct Client *c)
 	if (showingdesk)
 		clientshowdesk(0);
 	clientaddfocus(c);
-	clientbordercolor(c, Focused);
+	clientdecorate(c, Focused);
 	if (c->state == Minimized)
 		clientminimize(c, 0);
 	XSetInputFocus(dpy, c->win, RevertToParent, CurrentTime);
@@ -1906,8 +1880,6 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 	XSync(dpy, False);
 }
 
-#define MINSIZE 10              /* minimum size for tiled windows */
-
 /* resize client x and y pixels out of octant o */
 static void
 clientincrresize(struct Client *c, enum Octant o, int x, int y)
@@ -1917,7 +1889,7 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
 		return;
 	if (c->state == Tiled) {
-		if (c->row->col->w + x < MINSIZE || c->row->h + y < MINSIZE)
+		if (c->row->col->w + x < minsize || c->row->h + y < minsize)
 			return;
 		switch (o) {
 		case NW:
@@ -2103,7 +2075,7 @@ clientincrmove(struct Client *c, int x, int y)
 
 /* add client */
 static void
-clientadd(Window win, XWindowAttributes *wa)
+clientadd(Window win, XWindowAttributes *wa, int ignoreunmap)
 {
 	static XSetWindowAttributes swa = {
 		.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
@@ -2131,11 +2103,12 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->isfixed = 0;
 	c->state = Normal;
 	c->layer = 0;
+	c->ignoreunmap = ignoreunmap;
 	c->x = c->fx = wa->x;
 	c->y = c->fy = wa->y;
 	c->w = c->fw = wa->width;
 	c->h = c->fh = wa->height;
-	c->b = config.border_width;
+	c->b = border;
 	c->win = win;
 	c->prev = NULL;
 	if (clients)
@@ -2143,15 +2116,13 @@ clientadd(Window win, XWindowAttributes *wa)
 	c->next = clients;
 	clients = c;
 	updatesizehints(c);
-	swa.background_pixel = colors[Focused];
-	swa.cursor = cursor[CursNormal];
 	c->frame = XCreateWindow(dpy, root, c->x - c->b, c->y - c->b,
 	                         c->w + c->b * 2, c->h + c->b * 2, 0,
 	                         CopyFromParent, CopyFromParent, CopyFromParent,
-	                         CWEventMask | CWBackPixel | CWCursor, &swa);
+	                         CWEventMask, &swa);
 	c->curswin = XCreateWindow(dpy, c->frame, 0, 0, c->w + c->b * 2, c->h + c->b * 2, 0,
 	                           CopyFromParent, InputOnly, CopyFromParent, 0, NULL);
-	XReparentWindow(dpy, c->win, c->frame, config.border_width, config.border_width);
+	XReparentWindow(dpy, c->win, c->frame, border, border);
 	XSelectInput(dpy, win, EnterWindowMask | StructureNotifyMask
 	                     | PropertyChangeMask | FocusChangeMask);
 	XGrabButton(dpy, AnyButton, AnyModifier, win, False,
@@ -2171,7 +2142,7 @@ clientadd(Window win, XWindowAttributes *wa)
 	if (focus && f != NULL && f->isfullscreen)
 		focus = 0;
 	if (!focus)
-		clientbordercolor(c, colors[Unfocused]);
+		clientdecorate(c, Unfocused);
 	if (XGetTransientForHint(dpy, win, &trans) && (t = getclient(trans))) {
 		clientsendtransient(c, t);
 	} else {
@@ -2359,14 +2330,14 @@ scan(void)
 			|| wa.override_redirect || XGetTransientForHint(dpy, wins[i], &d1))
 				continue;
 			if (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)
-				clientadd(wins[i], &wa);
+				clientadd(wins[i], &wa, 1);
 		}
 		for (i = 0; i < num; i++) { /* now the transients */
 			if (!XGetWindowAttributes(dpy, wins[i], &wa))
 				continue;
 			if (XGetTransientForHint(dpy, wins[i], &d1)
 			&& (wa.map_state == IsViewable || getstate(wins[i]) == IconicState))
-				clientadd(wins[i], &wa);
+				clientadd(wins[i], &wa, 1);
 		}
 		if (wins)
 			XFree(wins);
@@ -2796,7 +2767,7 @@ xeventmaprequest(XEvent *e)
 		wins[0] = layerwin[LayerBars];
 		XRestackWindows(dpy, wins, sizeof wins);
 	} else if (getclient(ev->window) == NULL) {
-		clientadd(ev->window, &wa);
+		clientadd(ev->window, &wa, 0);
 	}
 }
 
@@ -2928,8 +2899,13 @@ xeventunmapnotify(XEvent *e)
 	XUnmapEvent *ev = &e->xunmap;
 	struct Client *c;
 
-	if ((c = getclient(ev->window)) != NULL && c->win == ev->window)
-		clientdel(c);
+	if ((c = getclient(ev->window)) != NULL && c->win == ev->window) {
+		if (c->ignoreunmap) {
+			c->ignoreunmap = 0;
+		} else {
+			clientdel(c);
+		}
+	}
 }
 
 /* clean clients and other structures */
@@ -2970,18 +2946,17 @@ cleanpixmaps(void)
 {
 	int i, j;
 
-	if (config.pixmap_width) {
-		for (i = 0; i < StyleLast; i++) {
-			for (j = 0; i < 2; i++) {
-				XFreePixmap(dpy, decor[i][j].NW);
-				XFreePixmap(dpy, decor[i][j].N);
-				XFreePixmap(dpy, decor[i][j].NE);
-				XFreePixmap(dpy, decor[i][j].W);
-				XFreePixmap(dpy, decor[i][j].E);
-				XFreePixmap(dpy, decor[i][j].SW);
-				XFreePixmap(dpy, decor[i][j].S);
-				XFreePixmap(dpy, decor[i][j].SE);
-			}
+	for (i = 0; i < StyleLast; i++) {
+		for (j = 0; i < 2; i++) {
+			XFreePixmap(dpy, decor[i][j].NW);
+			XFreePixmap(dpy, decor[i][j].N);
+			XFreePixmap(dpy, decor[i][j].NE);
+			XFreePixmap(dpy, decor[i][j].W);
+			XFreePixmap(dpy, decor[i][j].C);
+			XFreePixmap(dpy, decor[i][j].E);
+			XFreePixmap(dpy, decor[i][j].SW);
+			XFreePixmap(dpy, decor[i][j].S);
+			XFreePixmap(dpy, decor[i][j].SE);
 		}
 	}
 }
@@ -3019,8 +2994,7 @@ main(void)
 	xerrorxlib = XSetErrorHandler(xerror);
 
 	/* initialize resources database */
-	config.decoration_path = NULL;
-	config.icon_path = NULL;
+	config.theme_path = NULL;
 	XrmInitialize();
 	if ((xrm = XResourceManagerString(dpy)) != NULL && (xdb = XrmGetStringDatabase(xrm)) != NULL)
 		getresources();
@@ -3029,7 +3003,6 @@ main(void)
 	initsignal();
 	initdummywindows();
 	initcursors();
-	initcolors();
 	initatoms();
 
 	/* Select SubstructureRedirect events on root window */
@@ -3048,10 +3021,6 @@ main(void)
 	monupdate();
 	selmon = mons;
 
-	/* scan windows */
-	scan();
-	mapfocuswin();
-
 	/* initialize ewmh hints */
 	ewmhinit();
 	ewmhsetnumberofdesktops();
@@ -3063,8 +3032,12 @@ main(void)
 	ewmhsetwmdesktop();
 	ewmhsetactivewindow(None);
 
-	/* setup decoration */
-	setdecoration();
+	/* setup theme */
+	settheme();
+
+	/* scan windows */
+	scan();
+	mapfocuswin();
 
 	/* run main event loop */
 	while (running && !XNextEvent(dpy, &ev))

@@ -13,7 +13,7 @@ enum {
 	Resizing
 };
 
-/* border style */
+/* decoration style */
 enum {
 	Focused,
 	Unfocused,
@@ -127,13 +127,6 @@ enum Octant {
 	E,
 };
 
-/* color pixels for borders */
-struct Colors {
-	unsigned long urgent;
-	unsigned long focused;
-	unsigned long unfocused;
-};
-
 /* client structure */
 struct Client {
 	struct Client *prev, *next;
@@ -143,6 +136,7 @@ struct Client {
 	struct Desktop *desk;
 	struct Row *row;
 	int isfixed, isuserplaced, isfullscreen;
+	int ignoreunmap;
 	int state;
 	int rh;                 /* row height */
 	int x, y, w, h, b;      /* current geometry */
@@ -196,19 +190,12 @@ struct Monitor {
 
 /* configuration set in config.h */
 struct Config {
-	const char *urgent_color;
-	const char *focused_color;
-	const char *unfocused_color;
+	const char *theme_path;
 
-	const char *decoration_path;
-	const char *icon_path;
-
-	int border_width;
-	int corner_width;
-	int pixmap_width;
 	int edge_width;
 	int ignoregaps;
 	int ignoreborders;
+	int mergeborders;
 
 	int gapinner;
 	int gapouter;
@@ -224,6 +211,7 @@ struct Decor {
 	Pixmap N;       /* north border */
 	Pixmap NE;
 	Pixmap W;
+	Pixmap C;
 	Pixmap E;
 	Pixmap SW;
 	Pixmap S;
