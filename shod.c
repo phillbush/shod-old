@@ -1294,6 +1294,8 @@ clientplace(struct Client *c, struct Desktop *desk)
 	int posi, posj;         /* position of the larger region */
 	int lw, lh;             /* larger region width and height */
 
+	/* TODO: rewrite this function, it doesn't consider the client size */
+
 	if (desk == NULL || c == NULL || c->state == Tiled || c->isfullscreen || c->state == Minimized)
 		return;
 
@@ -1306,10 +1308,10 @@ clientplace(struct Client *c, struct Desktop *desk)
 	if (c->isuserplaced)
 		return;
 
-	if (c->fx < mon->gx || c->fx > mon->gx + mon->gw)
-		c->fx = mon->gx;
-	if (c->fy < mon->gy || c->fy > mon->gy + mon->gh)
-		c->fy = mon->gy;
+	if (c->fx < mon->gx + border || c->fx > mon->gx + border + mon->gw)
+		c->fx = mon->gx + border;
+	if (c->fy < mon->gy + border || c->fy > mon->gy + border + mon->gh)
+		c->fy = mon->gy + border;
 
 	/* if this is the first window in the desktop, just center it */
 	for (tmp = clients; tmp; tmp = tmp->next) {
@@ -1319,8 +1321,8 @@ clientplace(struct Client *c, struct Desktop *desk)
 		}
 	}
 	if (center) {
-		c->fx = mon->gx + mon->gw / 2 - WIDTH(c) / 2;
-		c->fy = mon->gy + mon->gh / 2 - HEIGHT(c) / 2;
+		c->fx = mon->gx + border + mon->gw / 2 - WIDTH(c) / 2;
+		c->fy = mon->gy + border + mon->gh / 2 - HEIGHT(c) / 2;
 		return;
 	}
 
@@ -1385,33 +1387,33 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	/* calculate y */
 	if (posi == 0) {
-		c->fy = mon->gy;
+		c->fy = mon->gy + border;
 	} else if (posi >= DIV - 1) {
-		c->fy = mon->gy + mon->gh - HEIGHT(c);
+		c->fy = mon->gy + border + mon->gh - HEIGHT(c);
 	} else {
 		int n, d, maxy;
 
 		n = posi;
 		d = DIV;
-		maxy = mon->gy + mon->gh - HEIGHT(c);
+		maxy = mon->gy + border + mon->gh - HEIGHT(c);
 		c->fy = (mon->gy + mon->gh * n)/d - HEIGHT(c);
-		c->fy = max(mon->gy, c->fy);
+		c->fy = max(mon->gy + border, c->fy);
 		c->fy = min(c->fy, maxy);
 	}
 
 	/* calculate x */
 	if (posj == 0) {
-		c->fx = mon->gx;
+		c->fx = mon->gx + border;
 	} else if (posj >= DIV - 1) {
-		c->fx = mon->gx + mon->gw - WIDTH(c);
+		c->fx = mon->gx + border + mon->gw - WIDTH(c);
 	} else {
 		int n, d, maxx;
 
 		n = posj;
 		d = DIV;
-		maxx = mon->gx + mon->gw - WIDTH(c);
+		maxx = mon->gx + border + mon->gw - WIDTH(c);
 		c->fx = (mon->gx + mon->gw * n)/d - WIDTH(c);
-		c->fx = max(mon->gx, c->fx);
+		c->fx = max(mon->gx + border, c->fx);
 		c->fx = min(c->fx, maxx);
 	}
 }
