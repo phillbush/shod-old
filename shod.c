@@ -1600,6 +1600,7 @@ clienthide(struct Client *c, int hide)
 {
 	if (c == NULL)
 		return;
+	c->ishidden = hide;
 	if (hide) {
 		XUnmapWindow(dpy, c->frame);
 		icccmwmstate(c->win, IconicState);
@@ -2102,6 +2103,7 @@ clientadd(Window win, XWindowAttributes *wa, int ignoreunmap)
 	c->isfullscreen = 0;
 	c->isuserplaced = 0;
 	c->trans = NULL;
+	c->ishidden = 0;
 	c->isfixed = 0;
 	c->state = Normal;
 	c->layer = 0;
@@ -2914,10 +2916,14 @@ xeventunmapnotify(XEvent *e)
 static void
 cleanclients(void)
 {
-	while (clients)
+	while (clients) {
+		if (clients->ishidden)
+			clienthide(clients, 0);
 		clientdel(clients);
-	while (mons)
+	}
+	while (mons) {
 		mondel(mons);
+	}
 }
 
 /* destroy dummy windows */
