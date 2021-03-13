@@ -2728,7 +2728,7 @@ xeventfocusin(XEvent *e)
 {
 	(void)e;
 
-	clientfocus(focused);
+	clientfocus(getfocused(NULL));
 }
 
 /* key press event on focuswin */
