@@ -1440,36 +1440,68 @@ clientoctant(struct Client *c, int x, int y)
 	tan = (double)h/w;
 	if (tan == 0.0)
 		tan = 1.0;
-	if (x >= wb && y >= hb)
-		return SE;
-	if (x <= wa && y >= hb)
-		return SW;
-	if (x >= wb && y <= ha)
-		return NE;
-	if (x <= wa && y <= ha)
-		return NW;
-	if (y >= hm) {
-		h = y - hm;
-		w = h / tan;
-		if (x < wm - w) {
+	if (x < 0 || x > w || y < 0 || y > h) {
+		if (x <= wa) {
+			if (y <= ha) {
+				return NW;
+			}
+			if (y >= hb) {
+				return SW;
+			}
 			return W;
-		} if (x > wm + w) {
-			return E;
-		} else {
-			return S;
 		}
-	} else {
-		h = hm - y;
-		w = h / tan;
-		if (x < wm - w) {
-			return W;
-		} if (x > wm + w) {
+		if (x >= wb) {
+			if (y <= ha) {
+				return NE;
+			}
+			if (y >= hb) {
+				return SE;
+			}
 			return E;
-		} else {
+		}
+		if (y <= ha)
 			return N;
+		if (y >= hb)
+			return S;
+	}
+	if (c->state == Tiled) {
+		if (y >= hm) {
+			h = y - hm;
+			w = h / tan;
+			if (x < wm - w) {
+				return W;
+			} if (x > wm + w) {
+				return E;
+			} else {
+				return S;
+			}
+		} else {
+			h = hm - y;
+			w = h / tan;
+			if (x < wm - w) {
+				return W;
+			} if (x > wm + w) {
+				return E;
+			} else {
+				return N;
+			}
+		}
+		return N;
+	} else {
+		if (x >= wm && y >= hm) {
+			return SE;
+		}
+		if (x >= wm && y <= hm) {
+			return NE;
+		}
+		if (x <= wm && y >= hm) {
+			return SW;
+		}
+		if (x <= wm && y <= hm) {
+			return NW;
 		}
 	}
-	return N;
+	return SE;
 }
 
 /* check if new size is ok */
