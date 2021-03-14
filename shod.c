@@ -1921,11 +1921,11 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 			c->row->h += y;
 			c->row->next->h -= y;
 		}
-		if (o & W && c->row->col->prev && c->row->col->prev->w - y >= minsize) {
+		if (o & W && c->row->col->prev && c->row->col->prev->w - x >= minsize) {
 			c->row->col->w += x;
 			c->row->col->prev->w -= x;
 		}
-		if (o & E && c->row->col->next && c->row->col->next->w - y >= minsize) {
+		if (o & E && c->row->col->next && c->row->col->next->w - x >= minsize) {
 			c->row->col->w += x;
 			c->row->col->next->w -= x;
 		}
