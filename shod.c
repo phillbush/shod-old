@@ -1493,7 +1493,7 @@ clientoctant(struct Client *c, int x, int y)
 
 /* check if new size is ok */
 static int
-clientchecksize(struct Client *c, int x, int y)
+clientvalidsize(struct Client *c, int x, int y)
 {
 	int w, h;
 
@@ -1931,7 +1931,7 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 		}
 		desktile(c->desk);
 	} else {
-		if (!clientchecksize(c, x, y))
+		if (!clientvalidsize(c, x, y))
 			return;
 		origx = c->x;
 		origy = c->y;
