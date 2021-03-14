@@ -117,14 +117,14 @@ enum {
 
 /* window eight sections (aka octants) */
 enum Octant {
-	NW,
-	NE,
-	SW,
-	SE,
-	N,
-	S,
-	W,
-	E,
+	N  = (1 << 0),
+	S  = (1 << 1),
+	W  = (1 << 2),
+	E  = (1 << 3),
+	NW = (1 << 0) | (1 << 2),
+	NE = (1 << 0) | (1 << 3),
+	SW = (1 << 1) | (1 << 2),
+	SE = (1 << 1) | (1 << 3),
 };
 
 /* client structure */
@@ -207,13 +207,13 @@ struct Config {
 
 /* decoration sections pixmaps */
 struct Decor {
-	Pixmap NW;      /* north west corner */
-	Pixmap N;       /* north border */
-	Pixmap NE;
-	Pixmap W;
-	Pixmap C;
-	Pixmap E;
-	Pixmap SW;
-	Pixmap S;
-	Pixmap SE;
+	Pixmap nw;      /* north west corner */
+	Pixmap n;       /* north border */
+	Pixmap ne;
+	Pixmap w;
+	Pixmap c;
+	Pixmap e;
+	Pixmap sw;
+	Pixmap s;
+	Pixmap se;
 };

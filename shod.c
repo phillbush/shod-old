@@ -424,15 +424,15 @@ settheme(void)
 		x = 0;
 		for (j = 0; j < 2; j++) {
 			d = &decor[i][j];
-			d->NW = copypixmap(pix, x, y, corner, corner);
-			d->N  = copypixmap(pix, x + corner, y, 1, border);
-			d->NE = copypixmap(pix, x + size - corner, y, corner, corner);
-			d->W  = copypixmap(pix, x, y + corner, border, 1);
-			d->C  = copypixmap(pix, x + border, y + border, center, center);
-			d->E  = copypixmap(pix, x + size - border, y + corner, border, 1);
-			d->SW = copypixmap(pix, x, y + size - corner, corner, corner);
-			d->S  = copypixmap(pix, x + corner, y + size - border, 1, border);
-			d->SE = copypixmap(pix, x + size - corner, y + size - corner, corner, corner);
+			d->nw = copypixmap(pix, x, y, corner, corner);
+			d->n  = copypixmap(pix, x + corner, y, 1, border);
+			d->ne = copypixmap(pix, x + size - corner, y, corner, corner);
+			d->w  = copypixmap(pix, x, y + corner, border, 1);
+			d->c  = copypixmap(pix, x + border, y + border, center, center);
+			d->e  = copypixmap(pix, x + size - border, y + corner, border, 1);
+			d->sw = copypixmap(pix, x, y + size - corner, corner, corner);
+			d->s  = copypixmap(pix, x + corner, y + size - border, 1, border);
+			d->se = copypixmap(pix, x + size - corner, y + size - corner, corner, corner);
 			x += size;
 		}
 		y += size;
@@ -834,13 +834,13 @@ clientdecorate(struct Client *c, int style)
 
 	/* draw edges */
 	if (w > 0) {
-		val.tile = d->N;
+		val.tile = d->n;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
 		XFillRectangle(dpy, c->frame, gc, origin + corner, 0, w, c->b);
 
-		val.tile = d->S;
+		val.tile = d->s;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = c->h + c->b;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
@@ -848,13 +848,13 @@ clientdecorate(struct Client *c, int style)
 	}
 
 	if (h > 0) {
-		val.tile = d->W;
+		val.tile = d->w;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
 		XFillRectangle(dpy, c->frame, gc, 0, origin + corner, c->b, h);
 
-		val.tile = d->E;
+		val.tile = d->e;
 		val.ts_x_origin = c->w + c->b;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
@@ -862,12 +862,12 @@ clientdecorate(struct Client *c, int style)
 	}
 
 	/* draw corners */
-	XCopyArea(dpy, d->NW, c->frame, gc, 0, 0, corner, corner, origin, origin);
-	XCopyArea(dpy, d->NE, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, origin);
-	XCopyArea(dpy, d->SW, c->frame, gc, 0, 0, corner, corner, origin, c->h + c->b * 2 - corner - origin);
-	XCopyArea(dpy, d->SE, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, c->h + c->b * 2 - corner - origin);
+	XCopyArea(dpy, d->nw, c->frame, gc, 0, 0, corner, corner, origin, origin);
+	XCopyArea(dpy, d->ne, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, origin);
+	XCopyArea(dpy, d->sw, c->frame, gc, 0, 0, corner, corner, origin, c->h + c->b * 2 - corner - origin);
+	XCopyArea(dpy, d->se, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, c->h + c->b * 2 - corner - origin);
 
-	val.tile = d->C;
+	val.tile = d->c;
 	val.ts_x_origin = c->b;
 	val.ts_y_origin = c->b;
 	XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
@@ -1894,71 +1894,21 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 	if (c->state == Tiled) {
 		if (c->row->col->w + x < minsize || c->row->h + y < minsize)
 			return;
-		switch (o) {
-		case NW:
-			if (c->row->col->prev) {
-				c->row->col->w += x;
-				c->row->col->prev->w -= x;
-			}
-			if (c->row->prev) {
-				c->row->h += y;
-				c->row->prev->h -= y;
-			}
-			break;
-		case NE:
-			if (c->row->col->next) {
-				c->row->col->w += x;
-				c->row->col->next->w -= x;
-			}
-			if (c->row->prev) {
-				c->row->h += y;
-				c->row->prev->h -= y;
-			}
-			break;
-		case SW:
-			if (c->row->col->prev) {
-				c->row->col->w += x;
-				c->row->col->prev->w -= x;
-			}
-			if (c->row->next) {
-				c->row->h += y;
-				c->row->next->h -= y;
-			}
-			break;
-		case SE:
-			if (c->row->col->next) {
-				c->row->col->w += x;
-				c->row->col->next->w -= x;
-			}
-			if (c->row->next) {
-				c->row->h += y;
-				c->row->next->h -= y;
-			}
-			break;
-		case N:
-			if (c->row->prev) {
-				c->row->h += y;
-				c->row->prev->h -= y;
-			}
-			break;
-		case S:
-			if (c->row->next) {
-				c->row->h += y;
-				c->row->next->h -= y;
-			}
-			break;
-		case W:
-			if (c->row->col->prev) {
-				c->row->col->w += x;
-				c->row->col->prev->w -= x;
-			}
-			break;
-		case E:
-			if (c->row->col->next) {
-				c->row->col->w += x;
-				c->row->col->next->w -= x;
-			}
-			break;
+		if (o & N && c->row->prev && c->row->prev->h - y >= minsize) {
+			c->row->h += y;
+			c->row->prev->h -= y;
+		}
+		if (o & S && c->row->next && c->row->next->h - y >= minsize) {
+			c->row->h += y;
+			c->row->next->h -= y;
+		}
+		if (o & W && c->row->col->prev && c->row->col->prev->w - y >= minsize) {
+			c->row->col->w += x;
+			c->row->col->prev->w -= x;
+		}
+		if (o & E && c->row->col->next && c->row->col->next->w - y >= minsize) {
+			c->row->col->w += x;
+			c->row->col->next->w -= x;
 		}
 		desktile(c->desk);
 	} else {
@@ -1971,33 +1921,10 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 		c->fw += x;
 		c->fh += y;
 		clientapplysize(c);
-		switch (o) {
-		case NW:
-			c->fx -= c->w - origw;
+		if (o & N)
 			c->fy -= c->h - origh;
-			break;
-		case NE:
-			c->fy -= c->h - origh;
-			break;
-		case SW:
+		if (o & W)
 			c->fx -= c->w - origw;
-			break;
-		case SE:
-			/* nothing */
-			break;
-		case N:
-			c->fy -= c->h - origh;
-			break;
-		case S:
-			/* nothing */
-			break;
-		case W:
-			c->fx -= c->w - origw;
-			break;
-		case E:
-			/* nothing */
-			break;
-		}
 		c->x = c->fx;
 		c->y = c->fy;
 		clientmoveresize(c);
@@ -2956,15 +2883,15 @@ cleanpixmaps(void)
 
 	for (i = 0; i < StyleLast; i++) {
 		for (j = 0; i < 2; i++) {
-			XFreePixmap(dpy, decor[i][j].NW);
-			XFreePixmap(dpy, decor[i][j].N);
-			XFreePixmap(dpy, decor[i][j].NE);
-			XFreePixmap(dpy, decor[i][j].W);
-			XFreePixmap(dpy, decor[i][j].C);
-			XFreePixmap(dpy, decor[i][j].E);
-			XFreePixmap(dpy, decor[i][j].SW);
-			XFreePixmap(dpy, decor[i][j].S);
-			XFreePixmap(dpy, decor[i][j].SE);
+			XFreePixmap(dpy, decor[i][j].nw);
+			XFreePixmap(dpy, decor[i][j].n);
+			XFreePixmap(dpy, decor[i][j].ne);
+			XFreePixmap(dpy, decor[i][j].w);
+			XFreePixmap(dpy, decor[i][j].c);
+			XFreePixmap(dpy, decor[i][j].e);
+			XFreePixmap(dpy, decor[i][j].sw);
+			XFreePixmap(dpy, decor[i][j].s);
+			XFreePixmap(dpy, decor[i][j].se);
 		}
 	}
 }
