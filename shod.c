@@ -1423,48 +1423,35 @@ static enum Octant
 clientoctant(struct Client *c, int x, int y)
 {
 	double tan;
-	int wm, wa, wb;
-	int hm, ha, hb;
+	int wm, hm;
 	int w, h;
 
 	if (c == NULL || c->state == Minimized)
 		return SE;
 	w = c->w;
 	h = c->h;
+	if (x > 0 && x >= w - corner && y > 0 && y >= h - corner)
+		return SE;
+	if (x > 0 && x >= w - corner && y < h && y <= corner)
+		return NE;
+	if (x < w && x <= corner && y > 0 && y >= h - corner)
+		return SW;
+	if (x < w && x <= corner && y < h && y <= corner)
+		return NW;
+	if (x < 0)
+		return W;
+	if (y < 0)
+		return N;
+	if (x > w)
+		return E;
+	if (y > h)
+		return S;
 	wm = w / 2;
-	wa = min(wm, corner);
-	wb = w - wa;
 	hm = h / 2;
-	ha = min(hm, corner);
-	hb = h - ha;
-	tan = (double)h/w;
-	if (tan == 0.0)
-		tan = 1.0;
-	if (x < 0 || x > w || y < 0 || y > h) {
-		if (x <= wa) {
-			if (y <= ha) {
-				return NW;
-			}
-			if (y >= hb) {
-				return SW;
-			}
-			return W;
-		}
-		if (x >= wb) {
-			if (y <= ha) {
-				return NE;
-			}
-			if (y >= hb) {
-				return SE;
-			}
-			return E;
-		}
-		if (y <= ha)
-			return N;
-		if (y >= hb)
-			return S;
-	}
 	if (c->state == Tiled) {
+		tan = (double)h/w;
+		if (tan == 0.0)
+			tan = 1.0;
 		if (y >= hm) {
 			h = y - hm;
 			w = h / tan;
