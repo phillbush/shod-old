@@ -1442,9 +1442,9 @@ clientoctant(struct Client *c, int x, int y)
 		return W;
 	if (y < 0)
 		return N;
-	if (x > w)
+	if (x >= w)
 		return E;
-	if (y > h)
+	if (y >= h)
 		return S;
 	wm = w / 2;
 	hm = h / 2;
