@@ -1491,6 +1491,13 @@ clientoctant(struct Client *c, int x, int y)
 	return SE;
 }
 
+/* check whether position x,y (relative to frame, not the content) is in the border */
+static int
+clientisborder(struct Client *c, Window win, int x, int y)
+{
+	return (win == c->frame && (x < c->b || y < c->b || x >= c->b + c->w || y >= c->b + c->h));
+}
+
 /* check if new size is ok */
 static int
 clientvalidsize(struct Client *c, int x, int y)
@@ -2323,7 +2330,7 @@ xeventbuttonpress(XEvent *e)
 	}
 
 	/* check action performed by mouse */
-	isborder = ev->window == c->frame && ev->subwindow != c->win;
+	isborder = clientisborder(c, ev->window, ev->x, ev->y);
 	if (ev->state == config.modifier && ev->button == Button1)
 		motionaction = Moving;
 	else if (ev->state == config.modifier && ev->button == Button3)
@@ -2733,31 +2740,35 @@ xeventmotionnotify(XEvent *e)
 	if ((c = getclient(ev->window)) == NULL)
 		return;
 	if (motionaction == NoAction && ev->subwindow == c->curswin) {
-		switch (clientoctant(c, ev->x - c->b, ev->y - c->b)) {
-		case NW:
-			XDefineCursor(dpy, c->curswin, cursor[CursNW]);
-			break;
-		case NE:
-			XDefineCursor(dpy, c->curswin, cursor[CursNE]);
-			break;
-		case SW:
-			XDefineCursor(dpy, c->curswin, cursor[CursSW]);
-			break;
-		case SE:
-			XDefineCursor(dpy, c->curswin, cursor[CursSE]);
-			break;
-		case N:
-			XDefineCursor(dpy, c->curswin, cursor[CursN]);
-			break;
-		case S:
-			XDefineCursor(dpy, c->curswin, cursor[CursS]);
-			break;
-		case W:
-			XDefineCursor(dpy, c->curswin, cursor[CursW]);
-			break;
-		case E:
-			XDefineCursor(dpy, c->curswin, cursor[CursE]);
-			break;
+		if (clientisborder(c, ev->window, ev->x, ev->y)) {
+			switch (clientoctant(c, ev->x - c->b, ev->y - c->b)) {
+			case NW:
+				XDefineCursor(dpy, c->curswin, cursor[CursNW]);
+				break;
+			case NE:
+				XDefineCursor(dpy, c->curswin, cursor[CursNE]);
+				break;
+			case SW:
+				XDefineCursor(dpy, c->curswin, cursor[CursSW]);
+				break;
+			case SE:
+				XDefineCursor(dpy, c->curswin, cursor[CursSE]);
+				break;
+			case N:
+				XDefineCursor(dpy, c->curswin, cursor[CursN]);
+				break;
+			case S:
+				XDefineCursor(dpy, c->curswin, cursor[CursS]);
+				break;
+			case W:
+				XDefineCursor(dpy, c->curswin, cursor[CursW]);
+				break;
+			case E:
+				XDefineCursor(dpy, c->curswin, cursor[CursE]);
+				break;
+			}
+		} else {
+			XDefineCursor(dpy, c->curswin, cursor[CursNormal]);
 		}
 		return;
 	} else if (motionaction == Resizing) {
