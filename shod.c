@@ -874,21 +874,19 @@ clientdecorate(struct Client *c, int style)
 		XFillRectangle(dpy, c->frame, gc, c->w + c->b, origin + corner, c->b, h);
 	}
 
-	/* draw corners */
+	/* draw corners and edges */
 	XCopyArea(dpy, (octant == NW) ? dp->nw : d->nw, c->frame, gc, 0, 0, corner, corner, origin, origin);
-	XCopyArea(dpy, (octant == NE) ? dp->ne : d->ne, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, origin);
-	XCopyArea(dpy, (octant == SW) ? dp->sw : d->sw, c->frame, gc, 0, 0, corner, corner, origin, c->h + c->b * 2 - corner - origin);
-	XCopyArea(dpy, (octant == SE) ? dp->se : d->se, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, c->h + c->b * 2 - corner - origin);
-
-	/* draw edges */
-	XCopyArea(dpy, (octant == W) ? dp->wf : d->wf, c->frame, gc, 0, 0, border, edge, origin, origin + corner);
-	XCopyArea(dpy, (octant == W) ? dp->wl : d->wl, c->frame, gc, 0, 0, border, edge, origin, origin + corner + h - edge);
-	XCopyArea(dpy, (octant == E) ? dp->ef : d->ef, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner);
-	XCopyArea(dpy, (octant == E) ? dp->el : d->el, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner + h - edge);
 	XCopyArea(dpy, (octant == N) ? dp->nf : d->nf, c->frame, gc, 0, 0, edge, border, origin + corner, origin);
+	XCopyArea(dpy, (octant == W) ? dp->wf : d->wf, c->frame, gc, 0, 0, border, edge, origin, origin + corner);
+	XCopyArea(dpy, (octant == NE) ? dp->ne : d->ne, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, origin);
 	XCopyArea(dpy, (octant == N) ? dp->nl : d->nl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin);
+	XCopyArea(dpy, (octant == E) ? dp->ef : d->ef, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner);
+	XCopyArea(dpy, (octant == SW) ? dp->sw : d->sw, c->frame, gc, 0, 0, corner, corner, origin, c->h + c->b * 2 - corner - origin);
 	XCopyArea(dpy, (octant == S) ? dp->sf : d->sf, c->frame, gc, 0, 0, edge, border, origin + corner, origin + border + c->h);
+	XCopyArea(dpy, (octant == W) ? dp->wl : d->wl, c->frame, gc, 0, 0, border, edge, origin, origin + corner + h - edge);
+	XCopyArea(dpy, (octant == SE) ? dp->se : d->se, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, c->h + c->b * 2 - corner - origin);
 	XCopyArea(dpy, (octant == S) ? dp->sl : d->sl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin + border + c->h);
+	XCopyArea(dpy, (octant == E) ? dp->el : d->el, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner + h - edge);
 
 	val.tile = centerpix[style];
 	val.ts_x_origin = c->b;
