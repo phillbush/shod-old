@@ -26,8 +26,10 @@ static int (*xerrorxlib)(Display *, XErrorEvent *);
 static Atom atoms[AtomLast];
 
 /* visual */
-static struct Decor decor[StyleLast][2];
+static struct Decor decor[StyleLast][3];
 static Cursor cursor[CursLast];
+static Pixmap centerpix[StyleLast];
+static int edge;        /* size of the decoration edge */
 static int corner;      /* size of the decoration corner */
 static int border;      /* size of the decoration border */
 static int center;      /* size of the decoration center */
@@ -406,14 +408,15 @@ settheme(void)
 		errx(1, "could not load theme");
 	size = 0;
 	if (xa.valuemask & (XpmSize | XpmHotspot) &&
-	    xa.width % 2 == 0 && xa.height % 3 == 0 && xa.height / 3 == xa.width / 2 &&
-	    (xa.width / 2) % 2 == 1 && (xa.height / 3) % 2 == 1 &&
-	    xa.x_hotspot < ((xa.width / 2) - 1) / 2) {
-		size = xa.width / 2;
+	    xa.width % 3 == 0 && xa.height % 3 == 0 && xa.height == xa.width &&
+	    (xa.width / 3) % 2 == 1 && (xa.height / 3) % 2 == 1 &&
+	    xa.x_hotspot < ((xa.width / 3) - 1) / 2) {
+		size = xa.width / 3;
 		border = xa.x_hotspot;
-		corner = (size - 1) / 2;
+		corner = xa.y_hotspot;
+		edge = (size - 1) / 2 - corner;
 		center = size - border * 2;
-		minsize = corner - border;
+		minsize = (size - 1) / 2 - border;
 	}
 	if (size == 0) {
 		XFreePixmap(dpy, pix);
@@ -422,19 +425,27 @@ settheme(void)
 	y = 0;
 	for (i = 0; i < StyleLast; i++) {
 		x = 0;
-		for (j = 0; j < 2; j++) {
+		for (j = 0; j < 3; j++) {
 			d = &decor[i][j];
 			d->nw = copypixmap(pix, x, y, corner, corner);
-			d->n  = copypixmap(pix, x + corner, y, 1, border);
+			d->nf = copypixmap(pix, x + corner, y, edge, border);
+			d->n  = copypixmap(pix, x + corner + edge, y, 1, border);
+			d->nl = copypixmap(pix, x + corner + edge + 1, y, edge, border);
 			d->ne = copypixmap(pix, x + size - corner, y, corner, corner);
-			d->w  = copypixmap(pix, x, y + corner, border, 1);
-			d->c  = copypixmap(pix, x + border, y + border, center, center);
-			d->e  = copypixmap(pix, x + size - border, y + corner, border, 1);
+			d->wf = copypixmap(pix, x, y + corner, border, edge);
+			d->w  = copypixmap(pix, x, y + corner + edge, border, 1);
+			d->wl = copypixmap(pix, x, y + corner + edge + 1, border, edge);
+			d->ef = copypixmap(pix, x + size - border, y + corner, border, edge);
+			d->e  = copypixmap(pix, x + size - border, y + corner + edge, border, 1);
+			d->el = copypixmap(pix, x + size - border, y + corner + edge + 1, border, edge);
 			d->sw = copypixmap(pix, x, y + size - corner, corner, corner);
-			d->s  = copypixmap(pix, x + corner, y + size - border, 1, border);
+			d->sf = copypixmap(pix, x + corner, y + size - border, edge, border);
+			d->s  = copypixmap(pix, x + corner + edge, y + size - border, 1, border);
+			d->sl = copypixmap(pix, x + corner + edge + 1, y + size - border, edge, border);
 			d->se = copypixmap(pix, x + size - corner, y + size - corner, corner, corner);
 			x += size;
 		}
+		centerpix[i] = copypixmap(pix, size * 2 + border, y + border, center, center);
 		y += size;
 	}
 	XFreePixmap(dpy, pix);
@@ -815,7 +826,8 @@ static void
 clientdecorate(struct Client *c, int style)
 {
 	XGCValues val;
-	struct Decor *d;
+	struct Decor *d;        /* unpressed decoration */
+	struct Decor *dp;       /* pressed decoration */
 	int origin;
 	int w, h;
 	int j;
@@ -824,23 +836,24 @@ clientdecorate(struct Client *c, int style)
 		return;
 	j = 0;
 	if (c->isfixed || ((c->state & Tiled) && config.mergeborders))
-		j = 1;
+		j = 2;
 	d = &decor[style][j];
+	dp = (motionaction == Resizing && j == 0) ? &decor[style][1] : d;
 	origin = c->b - border;
 	w = c->w + c->b * 2 - corner * 2 - origin * 2;
 	h = c->h + c->b * 2 - corner * 2 - origin * 2;
 	val.fill_style = FillTiled;
 	XChangeGC(dpy, gc, GCFillStyle, &val);
 
-	/* draw edges */
+	/* draw borders */
 	if (w > 0) {
-		val.tile = d->n;
+		val.tile = (octant == N) ? dp->n : d->n;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
 		XFillRectangle(dpy, c->frame, gc, origin + corner, 0, w, c->b);
 
-		val.tile = d->s;
+		val.tile = (octant == S) ? dp->s : d->s;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = c->h + c->b;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
@@ -848,13 +861,13 @@ clientdecorate(struct Client *c, int style)
 	}
 
 	if (h > 0) {
-		val.tile = d->w;
+		val.tile = (octant == W) ? dp->w : d->w;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
 		XFillRectangle(dpy, c->frame, gc, 0, origin + corner, c->b, h);
 
-		val.tile = d->e;
+		val.tile = (octant == E) ? dp->e : d->e;
 		val.ts_x_origin = c->w + c->b;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
@@ -862,12 +875,22 @@ clientdecorate(struct Client *c, int style)
 	}
 
 	/* draw corners */
-	XCopyArea(dpy, d->nw, c->frame, gc, 0, 0, corner, corner, origin, origin);
-	XCopyArea(dpy, d->ne, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, origin);
-	XCopyArea(dpy, d->sw, c->frame, gc, 0, 0, corner, corner, origin, c->h + c->b * 2 - corner - origin);
-	XCopyArea(dpy, d->se, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, c->h + c->b * 2 - corner - origin);
+	XCopyArea(dpy, (octant == NW) ? dp->nw : d->nw, c->frame, gc, 0, 0, corner, corner, origin, origin);
+	XCopyArea(dpy, (octant == NE) ? dp->ne : d->ne, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, origin);
+	XCopyArea(dpy, (octant == SW) ? dp->sw : d->sw, c->frame, gc, 0, 0, corner, corner, origin, c->h + c->b * 2 - corner - origin);
+	XCopyArea(dpy, (octant == SE) ? dp->se : d->se, c->frame, gc, 0, 0, corner, corner, c->w + c->b * 2 - corner - origin, c->h + c->b * 2 - corner - origin);
 
-	val.tile = d->c;
+	/* draw edges */
+	XCopyArea(dpy, (octant == W) ? dp->wf : d->wf, c->frame, gc, 0, 0, border, edge, origin, origin + corner);
+	XCopyArea(dpy, (octant == W) ? dp->wl : d->wl, c->frame, gc, 0, 0, border, edge, origin, origin + corner + h - edge);
+	XCopyArea(dpy, (octant == E) ? dp->ef : d->ef, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner);
+	XCopyArea(dpy, (octant == E) ? dp->el : d->el, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner + h - edge);
+	XCopyArea(dpy, (octant == N) ? dp->nf : d->nf, c->frame, gc, 0, 0, edge, border, origin + corner, origin);
+	XCopyArea(dpy, (octant == N) ? dp->nl : d->nl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin);
+	XCopyArea(dpy, (octant == S) ? dp->sf : d->sf, c->frame, gc, 0, 0, edge, border, origin + corner, origin + border + c->h);
+	XCopyArea(dpy, (octant == S) ? dp->sl : d->sl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin + border + c->h);
+
+	val.tile = centerpix[style];
 	val.ts_x_origin = c->b;
 	val.ts_y_origin = c->b;
 	XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
@@ -2381,6 +2404,7 @@ xeventbuttonpress(XEvent *e)
 		             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
 		motionx = ev->x_root;
 		motiony = ev->y_root;
+		clientdecorate(c, (focused == c ? Focused : Unfocused));
 	}
 
 	/* focus client */
@@ -2419,11 +2443,16 @@ done:
 static void
 xeventbuttonrelease(XEvent *e)
 {
-	(void)e;
+	XButtonReleasedEvent *ev = &e->xbutton;
+	struct Client *c;
+
 	XUngrabPointer(dpy, CurrentTime);
 	motionaction = NoAction;
 	motionx = -1;
 	motiony = -1;
+	if ((c = getclient(ev->window)) != NULL) {
+		clientdecorate(c, (focused == c ? Focused : Unfocused));
+	}
 }
 
 /* handle client message event */
@@ -2914,15 +2943,23 @@ cleanpixmaps(void)
 	for (i = 0; i < StyleLast; i++) {
 		for (j = 0; i < 2; i++) {
 			XFreePixmap(dpy, decor[i][j].nw);
+			XFreePixmap(dpy, decor[i][j].nf);
 			XFreePixmap(dpy, decor[i][j].n);
+			XFreePixmap(dpy, decor[i][j].nl);
 			XFreePixmap(dpy, decor[i][j].ne);
+			XFreePixmap(dpy, decor[i][j].wf);
 			XFreePixmap(dpy, decor[i][j].w);
-			XFreePixmap(dpy, decor[i][j].c);
+			XFreePixmap(dpy, decor[i][j].wl);
+			XFreePixmap(dpy, decor[i][j].ef);
 			XFreePixmap(dpy, decor[i][j].e);
+			XFreePixmap(dpy, decor[i][j].el);
 			XFreePixmap(dpy, decor[i][j].sw);
+			XFreePixmap(dpy, decor[i][j].sf);
 			XFreePixmap(dpy, decor[i][j].s);
+			XFreePixmap(dpy, decor[i][j].sl);
 			XFreePixmap(dpy, decor[i][j].se);
 		}
+		XFreePixmap(dpy, centerpix[i]);
 	}
 }
 

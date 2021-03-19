@@ -208,12 +208,19 @@ struct Config {
 /* decoration sections pixmaps */
 struct Decor {
 	Pixmap nw;      /* north west corner */
+	Pixmap nf;      /* north first edge */
 	Pixmap n;       /* north border */
+	Pixmap nl;      /* north last edge */
 	Pixmap ne;
+	Pixmap wf;
 	Pixmap w;
-	Pixmap c;
+	Pixmap wl;
+	Pixmap ef;
 	Pixmap e;
+	Pixmap el;
 	Pixmap sw;
+	Pixmap sf;
 	Pixmap s;
+	Pixmap sl;
 	Pixmap se;
 };
