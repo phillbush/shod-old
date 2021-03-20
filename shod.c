@@ -39,6 +39,7 @@ static int minsize;     /* minimum size of a window */
 static int motionx = -1, motiony = -1;
 static int motionaction = NoAction;
 static enum Octant octant = SE;
+static struct Client *target = NULL;
 
 /* dummy windows */
 static Window wmcheckwin;
@@ -838,7 +839,7 @@ clientdecorate(struct Client *c, int style)
 	if (c->isfixed || ((c->state & Tiled) && config.mergeborders))
 		j = 2;
 	d = &decor[style][j];
-	dp = (motionaction == Resizing && j == 0) ? &decor[style][1] : d;
+	dp = (c == target && motionaction == Resizing && j == 0) ? &decor[style][1] : d;
 	origin = c->b - border;
 	w = c->w + c->b * 2 - corner * 2 - origin * 2;
 	h = c->h + c->b * 2 - corner * 2 - origin * 2;
@@ -2365,6 +2366,7 @@ xeventbuttonpress(XEvent *e)
 
 	/* user is dragging window while clicking modifier or dragging window's border */
 	if (motionaction != NoAction) {
+		target = c;
 		octant = clientoctant(c, ev->x_root - c->x, ev->y_root - c->y);
 		if (motionaction == Moving) {
 			curs = cursor[CursMove];
@@ -2448,6 +2450,7 @@ xeventbuttonrelease(XEvent *e)
 	motionaction = NoAction;
 	motionx = -1;
 	motiony = -1;
+	target = NULL;
 	if ((c = getclient(ev->window)) != NULL) {
 		clientdecorate(c, (focused == c ? Focused : Unfocused));
 	}
