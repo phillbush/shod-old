@@ -1447,18 +1447,20 @@ clientoctant(struct Client *c, int x, int y)
 	double tan;
 	int wm, hm;
 	int w, h;
+	int b;
 
 	if (c == NULL || c->state == Minimized)
 		return SE;
 	w = c->w;
 	h = c->h;
-	if (x > 0 && x >= w - corner && y > 0 && y >= h - corner)
+	b = corner - c->b;
+	if (x > 0 && x >= w - b && y > 0 && y >= h - b)
 		return SE;
-	if (x > 0 && x >= w - corner && y < h && y <= corner)
+	if (x > 0 && x >= w - b && y < h && y <= b)
 		return NE;
-	if (x < w && x <= corner && y > 0 && y >= h - corner)
+	if (x < w && x <= b && y > 0 && y >= h - b)
 		return SW;
-	if (x < w && x <= corner && y < h && y <= corner)
+	if (x < w && x <= b && y < h && y <= b)
 		return NW;
 	if (x < 0)
 		return W;
