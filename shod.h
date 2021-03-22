@@ -1,3 +1,5 @@
+#define DOUBLECLICK  250    /* time in miliseconds of a double click */
+
 /* window states */
 enum {
 	Normal,         /* floating non-sticky window */
@@ -9,6 +11,7 @@ enum {
 /* motion action */
 enum {
 	NoAction,
+	Button,
 	Moving,
 	Resizing
 };
@@ -115,6 +118,15 @@ enum {
 	CursLast
 };
 
+/* frame region */
+enum {
+	FrameNone,
+	FrameButtonLeft,
+	FrameButtonRight,
+	FrameTitle,
+	FrameBorder,
+};
+
 /* window eight sections (aka octants) */
 enum Octant {
 	N  = (1 << 0),
@@ -127,6 +139,15 @@ enum Octant {
 	SE = (1 << 1) | (1 << 3),
 };
 
+/* tab structure */
+struct Tab {
+	struct Tab *prev, *next;
+	struct Client *c;
+	Window title;
+	Window win;
+	int w;
+};
+
 /* client structure */
 struct Client {
 	struct Client *prev, *next;
@@ -135,11 +156,15 @@ struct Client {
 	struct Monitor *mon;
 	struct Desktop *desk;
 	struct Row *row;
-	int ishidden, isfixed, isuserplaced, isfullscreen;
+	struct Tab *tabs;
+	struct Tab *seltab;
+	int ntabs;
+	int ishidden, isfixed, isuserplaced, isshaded, isfullscreen;
 	int ignoreunmap;
 	int state;
+	int saveh;              /* original height, used for shading */
 	int rh;                 /* row height */
-	int x, y, w, h, b;      /* current geometry */
+	int x, y, w, h, b, t;   /* current geometry */
 	int fx, fy, fw, fh;     /* floating geometry */
 	int tx, ty, tw, th;     /* tiled geometry */
 	int layer;              /* stacking order */
@@ -151,7 +176,6 @@ struct Client {
 	float mina, maxa;       /* TODO */
 	Window curswin;
 	Window frame;
-	Window win;
 };
 
 /* row in a column of tiled windows */
@@ -194,8 +218,10 @@ struct Config {
 
 	int edge_width;
 	int ignoregaps;
+	int ignoretitle;
 	int ignoreborders;
 	int mergeborders;
+	int hidetitle;
 
 	int gapinner;
 	int gapouter;
