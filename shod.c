@@ -33,6 +33,7 @@ static int edge;        /* size of the decoration edge */
 static int corner;      /* size of the decoration corner */
 static int border;      /* size of the decoration border */
 static int center;      /* size of the decoration center */
+static int button;      /* size of the title bar and the buttons */
 static int minsize;     /* minimum size of a window */
 
 /* mouse manipulation variables */
@@ -414,7 +415,8 @@ settheme(void)
 	    xa.x_hotspot < ((xa.width / 3) - 1) / 2) {
 		size = xa.width / 3;
 		border = xa.x_hotspot;
-		corner = xa.y_hotspot;
+		button = xa.y_hotspot;
+		corner = border + button;
 		edge = (size - 1) / 2 - corner;
 		center = size - border * 2;
 		minsize = (size - 1) / 2 - border;
@@ -428,6 +430,11 @@ settheme(void)
 		x = 0;
 		for (j = 0; j < 3; j++) {
 			d = &decor[i][j];
+			d->bl = copypixmap(pix, x + border, y + border, button, button);
+			d->tl = copypixmap(pix, x + border + button, y + border, edge, button);
+			d->t  = copypixmap(pix, x + border + button + edge, y + border, 1, button);
+			d->tr = copypixmap(pix, x + border + button + edge + 1, y + border, edge, button);
+			d->br = copypixmap(pix, x + border + button + 2 * edge + 1, y + border, button, button);
 			d->nw = copypixmap(pix, x, y, corner, corner);
 			d->nf = copypixmap(pix, x + corner, y, edge, border);
 			d->n  = copypixmap(pix, x + corner + edge, y, 1, border);
@@ -2945,6 +2952,11 @@ cleanpixmaps(void)
 
 	for (i = 0; i < StyleLast; i++) {
 		for (j = 0; i < 2; i++) {
+			XFreePixmap(dpy, decor[i][j].bl);
+			XFreePixmap(dpy, decor[i][j].tl);
+			XFreePixmap(dpy, decor[i][j].t);
+			XFreePixmap(dpy, decor[i][j].tr);
+			XFreePixmap(dpy, decor[i][j].br);
 			XFreePixmap(dpy, decor[i][j].nw);
 			XFreePixmap(dpy, decor[i][j].nf);
 			XFreePixmap(dpy, decor[i][j].n);

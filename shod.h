@@ -207,6 +207,11 @@ struct Config {
 
 /* decoration sections pixmaps */
 struct Decor {
+	Pixmap bl;      /* button left */
+	Pixmap tl;      /* title left end */
+	Pixmap t;       /* title middle */
+	Pixmap tr;      /* title right end */
+	Pixmap br;      /* button right */
 	Pixmap nw;      /* north west corner */
 	Pixmap nf;      /* north first edge */
 	Pixmap n;       /* north border */
