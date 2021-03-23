@@ -1018,7 +1018,7 @@ clientmoveresize(struct Client *c)
 static void
 clientprintgeometry(struct Client *c)
 {
-	(void)printf("%dx%d%+d%+d\n", c->w, c->h, c->x, c->y);
+	(void)printf("%dx%d%+d%+d\n", c->w + 2 * c->b, c->h + 2 * c->b + c->t, c->x - c->b, c->y - c->b - c->t);
 	(void)fflush(stdout);
 }
 
