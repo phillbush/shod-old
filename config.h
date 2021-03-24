@@ -1,4 +1,7 @@
 struct Config config = {
+	/* font, in the old X Logical Font Description style */
+	.font          = "-misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1",
+
 	/* gaps */
 	.gapinner      = 0,     /* gap between windows */
 	.gapouter      = 0,     /* gap between window and screen edges */

@@ -1,4 +1,5 @@
-#define DOUBLECLICK  250    /* time in miliseconds of a double click */
+#define DOUBLECLICK  250        /* time in miliseconds of a double click */
+#define NAMEMAXLEN   128        /* maximum length of window's name */
 
 /* window states */
 enum {
@@ -145,6 +146,7 @@ struct Tab {
 	struct Client *c;
 	Window title;
 	Window win;
+	char *name;
 	int w;
 };
 
@@ -215,6 +217,7 @@ struct Monitor {
 /* configuration set in config.h */
 struct Config {
 	const char *theme_path;
+	const char *font;
 
 	int edge_width;
 	int ignoregaps;
@@ -254,4 +257,5 @@ struct Decor {
 	Pixmap s;
 	Pixmap sl;
 	Pixmap se;
+	unsigned long color;
 };

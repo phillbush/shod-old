@@ -1,4 +1,5 @@
 #include <err.h>
+#include <locale.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +28,7 @@ static Atom atoms[AtomLast];
 
 /* visual */
 static struct Decor decor[StyleLast][3];
+static XFontSet fontset;
 static Cursor cursor[CursLast];
 static Pixmap centerpix[StyleLast];
 static int edge;        /* size of the decoration edge */
@@ -55,6 +57,11 @@ static struct Monitor *selmon = NULL;
 static struct Monitor *mons = NULL;
 static unsigned long deskcount = 0;
 static int showingdesk = 0;
+static XSetWindowAttributes clientswa = {
+	.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
+		    | SubstructureRedirectMask | ButtonPressMask | FocusChangeMask
+		    | PointerMotionMask,
+};
 
 /* other variables */
 volatile sig_atomic_t running = 1;
@@ -84,6 +91,17 @@ emalloc(size_t size)
 
 	if ((p = malloc(size)) == NULL)
 		err(1, "malloc");
+	return p;
+}
+
+/* call strndup checking for error */
+static char *
+estrndup(const char *s, size_t maxlen)
+{
+	char *p;
+
+	if ((p = strndup(s, maxlen)) == NULL)
+		err(1, "strndup");
 	return p;
 }
 
@@ -136,6 +154,32 @@ getcardinalprop(Window win, Atom atom, unsigned long size)
 	return values;
 }
 
+/* get window name into string name of given size */
+char *
+getwinname(Window win)
+{
+	XTextProperty tprop;
+	char **list = NULL;
+	char *name = NULL;
+	unsigned char *p = NULL;
+	unsigned long size, dl;
+	int di;
+	Atom da;
+
+	if (XGetWindowProperty(dpy, win, atoms[NetWMName], 0L, 8L, False, atoms[Utf8String],
+	                       &da, &di, &size, &dl, &p) == Success && p) {
+		name = estrndup((char *)p, NAMEMAXLEN);
+		XFree(p);
+	} else if (XGetWMName(dpy, win, &tprop) &&
+		   XmbTextPropertyToTextList(dpy, &tprop, &list, &di) == Success &&
+		   di > 0 && list && *list) {
+		name = estrndup(*list, NAMEMAXLEN);
+		XFreeStringList(list);
+		XFree(tprop.value);
+	}
+	return name;
+}
+
 /* get configuration from X resources */
 static void
 getresources(void)
@@ -173,14 +217,14 @@ getresources(void)
 static long
 getstate(Window w)
 {
-	int format;
 	long result = -1;
 	unsigned char *p = NULL;
 	unsigned long n, extra;
-	Atom real;
+	Atom da;
+	int di;
 
 	if (XGetWindowProperty(dpy, w, atoms[WMState], 0L, 2L, False, atoms[WMState],
-		&real, &format, &n, &extra, (unsigned char **)&p) != Success)
+		&da, &di, &n, &extra, (unsigned char **)&p) != Success)
 		return -1;
 	if (n != 0)
 		result = *p;
@@ -302,7 +346,19 @@ initdummywindows(void)
 		layerwin[i] = XCreateSimpleWindow(dpy, root, 0, 0, 1, 1, 0, 0, 0);
 }
 
-/* Initialize cursors */
+/* initialize font set */
+static void
+initfontset(void)
+{
+	char **dp, *ds;
+	int di;
+
+	if ((fontset = XCreateFontSet(dpy, config.font, &dp, &di, &ds)) == NULL)
+		errx(1, "XCreateFontSet: could not create fontset");
+	XFreeStringList(dp);
+}
+
+/* initialize cursors */
 static void
 initcursors(void)
 {
@@ -401,7 +457,9 @@ copypixmap(Pixmap src, int sx, int sy, int w, int h)
 static void
 settheme(void)
 {
+	XGCValues val;
 	XpmAttributes xa;
+	XImage *img;
 	Pixmap pix;
 	struct Decor *d;
 	unsigned int size;       /* size of each square in the .xpm file */
@@ -410,11 +468,16 @@ settheme(void)
 	int status;
 
 	if (config.theme_path)
-		status = XpmReadFileToPixmap(dpy, root, config.theme_path, &pix, NULL, &xa);
+		status = XpmReadFileToImage(dpy, config.theme_path, &img, NULL, &xa);
 	else
-		status = XpmCreatePixmapFromData(dpy, root, theme, &pix, NULL, &xa);
+		status = XpmCreateImageFromData(dpy, theme, &img, NULL, &xa);
 	if (status != XpmSuccess)
 		errx(1, "could not load theme");
+	pix = XCreatePixmap(dpy, root, img->width, img->height, img->depth);
+	val.foreground = 1;
+	val.background = 0;
+	XChangeGC(dpy, gc, GCForeground | GCBackground, &val);
+	XPutImage(dpy, pix, gc, img, 0, 0, 0, 0, img->width, img->height);
 	size = 0;
 	if (xa.valuemask & (XpmSize | XpmHotspot) &&
 	    xa.width % 3 == 0 && xa.height % 3 == 0 && xa.height == xa.width &&
@@ -458,11 +521,13 @@ settheme(void)
 			d->s  = copypixmap(pix, x + corner + edge, y + size - border, 1, border);
 			d->sl = copypixmap(pix, x + corner + edge + 1, y + size - border, edge, border);
 			d->se = copypixmap(pix, x + size - corner, y + size - corner, corner, corner);
+			d->color = XGetPixel(img, x + size / 2, y + corner + edge);
 			x += size;
 		}
 		centerpix[i] = copypixmap(pix, size * 2 + border, y + border, center, center);
 		y += size;
 	}
+	XDestroyImage(img);
 	XFreePixmap(dpy, pix);
 }
 
@@ -762,6 +827,20 @@ getclient(Window win)
 	return NULL;
 }
 
+/* get tab given a window */
+static struct Tab *
+gettab(Window win)
+{
+	struct Client *c;
+	struct Tab *t;
+
+	for (c = clients; c; c = c->next)
+		for (t = c->tabs; t; t = t->next)
+			if (t->win == win)
+				return t;
+	return NULL;
+}
+
 /* get monitor given coordinates */
 static struct Monitor *
 getmon(int x, int y)
@@ -825,6 +904,56 @@ getfullscreen(struct Monitor *mon, struct Desktop *desk)
 	return NULL;
 }
 
+/* add tab into client */
+static struct Tab *
+tabadd(struct Client *c, Window win)
+{
+	struct Tab *t;
+
+	t = emalloc(sizeof *t);
+	t->prev = NULL;
+	t->next = NULL;
+	t->name = NULL;
+	t->c = c;
+	t->win = win;
+	t->w = c->w;
+	t->title = XCreateWindow(dpy, c->frame, c->b, c->b, c->w, button, 0,
+	                         CopyFromParent, CopyFromParent, CopyFromParent,
+	                         CWEventMask, &clientswa);
+	return t;
+}
+
+/* delete tab from client */
+static void
+tabdel(struct Tab *t)
+{
+	icccmwmstate(t->win, WithdrawnState);
+	XReparentWindow(dpy, t->win, root, t->c->x, t->c->y);
+	XDestroyWindow(dpy, t->title);
+	if (t->next)
+		t->next->prev = t->prev;
+	if (t->prev)
+		t->prev->next = t->next;
+	else
+		t->c->tabs = t->next;
+	free(t->name);
+	free(t);
+}
+
+/* update tab title */
+static void
+tabupdatetitle(struct Tab *t)
+{
+	t->name = getwinname(t->win);
+}
+
+/* get decoration style (and state) of client */
+static int
+clientgetstate(struct Client *c)
+{
+	return (focused == c ? Focused : Unfocused);
+}
+
 /* check if client is visible */
 static int
 clientisvisible(struct Client *c)
@@ -866,13 +995,15 @@ static void
 clientdecorate(struct Client *c, int style)
 {
 	XGCValues val;
+	XRectangle box, dr;
 	struct Tab *t;
 	struct Decor *d;        /* unpressed decoration */
 	struct Decor *dp;       /* pressed decoration */
+	size_t len;
 	int origin;
-	int w, h;
+	int x, y, w, h;
 	int fullw, fullh;
-	int j;
+	int i, j;
 	int tabw;
 
 	if (c == NULL)
@@ -941,10 +1072,10 @@ clientdecorate(struct Client *c, int style)
 	if (c->t > 0) {
 		d = &decor[style][0];
 		dp = (c == target && motionaction == Button) ? &decor[style][1] : d;
-		tabw = max(1, (c->w - 2 * button) / c->ntabs);
 		XCopyArea(dpy, pressed == FrameButtonLeft ? dp->bl : d->bl, c->frame, gc, 0, 0, button, button, c->b, c->b);
 		XCopyArea(dpy, pressed == FrameButtonRight ? dp->br : d->br, c->frame, gc, 0, 0, button, button, fullw - button - c->b, c->b);
-		for (t = c->tabs; t; t = t->next) {
+		for (i = 0, t = c->tabs; t; t = t->next, i++) {
+			tabw = max(1, ((i + 1) * (c->w - 2 * button) / c->ntabs) - (i * (c->w - 2 * button) / c->ntabs));
 			dp = (c == target && motionaction == Moving && pressed == FrameTitle) ? &decor[style][1] : &decor[style][0];
 			XCopyArea(dpy, dp->tl, t->title, gc, 0, 0, edge, button, 0, 0);
 			val.tile = dp->t;
@@ -953,6 +1084,16 @@ clientdecorate(struct Client *c, int style)
 			XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
 			XFillRectangle(dpy, t->title, gc, edge, 0, tabw - edge, button);
 			XCopyArea(dpy, dp->tr, t->title, gc, 0, 0, edge, button, tabw - edge, 0);
+			if (t->name != NULL) {
+				len = strlen(t->name);
+				val.fill_style = FillSolid;
+				val.foreground = dp->color;
+				XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
+				XmbTextExtents(fontset, t->name, len, &dr, &box);
+				x = (tabw - box.width) / 2 - box.x;
+				y = (button - box.height) / 2 - box.y;
+				XmbDrawString(dpy, t->title, fontset, gc, x, y, t->name, len);
+			}
 		}
 	}
 
@@ -1003,7 +1144,7 @@ clientmoveresize(struct Client *c)
 	XMoveResizeWindow(dpy, c->frame, c->x - c->b, c->y - c->b - c->t, c->w + c->b * 2, c->h + c->b * 2 + c->t);
 	XMoveResizeWindow(dpy, c->curswin, 0, 0, c->w + c->b * 2, c->h + c->b * 2 + c->t);
 	for (i = 0, t = c->tabs; t; t = t->next, i++) {
-		tabw = max(1, (i + 1) * (c->w - 2 * button) / c->ntabs);
+		tabw = max(1, ((i + 1) * (c->w - 2 * button) / c->ntabs) - (i * (c->w - 2 * button) / c->ntabs));
 		if (c->t > 0) {
 			XMapWindow(dpy, t->title);
 			XMoveResizeWindow(dpy, t->title, c->b + button, c->b, max(1, c->w - button * 2), c->t);
@@ -2243,11 +2384,6 @@ clientincrmove(struct Client *c, int x, int y)
 static void
 clientadd(Window win, XWindowAttributes *wa, int ignoreunmap)
 {
-	static XSetWindowAttributes swa = {
-		.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
-		            | SubstructureRedirectMask | ButtonPressMask | FocusChangeMask
-		            | PointerMotionMask,
-	};
 	struct Client *c, *f, *t;
 	struct Tab *tab;
 	Window trans;
@@ -2260,7 +2396,6 @@ clientadd(Window win, XWindowAttributes *wa, int ignoreunmap)
 		XFree(values);
 	}
 	c = emalloc(sizeof *c);
-	tab = emalloc(sizeof *tab);
 	c->fprev = c->fnext = NULL;
 	c->mon = NULL;
 	c->desk = NULL;
@@ -2282,28 +2417,22 @@ clientadd(Window win, XWindowAttributes *wa, int ignoreunmap)
 	c->b = border;
 	c->t = (config.hidetitle ? 0 : button);
 	c->prev = NULL;
-	c->tabs = tab;
+	c->frame = XCreateWindow(dpy, root, c->x - c->b, c->y - c->b,
+	                         c->w + c->b * 2, c->h + c->b * 2 + c->t, 0,
+	                         CopyFromParent, CopyFromParent, CopyFromParent,
+	                         CWEventMask, &clientswa);
+	c->curswin = XCreateWindow(dpy, c->frame, 0, 0, c->w + c->b * 2, c->h + c->b * 2 + c->t, 0,
+	                           CopyFromParent, InputOnly, CopyFromParent, 0, NULL);
+	tab = tabadd(c, win);
 	c->seltab = tab;
+	c->tabs = tab;
 	c->ntabs = 1;
-	tab->prev = NULL;
-	tab->next = NULL;
-	tab->c = c;
-	tab->win = win;
-	tab->w = c->w;
+	tabupdatetitle(tab);
 	if (clients)
 		clients->prev = c;
 	c->next = clients;
 	clients = c;
 	updatesizehints(c);
-	c->frame = XCreateWindow(dpy, root, c->x - c->b, c->y - c->b,
-	                         c->w + c->b * 2, c->h + c->b * 2 + c->t, 0,
-	                         CopyFromParent, CopyFromParent, CopyFromParent,
-	                         CWEventMask, &swa);
-	tab->title = XCreateWindow(dpy, c->frame, c->b, c->b, c->w, button, 0,
-	                           CopyFromParent, CopyFromParent, CopyFromParent,
-	                           CWEventMask, &swa);
-	c->curswin = XCreateWindow(dpy, c->frame, 0, 0, c->w + c->b * 2, c->h + c->b * 2 + c->t, 0,
-	                           CopyFromParent, InputOnly, CopyFromParent, 0, NULL);
 	XReparentWindow(dpy, win, c->frame, border, border);
 	XSelectInput(dpy, win, EnterWindowMask | StructureNotifyMask
 	                     | PropertyChangeMask | FocusChangeMask);
@@ -2339,7 +2468,6 @@ static void
 clientdel(struct Client *c)
 {
 	struct Client *focus;
-	struct Tab *t;
 
 	focus = getfocused(c);
 	clientdelfocus(c);
@@ -2358,14 +2486,8 @@ clientdel(struct Client *c)
 		c->desk->nclients--;
 	if (c->state == Tiled)
 		desktile(c->desk);
-	while (c->tabs) {
-		icccmwmstate(c->tabs->win, WithdrawnState);
-		XReparentWindow(dpy, c->tabs->win, root, c->x, c->y);
-		t = c->tabs;
-		c->tabs = c->tabs->next;
-		XDestroyWindow(dpy, t->title);
-		free(t);
-	}
+	while (c->tabs)
+		tabdel(c->tabs);
 	XDestroyWindow(dpy, c->frame);
 	XDestroyWindow(dpy, c->curswin);
 	ewmhsetclients();
@@ -2575,7 +2697,7 @@ xeventbuttonpress(XEvent *e)
 		XGrabPointer(dpy, c->frame, False,
 		             ButtonReleaseMask,
 		             GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
-		clientdecorate(c, (focused == c ? Focused : Unfocused));
+		clientdecorate(c, clientgetstate(c));
 		return;
 	}
 
@@ -2643,7 +2765,7 @@ xeventbuttonpress(XEvent *e)
 		             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
 		motionx = ev->x_root;
 		motiony = ev->y_root;
-		clientdecorate(c, (focused == c ? Focused : Unfocused));
+		clientdecorate(c, clientgetstate(c));
 	}
 
 	/* focus client */
@@ -2707,7 +2829,7 @@ xeventbuttonrelease(XEvent *e)
 	target = NULL;
 	pressed = FrameNone;
 	if (c != NULL) {
-		clientdecorate(c, (focused == c ? Focused : Unfocused));
+		clientdecorate(c, clientgetstate(c));
 	}
 }
 
@@ -2966,7 +3088,7 @@ xeventexpose(XEvent *e)
 
 	if ((c = getclient(ev->window)) != NULL && c->frame == ev->window)
 		if (ev->count == 0)
-			clientdecorate(c, (focused == c ? Focused : Unfocused));
+			clientdecorate(c, clientgetstate(c));
 }
 
 /* handle focusin event */
@@ -3147,6 +3269,21 @@ done:
 	motiony = ev->y_root;
 }
 
+/* update client properties */
+static void
+xeventpropertynotify(XEvent *e)
+{
+	XPropertyEvent *ev =&e->xproperty;
+	struct Tab *t;
+
+	if ((t = gettab(ev->window)) == NULL)
+		return;
+	if (ev->atom == XA_WM_NAME || ev->atom == atoms[NetWMName]) {
+		tabupdatetitle(t);
+		clientdecorate(t->c, clientgetstate(t->c));
+	}
+}
+
 /* forget about client */
 static void
 xeventunmapnotify(XEvent *e)
@@ -3242,6 +3379,13 @@ cleanpixmaps(void)
 	}
 }
 
+/* free fontset */
+static void
+cleanfontset(void)
+{
+	XFreeFontSet(dpy, fontset);
+}
+
 /* shod window manager */
 int
 main(void)
@@ -3261,10 +3405,13 @@ main(void)
 		[KeyPress]         = xeventkeypress,
 		[MapRequest]       = xeventmaprequest,
 		[MotionNotify]     = xeventmotionnotify,
+		[PropertyNotify]   = xeventpropertynotify,
 		[UnmapNotify]      = xeventunmapnotify
 	};
 
 	/* open connection to server and set X variables */
+	if (!setlocale(LC_ALL, "") || !XSupportsLocale())
+		warnx("warning: no locale support");
 	if ((dpy = XOpenDisplay(NULL)) == NULL)
 		errx(1, "could not open display");
 	screen = DefaultScreen(dpy);
@@ -3283,6 +3430,7 @@ main(void)
 	/* initialize */
 	initsignal();
 	initdummywindows();
+	initfontset();
 	initcursors();
 	initatoms();
 
@@ -3330,6 +3478,7 @@ main(void)
 	cleancursors();
 	cleanclients();
 	cleanpixmaps();
+	cleanfontset();
 
 	/* close connection to server */
 	XUngrabPointer(dpy, CurrentTime);
