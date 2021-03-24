@@ -467,17 +467,21 @@ settheme(void)
 	unsigned int i, j;
 	int status;
 
-	if (config.theme_path)
+	if (config.theme_path)  /* if the we have specified a file, read it instead */
 		status = XpmReadFileToImage(dpy, config.theme_path, &img, NULL, &xa);
-	else
+	else                    /* else use the default theme */
 		status = XpmCreateImageFromData(dpy, theme, &img, NULL, &xa);
 	if (status != XpmSuccess)
 		errx(1, "could not load theme");
+
+	/* create Pixmap from XImage */
 	pix = XCreatePixmap(dpy, root, img->width, img->height, img->depth);
 	val.foreground = 1;
 	val.background = 0;
 	XChangeGC(dpy, gc, GCForeground | GCBackground, &val);
 	XPutImage(dpy, pix, gc, img, 0, 0, 0, 0, img->width, img->height);
+
+	/* check whether the theme has the correct proportions and hotspots */
 	size = 0;
 	if (xa.valuemask & (XpmSize | XpmHotspot) &&
 	    xa.width % 3 == 0 && xa.height % 3 == 0 && xa.height == xa.width &&
@@ -492,9 +496,12 @@ settheme(void)
 		minsize = (size - 1) / 2 - border;
 	}
 	if (size == 0) {
+		XDestroyImage(img);
 		XFreePixmap(dpy, pix);
 		errx(1, "theme in wrong format");
 	}
+
+	/* destroy pixmap into decoration parts and copy them into the decor array */
 	y = 0;
 	for (i = 0; i < StyleLast; i++) {
 		x = 0;
@@ -527,6 +534,7 @@ settheme(void)
 		centerpix[i] = copypixmap(pix, size * 2 + border, y + border, center, center);
 		y += size;
 	}
+
 	XDestroyImage(img);
 	XFreePixmap(dpy, pix);
 }
@@ -3461,12 +3469,10 @@ main(void)
 	ewmhsetwmdesktop();
 	ewmhsetactivewindow(None);
 
-	/* setup theme */
-	settheme();
-
 	/* scan windows */
-	scan();
 	mapfocuswin();
+	settheme();
+	scan();
 
 	/* run main event loop */
 	while (running && !XNextEvent(dpy, &ev))
