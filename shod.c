@@ -3469,10 +3469,12 @@ main(void)
 	ewmhsetwmdesktop();
 	ewmhsetactivewindow(None);
 
-	/* scan windows */
-	mapfocuswin();
+	/* setup theme */
 	settheme();
+
+	/* scan windows */
 	scan();
+	mapfocuswin();
 
 	/* run main event loop */
 	while (running && !XNextEvent(dpy, &ev))
