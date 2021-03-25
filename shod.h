@@ -12,6 +12,7 @@ enum {
 /* motion action */
 enum {
 	NoAction,
+	Retabbing,
 	Button,
 	Moving,
 	Resizing
@@ -147,7 +148,10 @@ struct Tab {
 	Window title;
 	Window win;
 	char *name;
-	int w;
+	char *class;
+	int ignoreunmap;
+	int winw, winh;
+	int tabx, tabw;
 };
 
 /* client structure */
@@ -162,7 +166,6 @@ struct Client {
 	struct Tab *seltab;
 	int ntabs;
 	int ishidden, isfixed, isuserplaced, isshaded, isfullscreen;
-	int ignoreunmap;
 	int state;
 	int saveh;              /* original height, used for shading */
 	int rh;                 /* row height */
@@ -225,6 +228,7 @@ struct Config {
 	int ignoreborders;
 	int mergeborders;
 	int hidetitle;
+	int tabclass;
 
 	int gapinner;
 	int gapouter;
@@ -257,5 +261,6 @@ struct Decor {
 	Pixmap s;
 	Pixmap sl;
 	Pixmap se;
-	unsigned long color;
+	unsigned long fg;
+	unsigned long bg;
 };
