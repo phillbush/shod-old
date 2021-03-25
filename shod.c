@@ -25,7 +25,6 @@ static char *xrm;
 static int screen, screenw, screenh;
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 static Atom atoms[AtomLast];
-static XSizeHints defsize = {.flags = PSize};
 
 /* visual */
 static struct Decor decor[StyleLast][3];
@@ -811,49 +810,6 @@ ewmhsetclientsstacking(void)
 	free(wins);
 }
 
-/* TODO set client size hints */
-static void
-updatesizehints(struct Client *c, XSizeHints *size)
-{
-	if (size->flags & PResizeInc) {
-		c->incw = size->width_inc;
-		c->inch = size->height_inc;
-	} else
-		c->incw = c->inch = 0;
-	if (size->flags & PMaxSize) {
-		c->maxw = size->max_width;
-		c->maxh = size->max_height;
-	} else
-		c->maxw = c->maxh = 0;
-	if (size->flags & PBaseSize) {
-		c->basew = size->base_width;
-		c->baseh = size->base_height;
-	} else if (size->flags & PMinSize) {
-		c->basew = size->min_width;
-		c->baseh = size->min_height;
-	} else
-		c->basew = c->baseh = 0;
-	if (size->flags & PMinSize) {
-		c->minw = size->min_width;
-		c->minh = size->min_height;
-	} else if (size->flags & PBaseSize) {
-		c->minw = size->base_width;
-		c->minh = size->base_height;
-	} else
-		c->minw = c->minh = 0;
-	if (c->minw < minsize)
-		c->minw = minsize;
-	if (c->minh < minsize)
-		c->minh = minsize;
-	if (size->flags & PAspect) {
-		c->mina = (float)size->min_aspect.y / size->min_aspect.x;
-		c->maxa = (float)size->max_aspect.x / size->max_aspect.y;
-	} else
-		c->maxa = c->mina = 0.0;
-	c->isfixed = (c->maxw && c->maxh && c->maxw == c->minw && c->maxh == c->minh);
-	c->isuserplaced = (size->flags & USPosition);
-}
-
 /* get client given a window */
 static struct Client *
 getclient(Window win)
@@ -1144,7 +1100,7 @@ clientdecorate(struct Client *c, int style)
 	if (c == NULL)
 		return;
 	j = 0;
-	if (c->isfixed || ((c->state & Tiled) && config.mergeborders))
+	if ((c->state & Tiled) && config.mergeborders)
 		j = 2;
 	d = &decor[style][j];
 	dp = (c == target && mouseaction == Resizing && j == 0) ? &decor[style][1] : d;
@@ -1908,13 +1864,9 @@ clientvalidsize(struct Client *c, int x, int y)
 
 	w = c->fw + x;
 	h = c->fh + y;
-	if (w < 1 || (c->minw && w < c->minw))
+	if (w < minsize)
 		return 0;
-	if (c->maxw && w > c->maxw)
-		return 0;
-	if (h < 1 || (c->minh && h < c->minh))
-		return 0;
-	if (c->maxh && h > c->maxh)
+	if (h < minsize)
 		return 0;
 	return 1;
 }
@@ -1923,49 +1875,11 @@ clientvalidsize(struct Client *c, int x, int y)
 static void
 clientapplysize(struct Client *c)
 {
-	int w, h;
-
-	if (c == NULL || c->isfixed)
+	if (c == NULL)
 		return;
-	
-	w = max(c->fw, 1);
-	h = max(c->fh, 1);
-	if (c->mina > 0 && c->maxa > 0) {
-		if (c->maxa < (float)w/h) {
-			if (c->w == max(w, h)) {
-				h = w / c->maxa - 0.5;
-			} else {
-				w = h * c->maxa + 0.5;
-			}
-		} else if (c->mina < (float)h/w) {
-			if (h == max(w, h)) {
-				w = h / c->mina - 0.5;
-			} else {
-				h = w * c->mina + 0.5;
-			}
-		}
-	}
-	if (c->incw > 0 && c->basew < w) {
-		w -= c->basew;
-		w /= c->incw;
-		w *= c->incw;
-		w += c->basew;
-	}
-	if (c->inch > 0 && c->baseh < w) {
-		h -= c->baseh;
-		h /= c->inch;
-		h *= c->inch;
-		h += c->baseh;
-	}
-	w = max(c->minw, w);
-	h = max(c->minh, h);
-	if (c->maxw > 0)
-		w = min(c->maxw, w);
-	if (c->maxh > 0)
-		h = min(c->maxh, h);
-	c->w = w;
+	c->w = max(c->fw, minsize);
 	if (!c->isshaded)
-		c->h = h;
+		c->h = max(c->fh, minsize);
 	c->x = c->fx;
 	c->y = c->fy;
 }
@@ -2092,7 +2006,7 @@ clienttile(struct Client *c, int tile)
 	struct Column *col;
 	struct Row *row;
 
-	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
+	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return;
 
 	desk = c->desk;
@@ -2362,7 +2276,7 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 {
 	int origx, origy, origw, origh;
 
-	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
+	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return;
 	if (c->state == Tiled) {
 		if (c->row->col->w + x < minsize || c->row->h + y < minsize)
@@ -2486,7 +2400,7 @@ clientincrmove(struct Client *c, int x, int y)
 
 /* add client */
 static struct Client *
-clientadd(int x, int y, int w, int h)
+clientadd(int x, int y, int w, int h, int isuserplaced)
 {
 	struct Client *c;
 
@@ -2496,11 +2410,10 @@ clientadd(int x, int y, int w, int h)
 	c->desk = NULL;
 	c->row = NULL;
 	c->isfullscreen = 0;
-	c->isuserplaced = 0;
+	c->isuserplaced = isuserplaced;
 	c->isshaded = 0;
 	c->trans = NULL;
 	c->ishidden = 0;
-	c->isfixed = 0;
 	c->state = Normal;
 	c->layer = 0;
 	c->x = c->fx = x;
@@ -2678,7 +2591,7 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 {
 	int x, y, w, h;
 
-	if (c == NULL || c->isfixed || c->state == Minimized || c->isfullscreen)
+	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return;
 	if (valuemask & CWX)
 		wc->x -= c->b;
@@ -2761,16 +2674,14 @@ updateproperties(struct Client *c)
 }
 
 /* create client for tab */
-static struct Client *
-manage(struct Tab *t, XWindowAttributes *wa, XSizeHints *size, Window transwin)
+static void
+manage(struct Client *c, struct Tab *t, Window transwin)
 {
-	struct Client *c, *f, *transfor;
+	struct Client *f, *transfor;
 	unsigned long *values;
 	int focus = 1;          /* whether to focus window */
 
-	c = clientadd(wa->x, wa->y, wa->width, wa->height);
 	clienttab(c, t, 0);
-	updatesizehints(c, size);
 	updateproperties(c);
 	clientnotify(c);
 	clientraise(c);
@@ -2789,7 +2700,6 @@ manage(struct Tab *t, XWindowAttributes *wa, XSizeHints *size, Window transwin)
 	} else {
 		clientsendtodesk(c, selmon->seldesk, 1, focus);
 	}
-	return c;
 }
 
 /* delete tab (and its client if it is the only tab) */
@@ -2816,6 +2726,7 @@ unmanage(struct Tab *t)
 static void
 scan(void)
 {
+	struct Client *c;
 	struct Tab *t;
 	unsigned int i, num;
 	Window d1, d2, transwin, *wins = NULL;
@@ -2829,7 +2740,8 @@ scan(void)
 			if (wa.map_state == IsViewable || getstate(wins[i]) == IconicState) {
 				preparewin(wins[i]);
 				t = tabadd(wins[i], 1);
-				manage(t, &wa, &defsize, None);
+				c = clientadd(wa.x, wa.y, wa.width, wa.height, 0);
+				manage(c, t, None);
 			}
 		}
 		for (i = 0; i < num; i++) { /* now the transients */
@@ -2839,7 +2751,8 @@ scan(void)
 			   (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)) {
 				preparewin(wins[i]);
 				t = tabadd(wins[i], 1);
-				manage(t, &wa, &defsize, transwin);
+				c = clientadd(wa.x, wa.y, wa.width, wa.height, 0);
+				manage(c, t, transwin);
 			}
 		}
 		if (wins)
@@ -3016,7 +2929,6 @@ static void
 xeventbuttonrelease(XEvent *e)
 {
 	XButtonReleasedEvent *ev = &e->xbutton;
-	XWindowAttributes wa;
 	struct Client *c, *oldc;
 	int region;
 
@@ -3026,11 +2938,8 @@ xeventbuttonrelease(XEvent *e)
 		if (c != NULL) {
 			clienttab(c, movetab, -1);
 		} else {
-			wa.x = ev->x_root;
-			wa.y = ev->y_root;
-			wa.width = movetab->winw;
-			wa.height = movetab->winh;
-			c = manage(movetab, &wa, &defsize, None);
+			c = clientadd(ev->x_root, ev->y_root, movetab->winw, movetab->winh, 0);
+			manage(c, movetab, None);
 		}
 		if (oldc->ntabs == 0) {
 			clientdel(oldc);
@@ -3366,6 +3275,7 @@ xeventkeypress(XEvent *e)
 static void
 xeventmaprequest(XEvent *e)
 {
+	struct Client *c;
 	struct Tab *t;
 	XMapRequestEvent *ev = &e->xmaprequest;
 	XWindowAttributes wa;
@@ -3373,6 +3283,7 @@ xeventmaprequest(XEvent *e)
 	Atom prop = None;
 	Window win, wins[2];
 	Window transwin = None;
+	int isuserplaced = 0;
 	long dl;
 
 
@@ -3400,10 +3311,9 @@ xeventmaprequest(XEvent *e)
 		t = tabadd(ev->window, 0);
 		if (XGetTransientForHint(dpy, ev->window, &win))
 			transwin = win;
-		if (!XGetWMNormalHints(dpy, ev->window, &size, &dl))
-			size.flags = PSize;
-		if (config.tabclass &&
-		    !(size.flags & USPosition) &&
+		if (XGetWMNormalHints(dpy, ev->window, &size, &dl) && (size.flags & USPosition))
+			isuserplaced = 1;
+		if (config.tabclass && !isuserplaced &&
 		    focused && focused == getfocused(NULL) &&
 		    !focused->isshaded && !focused->isfullscreen && focused->state != Minimized &&
 		    !(focused->state == Tiled && focused->desk->col->next == NULL && focused->desk->col->row->next == NULL) &&
@@ -3416,7 +3326,8 @@ xeventmaprequest(XEvent *e)
 				desktile(focused->desk);
 			}
 		} else {
-			manage(t, &wa, &size, transwin);
+			c = clientadd(wa.x, wa.y, wa.width, wa.height, isuserplaced);
+			manage(c, t, transwin);
 		}
 	}
 }

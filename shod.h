@@ -165,7 +165,7 @@ struct Client {
 	struct Tab *tabs;
 	struct Tab *seltab;
 	int ntabs;
-	int ishidden, isfixed, isuserplaced, isshaded, isfullscreen;
+	int ishidden, isuserplaced, isshaded, isfullscreen;
 	int state;
 	int saveh;              /* original height, used for shading */
 	int rh;                 /* row height */
@@ -173,12 +173,7 @@ struct Client {
 	int fx, fy, fw, fh;     /* floating geometry */
 	int tx, ty, tw, th;     /* tiled geometry */
 	int layer;              /* stacking order */
-	int basew, baseh;       /* TODO */
-	int minw, minh;         /* TODO */
-	int maxw, maxh;         /* TODO */
-	int incw, inch;         /* TODO */
 	long shflags;
-	float mina, maxa;       /* TODO */
 	Window curswin;
 	Window frame;
 };
