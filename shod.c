@@ -154,7 +154,7 @@ getcardinalprop(Window win, Atom atom, unsigned long size)
 	return values;
 }
 
-/* get window name into string name of given size */
+/* get window name */
 char *
 getwinname(Window win)
 {
@@ -650,17 +650,15 @@ ewmhsetcurrentdesktop(unsigned long n)
 }
 
 static void
-ewmhsetframeextents(struct Client *c)
+ewmhsetframeextents(Window win, int b, int t)
 {
 	unsigned long data[4];
-	struct Tab *t;
 
-	data[0] = data[1] = data[3] = c->b;
-	data[2] = c->b + c->t;
+	data[0] = data[1] = data[3] = b;
+	data[2] = b + t;
 
-	for (t = c->tabs; t; t = t->next)
-		XChangeProperty(dpy, t->win, atoms[NetFrameExtents], XA_CARDINAL, 32,
-		                PropModeReplace, (unsigned char *)&data, 4);
+	XChangeProperty(dpy, win, atoms[NetFrameExtents], XA_CARDINAL, 32,
+		        PropModeReplace, (unsigned char *)&data, 4);
 }
 
 static void
@@ -832,15 +830,25 @@ getclient(Window win)
 
 /* get tab given a window */
 static struct Tab *
-gettab(Window win)
+gettab(struct Client *c, Window win)
 {
-	struct Client *c;
 	struct Tab *t;
 
-	for (c = clients; c; c = c->next)
-		for (t = c->tabs; t; t = t->next)
-			if (t->win == win || t->title == win)
+	if (c) {
+		for (t = c->tabs; t; t = t->next) {
+			if (t->win == win || t->title == win) {
 				return t;
+			}
+		}
+	} else {
+		for (c = clients; c; c = c->next) {
+			for (t = c->tabs; t; t = t->next) {
+				if (t->win == win || t->title == win) {
+					return t;
+				}
+			}
+		}
+	}
 	return NULL;
 }
 
@@ -912,6 +920,7 @@ tabdetach(struct Tab *t, int x, int y)
 		}
 	}
 	t->c->ntabs--;
+	t->ignoreunmap = 2;
 	XReparentWindow(dpy, t->title, root, x, y);
 	if (t->next)
 		t->next->prev = t->prev;
@@ -986,6 +995,8 @@ tabadd(Window win, int ignoreunmap)
 	t->ignoreunmap = ignoreunmap;
 	tabupdatetitle(t);
 	tabupdateclass(t);
+	icccmwmstate(win, NormalState);
+	ewmhsetallowedactions(win);
 	return t;
 }
 
@@ -1656,6 +1667,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 	int i, j, k, w, h;
 	int posi, posj;         /* position of the larger region */
 	int lw, lh;             /* larger region width and height */
+	int origw, origh;
 
 	/* TODO: rewrite this function, it doesn't consider the client size */
 
@@ -1664,8 +1676,14 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	mon = desk->mon;
 
+	origw = c->fw;
+	origh = c->fh;
 	c->fw = min(c->fw, mon->gw - 2 * c->b);
 	c->fh = min(c->fh, mon->gh - 2 * c->b - c->t);
+	if (c->fw > c->fh)
+		c->fh = origh * (c->fw / origw);
+	else
+		c->fw = origw * (c->fh / origh);
 
 	/* if the user placed the window, we should not re-place it */
 	if (c->isuserplaced)
@@ -2479,6 +2497,10 @@ clienttab(struct Client *c, struct Tab *t, int pos)
 	if (clientisvisible(c)) {
 		tabfocus(t);
 	}
+	ewmhsetframeextents(t->win, c->b, c->t);
+	ewmhsetclients();
+	ewmhsetclientsstacking();
+	ewmhsetwmdesktop();
 }
 
 /* delete client */
@@ -2660,19 +2682,6 @@ preparewin(Window win)
 	XSetWindowBorderWidth(dpy, win, 0);
 }
 
-/* update properties for new window */
-static void
-updateproperties(struct Client *c)
-{
-	if (c->seltab) {
-		icccmwmstate(c->seltab->win, NormalState);
-		ewmhsetallowedactions(c->seltab->win);
-	}
-	ewmhsetframeextents(c);
-	ewmhsetclients();
-	ewmhsetclientsstacking();
-}
-
 /* create client for tab */
 static void
 manage(struct Client *c, struct Tab *t, Window transwin)
@@ -2682,7 +2691,6 @@ manage(struct Client *c, struct Tab *t, Window transwin)
 	int focus = 1;          /* whether to focus window */
 
 	clienttab(c, t, 0);
-	updateproperties(c);
 	clientnotify(c);
 	clientraise(c);
 	f = getfocused(NULL);
@@ -2816,7 +2824,7 @@ xeventbuttonpress(XEvent *e)
 	} else if (region == FrameTitle && ev->button == Button3) {
 		mouseaction = Retabbing;
 	} else if (region == FrameTitle && ev->button == Button1) {
-		tabfocus(gettab(ev->window));
+		tabfocus(gettab(NULL, ev->window));
 		if (lastc == c && ev->time - lasttime < DOUBLECLICK) {
 			clientshade(c, !c->isshaded);
 			lasttime = 0;
@@ -2833,7 +2841,7 @@ xeventbuttonpress(XEvent *e)
 
 	/* user is dragging window title with right mouse button */
 	if (mouseaction == Retabbing) {
-		if ((t = gettab(ev->window)) == NULL || t->title != ev->window) {
+		if ((t = gettab(NULL, ev->window)) == NULL || t->title != ev->window) {
 			mouseaction = NoAction;
 			return;
 		}
@@ -2987,6 +2995,7 @@ xeventclientmessage(XEvent *e)
 	XWindowChanges wc;
 	unsigned value_mask = 0;
 	struct Client *c;
+	struct Tab *t;
 	Cursor curs = None;
 	int i;
 
@@ -3002,7 +3011,7 @@ xeventclientmessage(XEvent *e)
 	} else if (ev->message_type == atoms[NetRequestFrameExtents]) {
 		if (c == NULL)
 			return;
-		ewmhsetframeextents(c);
+		ewmhsetframeextents(ev->window, c->b, c->t);
 	} else if (ev->message_type == atoms[NetWMState]) {
 		if (c == NULL)
 			return;
@@ -3038,6 +3047,8 @@ xeventclientmessage(XEvent *e)
 		if (c->state == Minimized) {
 			clientminimize(c, 0);
 		} else {
+			if ((t = gettab(c, ev->window)) != NULL)
+				c->seltab = t;
 			deskchange(c->desk);
 			clientfocus(c);
 			clientraise(c);
@@ -3472,7 +3483,7 @@ xeventpropertynotify(XEvent *e)
 	XPropertyEvent *ev =&e->xproperty;
 	struct Tab *t;
 
-	if ((t = gettab(ev->window)) == NULL)
+	if ((t = gettab(NULL, ev->window)) == NULL)
 		return;
 	if (ev->atom == XA_WM_NAME || ev->atom == atoms[NetWMName]) {
 		tabupdatetitle(t);
