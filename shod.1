@@ -6,13 +6,14 @@
 .B shod
 .SH DESCRIPTION
 .B shod
-is an hybrid (tiling and floating) reparenting and themeable multimonitor X11 window manager.
+is an hybrid (tiling and floating) reparenting and themeable multimonitor X11 window manager
+which support tabs.
 .B shod
 sets no keybindings;
 reads no configuration other than X resources;
 and works only via mouse with a given key modifier (Alt by default)
 and by responding to client messages with EWMH hints
-(so you have to use
+(so it is needed
 .IR wmctrl (1)
 to control shod).
 .PP
@@ -29,49 +30,65 @@ If a window is open on the last empty desktop,
 creates a new empty desktop on that monitor.
 When a desktop has no window, this desktop is deleted.
 .PP
-Each window has one of the following four states:
+Windows are displayed in frames.
+A frame contains borders (four edges and four corners),
+tabs (one for each client in the window),
+two buttons (a minimize and a close button)
+and the content (which is the window of the selected tab).
+The buttons and the tabs of a frame together are called the title bar of that frame.
+Windows can be grouped into the same frame with tabs;
+there is one tab for each window.
+One of the tabs is the selected tab.
+Only the contents of the window of the selected tab of a frame is shown in that frame.
+.PP
+When a frame is moved from one monitor to another,
+that frame moves from the desktop it is in to the focused desktop
+of the monitor it is moved to.
+.PP
+Each frame has one of the following four states:
 .TP
 Minimized
-Minimized windows belong to no monitor or desktop.
-Minimized windows are not shown on the screen.
-When a minimized window is unminimized,
-it becomes a normal window on the focused desktop of the focused monitor.
+Minimized frames belong to no monitor or desktop.
+Minimized frames are not shown on the screen.
+When a minimized frame is unminimized,
+it becomes a normal frame on the focused desktop of the focused monitor.
 .TP
 Sticky
-Sticky windows belong only to a monitor; but they do not belong to any desktop.
-Instead, they are \(dqsticked\(dq to the monitor, and they appear on the screen
+Sticky frames belong only to a monitor; but they do not belong to any desktop.
+Instead, they are \(lqsticked\(rq to the monitor, and they appear on the screen
 no matter which desktop is focused on that monitor.
 .TP
 Tiled
-Tiled windows belong to a desktop and its monitor.
-The monitor is divided into columns, each window occupies a row in a column.
+Tiled frames belong to a desktop and its monitor.
+The monitor is divided into columns, each frame occupies a row in a column.
 (This tiling style is the same used by the old wmii(1) window manager and the acme(1) editor).
 .TP
 Normal
-Normal windows belong to a desktop and its monitor.
-Normal windows, just like sticky windows, are floating windows.
-Normal windows appear only when its desktop is the focused one for its monitor.
+Normal frames belong to a desktop and its monitor.
+Normal frames, along with sticky frames, are called floating frames.
+Normal frames appear only when its desktop is the focused one for its monitor.
 .PP
-A non-minimized window can also be made fullscreen.
-A floating (sticky or normal) window can also be raised above other floating windows
-or lowered below other floating windows.
+A non-minimized frame can also be made fullscreen.
+A non-minimized frame can also be shaded (i.e., collapsed into its title bar).
+A floating (sticky or normal) frame can also be raised above other floating windows
+or lowered below other floating frames.
 .PP
-When a new window spawns, it is set as
+When a new frame spawns, it is set as
 .BR Normal ,
 and it is placed in an unoccupied region of the monitor.
-The first window in a monitor is spawned in the center of the monitor.
+The first frame in a monitor is spawned in the center of the monitor.
 .PP
-The window stacking order is the following (from bottom-to-top):
+The frame stacking order is the following (from bottom-to-top):
 .IP \(bu 2
-Tiled windows appear below any other windows.
+Tiled frames appear below any other frames.
 .IP \(bu 2
-Lowered floating windows appear on top of tiled windows.
+Lowered floating frames appear on top of tiled frames.
 .IP \(bu 2
-Regular floating windows appear on top of lowered floating windows.
+Regular floating frames appear on top of lowered floating frames.
 .IP \(bu 2
-Raised floating windows appear on top of regular floating windows.
+Raised floating frames appear on top of regular floating frames.
 .IP \(bu 2
-Fullscreen windows appear on top of raised floating windows.
+Fullscreen frames appear on top of raised floating frames.
 .SH USAGE
 .B shod
 has several ways of manipulating windows.
@@ -86,32 +103,44 @@ The main method for controlling windows is the mouse.
 The
 .B config.focusbuttons
 variable (set at compile time in config.h)
-specifies which mouse buttons can be used to focus a window when clicking on it.
+specifies which mouse buttons can be used to focus a frame when clicking on it.
 Each bit represents a button.
 For example, if it is set to 5 (0101 in binary),
-a window is focused when clicking on it with the first or the third mouse button.
+a frame is focused when clicking on it with the first or the third mouse button.
 If this variable is set to 0, the focus follows the mouse pointer.
 .PP
 The
 .B config.raisebuttons
 variable (set at compile time in config.h)
-specifies which mouse buttons can be used to raise a window when clicking on it.
+specifies which mouse buttons can be used to raise a frame when clicking on it.
 Each bit represents a button.
-If this variable is set to 0, all buttons raises a window.
+If this variable is set to 0, all buttons raises a frame.
 .PP
 The
 .B config.modifier
 variable (set at compile time in config.h)
 specifies the modifier key.
-Pressing the modifier key and dragging a window with the Button 1
-(the left mouse button) will move that window.
-Pressing the modifier key and dragging a corner or side of a window with the Button 3
-(the right mouse button) will resize that window in the direction of that corner or side.
+Pressing the modifier key and dragging a frame with the Button 1
+(the left mouse button) will move that frame.
+Pressing the modifier key and dragging a corner or edge of a frame with the Button 3
+(the right mouse button) will resize that frame in the direction of that corner or side.
 .PP
-Resizing windows can also be performed by dragging a window border with the Button 1,
+Resizing frames can also be performed by dragging a frame border with the Button 1,
 without pressing any modifier.
-Moving windows can also be performed by dragging a window border with the button 3,
+Moving frames can also be performed by dragging a frame border with the button 3,
 without pressing any modifier.
+.PP
+Moving frames can also be performed by dragging a tab of the frame with the Button 1,
+without pressing any modifier.
+A tab can be detached from its frame by dragging it with the Button 3;
+a detached frame, while being dragged with the Button 3,
+can be attached into another frame by dropping it into another frame's title bar.
+.PP
+Each frame has two buttons on its title bar.
+Clicking with the mouse Button 1 on the frame's left button (called the minimize button)
+minimzes the frame.
+Clicking with the mouse Button 1 on the frame's right button (called the close button)
+closes the window on the focused tab, and, if it was the last tab on the frame, deletes the frame.
 .SS Manipulating via window properties
 The
 .IR wmctrl (1)
@@ -120,7 +149,7 @@ and
 .B shod
 respects and sets those properties in different ways.
 For example, running the following command toggles the sticky option
-on the active window.
+on the active frame.
 .IP
 .EX
 $ wmctrl -r :ACTIVE: -b toggle,sticky
@@ -128,12 +157,12 @@ $ wmctrl -r :ACTIVE: -b toggle,sticky
 .IP \(bu 2
 If the
 .B sticky
-property is set on a window, this window becomes sticky
-(it is displayed on all desktops of the monitor the window is in).
+property is set on a window, that window's frame becomes sticky
+(it is displayed on all desktops of the monitor the frame is in).
 .IP \(bu 2
 If the
 .BR maximize_vert " and " maximize_horz
-properties are set on a window, the window is tiled.
+properties are set on a window, that window's frame is tiled.
 For more information on manipulating tiled windows, see the section
 .B Manipulating tiled windows
 below.
@@ -141,20 +170,24 @@ below.
 If the
 .B hidden
 property is set on a window,
-the window becomes minimized
+that window's frame becomes minimized
 (it won't be displayed on any desktop or on any monitor).
 .IP \(bu 2
 If the
 .B fullscreen
-property is set on a window, the window is maximized to fit the entire screen.
+property is set on a window, the content of that window's frame is maximized to fit the entire screen.
 .IP \(bu 2
 If the
 .B above
-property is set on a floating window, the window is raised above all other floating windows.
+property is set on a floating window, that window's frame is raised above all other floating frames.
 .IP \(bu 2
 If the
 .B below
-property is set on a floating window, the window is lowered below all other floating windows.
+property is set on a floating window, that window's frame is lowered below all other floating frames.
+.IP \(bu 2
+If the
+.B shaded
+property is set on a window, that window's frame collapsed into its title bar.
 .PP
 All other properties are ignored.
 .SS Manipulating via other client messages
@@ -176,7 +209,7 @@ That is,
 hide the windows on the current desktop and show the windows on a new desktop.
 If the desktop is on another monitor,
 .B shod
-instead move the pointer to that monitor and focus a window on it.
+instead moves the pointer to that monitor and focus a window on it.
 .IP \(bu 2
 A message sent with the
 .B -k on
@@ -194,8 +227,8 @@ option of
 .IR wmctrl (1)
 makes
 .B shod
-change the active window.
-That is, focus and raise the specified window.
+change the active frame.
+That is, focus and raise the frame of the specified window.
 .IP \(bu 2
 A message sent with the
 .BI -c " WINDOW"
@@ -211,7 +244,7 @@ option of
 .IR wmctrl (1)
 makes
 .B shod
-change the position and geometry of the specified window.
+change the position and geometry of the frame of the specified window.
 .IP \(bu 2
 A message sent with the
 .BI -s " NUMBER"
@@ -219,7 +252,7 @@ option of
 .IR wmctrl (1)
 makes
 .B shod
-send a specified window to a specified desktop.
+send the frame of a specified window to a specified desktop.
 .IP \(bu 2
 A message sent with the
 .BI -t " NUMBER"
@@ -227,39 +260,35 @@ option of
 .IR wmctrl (1)
 makes
 shod
-move the specified window to the specified desktop.
+move the frame of the specified window to the specified desktop.
 .SS Manipulating via configure request
 .B shod
-acts upon configure request events sent to windows via by resizing and moving windows
+acts upon configure request events sent to windows via by resizing and moving their frames
 just as if the user have resized or moved them with the mouse.
-.PP
-When a window is moved from one monitor to another,
-that window moves from the desktop it is in to the focused desktop
-of the monitor it is moved to.
 .SS Manipulating tiled windows
-When a window is maximized, it is tiled by
+When a window is maximized, its frame is tiled by
 .BR shod .
-A tiled window behaves differently of regular windows.
-The tiled windows are organized in columns.
-Each tiled window ocupies a row in a column.
+A tiled frame behaves differently of regular frames.
+Tiled frames are organized in columns.
+Each tiled frame ocupies a row in a column.
 .PP
-In order to move a tiled window from one column to another
-just move the window left or right with
+In order to move a tiled frame from one column to another
+just move the frame left or right with
 .IR wmctrl (1)
 or with the mouse.
-This will move the window from its current column to the column to its
+This will move the frame from its current column to the column to its
 left or right, or it will create a new column, if needed.
 .PP
-In order to move a tiled window up or down a column,
-just move the window up or down with
+In order to move a tiled frame up or down a column,
+just move the frame up or down with
 .IR wmctrl (1)
 or with the mouse.
 .PP
-Resizing a tiled window with
+Resizing a tiled frame with
 .IR wmctrl (1)
 or with the mouse
-will change the size of the window, the size of the column it is in,
-and the size of the neighboring windows.
+will change the size of the frame, the size of the column it is in,
+and the size of the neighboring frames.
 .SH ENVIRONMENT
 The following environment variables affect the execution of
 .B shod
@@ -275,24 +304,33 @@ understands the following X resources.
 .B shod.theme
 Path to a .xpm file containing the border decorations.
 The x_hotspot is interpreted as the width of the border for that decoration.
-The y_hotspot is interpreted as the width of the corner for that decoration.
-The .xpm file contains in it six squares representing all the possible decoration states for a window.
+The y_hotspot is interpreted as the width of the buttons for that decoration.
+The size of the corner is calculated as the sum of the width of the border and the width of the buttons.
+The height of the title bar (and its tabs) is equal to the width of the buttons.
+The .xpm file contains in it nine squares representing all the possible decoration states for a frame.
 A sample .xpm file is distributed with shod.
 .TP
 .B shod.gapOuter
-The gap in pixels between the sides of the monitor and the windows.
+The gap in pixels between the sides of the monitor and the frames.
 .TP
 .B shod.gapInner
-The gap in pixels between the tiled windows.
+The gap in pixels between the tiled frames.
+.TP
+.B shod.hideTitle
+If set to \(lqtrue\(rq, the title bars of frames with a single tab are hidden.
 .TP
 .B shod.ignoreGaps
-If set to \(lqtrue\(rq, a single tiled window ingores the gaps.
+If set to \(lqtrue\(rq, a single tiled frame ingores the gaps.
 .TP
 .B shod.ignoreBorders
-If set to \(lqtrue\(rq, a single tiled window does not have borders.
+If set to \(lqtrue\(rq, a single tiled frame does not have borders.
 .TP
 .B shod.mergeBorders
-If set to \(lqtrue\(rq, the borders of adjacent tiled windows are merged into a single border.
+If set to \(lqtrue\(rq, the borders of adjacent tiled frames are merged into a single border.
+.TP
+.B shod.tabClass
+If set to \(lqtrue\(rq, a new window is tab with the focused frame,
+if the focused window on that frame has the same class as the new window.
 .SH EXAMPLES
 The following is a sample configuration for X resources.
 It must be placed in
