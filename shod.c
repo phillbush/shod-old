@@ -214,6 +214,8 @@ getresources(void)
 		                   strcasecmp(xval.addr, "on") == 0);
 	if (XrmGetResource(xdb, "shod.theme", "*", &type, &xval) == True)
 		config.theme_path = xval.addr;
+	if (XrmGetResource(xdb, "shod.font", "*", &type, &xval) == True)
+		config.font = xval.addr;
 }
 
 /* get window's WM_STATE property */
