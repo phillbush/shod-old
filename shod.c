@@ -212,6 +212,9 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.tabClass", "*", &type, &xval) == True)
 		config.tabclass = (strcasecmp(xval.addr, "true") == 0 ||
 		                   strcasecmp(xval.addr, "on") == 0);
+	if (XrmGetResource(xdb, "shod.groupHint", "*", &type, &xval) == True)
+		config.grouphint = (strcasecmp(xval.addr, "true") == 0 ||
+		                    strcasecmp(xval.addr, "on") == 0);
 	if (XrmGetResource(xdb, "shod.theme", "*", &type, &xval) == True)
 		config.theme_path = xval.addr;
 	if (XrmGetResource(xdb, "shod.font", "*", &type, &xval) == True)
@@ -594,6 +597,28 @@ icccmwmstate(Window win, int state)
 }
 
 static void
+icccmgroup(void)
+{
+	struct Client *c;
+	struct Tab *t;
+	XWMHints *hints;
+
+	if (!config.grouphint)
+		return;
+	hints = XAllocWMHints();
+	hints->flags = WindowGroupHint;
+	for (c = clients; c; c = c->next) {
+		if (c->seltab) {
+			hints->window_group = c->seltab->win;
+			for (t = c->tabs; t; t = t->next) {
+				XSetWMHints(dpy, t->win, hints);
+			}
+		}
+	}
+	XFree(hints);
+}
+
+static void
 ewmhinit(void)
 {
 	unsigned long data[2];
@@ -953,6 +978,10 @@ tabdel(struct Tab *t)
 	XReparentWindow(dpy, t->win, root, c->x, c->y);
 	XUnmapWindow(dpy, t->title);
 	XDestroyWindow(dpy, t->title);
+	icccmgroup();
+	ewmhsetclients();
+	ewmhsetclientsstacking();
+	ewmhsetwmdesktop();
 	free(t->name);
 	free(t->class);
 	free(t);
@@ -1014,6 +1043,7 @@ tabfocus(struct Tab *t)
 		XSetInputFocus(dpy, t->c->frame, RevertToParent, CurrentTime);
 	else
 		XSetInputFocus(dpy, t->win, RevertToParent, CurrentTime);
+	icccmgroup();
 	ewmhsetstate(t->c);
 	ewmhsetactivewindow(t->win);
 }
@@ -2499,6 +2529,7 @@ clienttab(struct Client *c, struct Tab *t, int pos)
 	if (clientisvisible(c)) {
 		tabfocus(t);
 	}
+	icccmgroup();
 	ewmhsetframeextents(t->win, c->b, c->t);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
@@ -2532,9 +2563,6 @@ clientdel(struct Client *c)
 		tabdel(c->tabs);
 	XDestroyWindow(dpy, c->frame);
 	XDestroyWindow(dpy, c->curswin);
-	ewmhsetclients();
-	ewmhsetclientsstacking();
-	ewmhsetwmdesktop();
 	free(c);
 }
 
@@ -3362,7 +3390,7 @@ xeventmotionnotify(XEvent *e)
 		return;
 	if (mouseaction == NoAction && ev->subwindow == c->curswin) {
 		if (frameregion(c, ev->window, ev->x, ev->y) == FrameBorder) {
-			switch (clientoctant(c, ev->x - c->b, ev->y - c->b)) {
+			switch (clientoctant(c, ev->x - c->b, ev->y - c->b - c->t)) {
 			case NW:
 				XDefineCursor(dpy, c->curswin, (c->isshaded ? cursor[CursW] : cursor[CursNW]));
 				break;
