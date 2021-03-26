@@ -212,9 +212,6 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.tabClass", "*", &type, &xval) == True)
 		config.tabclass = (strcasecmp(xval.addr, "true") == 0 ||
 		                   strcasecmp(xval.addr, "on") == 0);
-	if (XrmGetResource(xdb, "shod.groupHint", "*", &type, &xval) == True)
-		config.grouphint = (strcasecmp(xval.addr, "true") == 0 ||
-		                    strcasecmp(xval.addr, "on") == 0);
 	if (XrmGetResource(xdb, "shod.theme", "*", &type, &xval) == True)
 		config.theme_path = xval.addr;
 	if (XrmGetResource(xdb, "shod.font", "*", &type, &xval) == True)
@@ -603,8 +600,6 @@ icccmgroup(void)
 	struct Tab *t;
 	XWMHints *hints;
 
-	if (!config.grouphint)
-		return;
 	hints = XAllocWMHints();
 	hints->flags = WindowGroupHint;
 	for (c = clients; c; c = c->next) {
@@ -3056,7 +3051,7 @@ xeventclientmessage(XEvent *e)
 		     (Atom)ev->data.l[2] == atoms[NetWMStateMaximizedHorz])) {
 			clienttile(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && c->state != Tiled)));
 		}
-		for (i = 0; i < 2; i++) {
+		for (i = 1; i < 3; i++) {
 			if ((Atom)ev->data.l[i] == atoms[NetWMStateFullscreen])
 				clientfullscreen(c, (ev->data.l[0] == 1 || (ev->data.l[0] == 2 && !c->isfullscreen)));
 			else if ((Atom)ev->data.l[i] == atoms[NetWMStateShaded])

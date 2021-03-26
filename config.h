@@ -18,9 +18,6 @@ struct Config config = {
 	/* whether a new window should be tabbed with the focused window if they have the same class */
 	.tabclass      = 0,
 
-	/* whether to use the WindowGroupHint field of te XWMHints to group windows on the same frame */
-	.grouphint     = 0,
-
 	/* mouse control (these configuration cannot be set via X resources) */
 	.modifier = Mod1Mask,   /* modifier pressed with mouse button */
 	.focusbuttons = 1,      /* bit mask of mouse buttons that focus windows */

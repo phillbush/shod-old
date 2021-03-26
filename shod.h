@@ -224,7 +224,6 @@ struct Config {
 	int mergeborders;
 	int hidetitle;
 	int tabclass;
-	int grouphint;
 
 	int gapinner;
 	int gapouter;
