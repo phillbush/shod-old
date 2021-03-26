@@ -3307,11 +3307,7 @@ xeventmaprequest(XEvent *e)
 
 	wins[1] = ev->window;
 	prop = getatomprop(ev->window, atoms[NetWMWindowType]);
-	if (prop == atoms[NetWMWindowTypeToolbar] ||
-	    prop == atoms[NetWMWindowTypeUtility] ||
-	    prop == atoms[NetWMWindowTypeMenu]) {
-		XMapWindow(dpy, ev->window);
-	} else if (prop == atoms[NetWMWindowTypeDesktop]) {
+	if (prop == atoms[NetWMWindowTypeDesktop]) {
 		XMapWindow(dpy, ev->window);
 		wins[0] = layerwin[LayerDesktop];
 		XRestackWindows(dpy, wins, sizeof wins);
