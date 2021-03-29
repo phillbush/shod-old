@@ -209,13 +209,23 @@ getresources(void)
 	if (XrmGetResource(xdb, "shod.mergeBorders", "*", &type, &xval) == True)
 		config.mergeborders = (strcasecmp(xval.addr, "true") == 0 ||
 		                       strcasecmp(xval.addr, "on") == 0);
-	if (XrmGetResource(xdb, "shod.tabClass", "*", &type, &xval) == True)
-		config.tabclass = (strcasecmp(xval.addr, "true") == 0 ||
-		                   strcasecmp(xval.addr, "on") == 0);
 	if (XrmGetResource(xdb, "shod.theme", "*", &type, &xval) == True)
 		config.theme_path = xval.addr;
 	if (XrmGetResource(xdb, "shod.font", "*", &type, &xval) == True)
 		config.font = xval.addr;
+	if (XrmGetResource(xdb, "shod.autoTab", "*", &type, &xval) == True) {
+		if (strcasecmp(xval.addr, "floating") == 0) {
+			config.autotab = TabFloating;
+		} else if (strcasecmp(xval.addr, "tilingAlways") == 0) {
+			config.autotab = TabTiledAlways;
+		} else if (strcasecmp(xval.addr, "tilingMulti") == 0) {
+			config.autotab = TabTiledMulti;
+		} else if (strcasecmp(xval.addr, "always") == 0) {
+			config.autotab = TabAlways;
+		} else {
+			config.autotab = NoAutoTab;
+		}
+	}
 }
 
 /* get window's WM_STATE property */
@@ -442,6 +452,7 @@ initatoms(void)
 		[NetWMDesktop]               = "_NET_WM_DESKTOP",
 		[NetFrameExtents]            = "_NET_FRAME_EXTENTS",
 		[NetDesktopViewport]         = "_NET_DESKTOP_VIEWPORT",
+		[ShodTabGroup]               = "_SHOD_TAB_GROUP"
 	};
 
 	XInternAtoms(dpy, atomnames, AtomLast, False, atoms);
@@ -594,23 +605,18 @@ icccmwmstate(Window win, int state)
 }
 
 static void
-icccmgroup(void)
+shodgroup(void)
 {
 	struct Client *c;
 	struct Tab *t;
-	XWMHints *hints;
 
-	hints = XAllocWMHints();
-	hints->flags = WindowGroupHint;
 	for (c = clients; c; c = c->next) {
 		if (c->seltab) {
-			hints->window_group = c->seltab->win;
 			for (t = c->tabs; t; t = t->next) {
-				XSetWMHints(dpy, t->win, hints);
+				XChangeProperty(dpy, t->win, atoms[ShodTabGroup], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&c->seltab->win, 1);
 			}
 		}
 	}
-	XFree(hints);
 }
 
 static void
@@ -830,6 +836,15 @@ ewmhsetclientsstacking(void)
 	free(wins);
 }
 
+static void
+ewmhupdate(void)
+{
+	shodgroup();
+	ewmhsetclients();
+	ewmhsetclientsstacking();
+	ewmhsetwmdesktop();
+}
+
 /* get client given a window */
 static struct Client *
 getclient(Window win)
@@ -876,13 +891,16 @@ gettab(struct Client *c, Window win)
 
 /* check if there is a titlebar of a client under cursor; return client */
 static struct Client *
-getclientbytitle(int x, int y)
+getclientbytitle(int x, int y, int *pos)
 {
 	struct Client *c;
 
-	for (c = clients; c; c = c->next)
-		if (y >= c->y - c->t - c->b && y < c->y && x >= c->x && x < c->x + c->w)
+	for (c = clients; c; c = c->next) {
+		if (clientisvisible(c) && y >= c->y - c->t - c->b && y < c->y && x >= c->x && x < c->x + c->w) {
+			*pos = (1 + (2 * c->ntabs * (x - c->x)) / c->w) / 2;
 			return c;
+		}
+	}
 	return NULL;
 }
 
@@ -964,7 +982,7 @@ tabmove(struct Tab *t, int x, int y)
 
 /* delete tab from client */
 static void
-tabdel(struct Tab *t)
+tabdel(struct Tab *t, int updateprops)
 {
 	struct Client *c;
 
@@ -973,10 +991,8 @@ tabdel(struct Tab *t)
 	XReparentWindow(dpy, t->win, root, c->x, c->y);
 	XUnmapWindow(dpy, t->title);
 	XDestroyWindow(dpy, t->title);
-	icccmgroup();
-	ewmhsetclients();
-	ewmhsetclientsstacking();
-	ewmhsetwmdesktop();
+	if (updateprops)
+		ewmhupdate();
 	free(t->name);
 	free(t->class);
 	free(t);
@@ -1038,7 +1054,7 @@ tabfocus(struct Tab *t)
 		XSetInputFocus(dpy, t->c->frame, RevertToParent, CurrentTime);
 	else
 		XSetInputFocus(dpy, t->win, RevertToParent, CurrentTime);
-	icccmgroup();
+	shodgroup();
 	ewmhsetstate(t->c);
 	ewmhsetactivewindow(t->win);
 }
@@ -1083,7 +1099,7 @@ tabdecorate(struct Tab *t, int style)
 static int
 clientgetstyle(struct Client *c)
 {
-	return (c == getfocused(NULL) ? Focused : Unfocused);
+	return (c && c == getfocused(NULL)) ? Focused : Unfocused;
 }
 
 /* check if client is visible */
@@ -1703,14 +1719,17 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	mon = desk->mon;
 
-	origw = c->fw;
-	origh = c->fh;
-	c->fw = min(c->fw, mon->gw - 2 * c->b);
-	c->fh = min(c->fh, mon->gh - 2 * c->b - c->t);
-	if (c->fw > c->fh)
-		c->fh = origh * (c->fw / origw);
+	/* if window is bigger than monitor, resize it while maintaining proportion */
+	origw = w = c->fw + 2 * c->b;
+	origh = h = c->fh + 2 * c->b + c->t;
+	w = min(w, mon->gw);
+	h = min(h, mon->gh);
+	if (origw - c->fw < origh - c->fh)
+		h = (origh * w) / origw;
 	else
-		c->fw = origw * (c->fh / origh);
+		w = (origw * h) / origh;
+	c->fw = max(minsize, w - (2 * c->b));
+	c->fh = max(minsize, h - (2 * c->b + c->t));
 
 	/* if the user placed the window, we should not re-place it */
 	if (c->isuserplaced)
@@ -2486,17 +2505,51 @@ clientadd(int x, int y, int w, int h, int isuserplaced)
 	return c;
 }
 
+/* delete client */
+static void
+clientdel(struct Client *c, int updateprops)
+{
+	struct Client *focus;
+
+	focus = getfocused(c);
+	clientdelfocus(c);
+	if (c->next)
+		c->next->prev = c->prev;
+	if (c->prev)
+		c->prev->next = c->next;
+	else
+		clients = c->next;
+	if (c->state == Tiled) {
+		rowdel(c->row);
+	}
+	if (c->state != Minimized && c->mon == selmon)
+		clientfocus(focus);
+	if (c->state != Minimized && c->state != Sticky)
+		c->desk->nclients--;
+	if (c->state == Tiled)
+		desktile(c->desk);
+	while (c->tabs)
+		tabdel(c->tabs, updateprops);
+	XDestroyWindow(dpy, c->frame);
+	XDestroyWindow(dpy, c->curswin);
+	free(c);
+}
+
 /* add tab into client w*/
 static void
 clienttab(struct Client *c, struct Tab *t, int pos)
 {
+	struct Client *oldc;
 	struct Tab *tmp, *prev;
 	int i;
 
+	oldc = t->c;
 	t->c = c;
 	c->seltab = t;
 	c->ntabs++;
 	if (pos == 0 || c->tabs == NULL) {
+		t->prev = NULL;
+		t->next = c->tabs;
 		if (c->tabs)
 			c->tabs->prev = t;
 		c->tabs = t;
@@ -2524,41 +2577,18 @@ clienttab(struct Client *c, struct Tab *t, int pos)
 	if (clientisvisible(c)) {
 		tabfocus(t);
 	}
-	icccmgroup();
+	if (oldc) {     /* deal with the frame this tab came from */
+		if (oldc->ntabs == 0) {
+			clientdel(oldc, 0);
+		} else if (oldc->state == Tiled) {
+			desktile(oldc->desk);
+		}
+	}
+	shodgroup();
 	ewmhsetframeextents(t->win, c->b, c->t);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 	ewmhsetwmdesktop();
-}
-
-/* delete client */
-static void
-clientdel(struct Client *c)
-{
-	struct Client *focus;
-
-	focus = getfocused(c);
-	clientdelfocus(c);
-	if (c->next)
-		c->next->prev = c->prev;
-	if (c->prev)
-		c->prev->next = c->next;
-	else
-		clients = c->next;
-	if (c->state == Tiled) {
-		rowdel(c->row);
-	}
-	if (c->state != Minimized && c->mon == selmon)
-		clientfocus(focus);
-	if (c->state != Minimized && c->state != Sticky)
-		c->desk->nclients--;
-	if (c->state == Tiled)
-		desktile(c->desk);
-	while (c->tabs)
-		tabdel(c->tabs);
-	XDestroyWindow(dpy, c->frame);
-	XDestroyWindow(dpy, c->curswin);
-	free(c);
 }
 
 /* change desktop */
@@ -2674,6 +2704,39 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 	}
 }
 
+/* check whether to place new window in tab rather than in new frame*/
+static int
+autotab(struct Tab *t)
+{
+	/* auto tab should be anabled */
+	if (config.autotab == NoAutoTab)
+		return 0;
+
+	/* there should be a focused frame */
+	if (!focused || focused != getfocused(NULL))
+		return 0;
+
+	/* focused frame must be unshaded with title bar visible */
+	if (focused->isfullscreen || focused->state == Minimized)
+		return 0;
+
+	/* classes must match */
+	if (!t->class || !focused->seltab->class || strcmp(t->class, focused->seltab->class) != 0)
+		return 0;
+
+	switch (config.autotab) {
+	case TabFloating:
+		return focused->state != Tiled;
+	case TabTiledAlways:
+		return focused->state == Tiled;
+	case TabTiledMulti:
+		return focused->state == Tiled && (focused->desk->col->next || focused->desk->col->row->next);
+	case TabAlways:
+		return 1;
+	}
+	return 0;
+}
+
 /* send a WM_DELETE message to client */
 static void
 windowclose(Window win)
@@ -2742,10 +2805,10 @@ unmanage(struct Tab *t)
 	struct Client *c;
 
 	c = t->c;
-	tabdel(t);
+	tabdel(t, 1);
 	calctabs(c);
 	if (c->ntabs == 0) {
-		clientdel(c);
+		clientdel(c, 1);
 	} else {
 		clientdecorate(c, clientgetstyle(c));
 		clientmoveresize(c);
@@ -2871,7 +2934,9 @@ xeventbuttonpress(XEvent *e)
 			return;
 		}
 		movetab = t;
-		tabdetach(t, ev->x_root, ev->y_root);
+		mousex = ev->x;
+		mousey = ev->y;
+		tabdetach(t, ev->x_root - mousex, ev->y_root - mousey);
 		tabfocus(c->seltab);
 		clientmoveresize(c);
 		clientdecorate(c, clientgetstyle(c));
@@ -2962,22 +3027,17 @@ static void
 xeventbuttonrelease(XEvent *e)
 {
 	XButtonReleasedEvent *ev = &e->xbutton;
-	struct Client *c, *oldc;
+	struct Client *c;
 	int region;
+	int pos;
 
 	if (mouseaction == Retabbing && movetab != NULL) {
-		oldc = movetab->c;
-		c = getclientbytitle(ev->x_root, ev->y_root);
+		c = getclientbytitle(ev->x_root, ev->y_root, &pos);
 		if (c != NULL) {
-			clienttab(c, movetab, -1);
+			clienttab(c, movetab, pos);
 		} else {
 			c = clientadd(ev->x_root, ev->y_root, movetab->winw, movetab->winh, 0);
 			manage(c, movetab, None);
-		}
-		if (oldc->ntabs == 0) {
-			clientdel(oldc);
-		} else if (oldc->state == Tiled) {
-			desktile(oldc->desk);
 		}
 	} else {
 		c = getclient(ev->window);
@@ -3271,7 +3331,7 @@ xeventexpose(XEvent *e)
 
 	if (ev->count == 0) {
 		if (movetab && ev->window == movetab->title) {
-			tabdecorate(movetab, Focused);
+			tabdecorate(movetab, clientgetstyle(movetab->c));
 		} else if ((c = getclient(ev->window)) != NULL) {
 			if (ev->window == c->frame) {
 				clientdecorate(c, clientgetstyle(c));
@@ -3345,12 +3405,7 @@ xeventmaprequest(XEvent *e)
 			transwin = win;
 		if (XGetWMNormalHints(dpy, ev->window, &size, &dl) && (size.flags & USPosition))
 			isuserplaced = 1;
-		if (config.tabclass && !isuserplaced &&
-		    focused && focused == getfocused(NULL) &&
-		    !focused->isshaded && !focused->isfullscreen && focused->state != Minimized &&
-		    !(focused->state == Tiled && focused->desk->col->next == NULL && focused->desk->col->row->next == NULL) &&
-		    t->class && focused->seltab->class &&
-		    strcmp(t->class, focused->seltab->class) == 0) {
+		if (!isuserplaced && transwin == None && autotab(t)) {
 			clienttab(focused, t, -1);
 			clientdecorate(focused, Focused);
 			clientmoveresize(focused);
@@ -3378,7 +3433,7 @@ xeventmotionnotify(XEvent *e)
 			mouseaction = NoAction;
 			return;
 		}
-		tabmove(movetab, ev->x_root, ev->y_root);
+		tabmove(movetab, ev->x_root - mousex, ev->y_root - mousey);
 		return;
 	}
 	if ((c = getclient(ev->window)) == NULL)
@@ -3546,7 +3601,7 @@ cleanclients(void)
 			clienthide(clients, 0);
 		if (clients->isshaded)
 			clientshade(clients, 0);
-		clientdel(clients);
+		clientdel(clients, 1);
 	}
 	while (mons) {
 		mondel(mons);

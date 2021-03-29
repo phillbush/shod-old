@@ -89,6 +89,16 @@ Regular floating frames appear on top of lowered floating frames.
 Raised floating frames appear on top of regular floating frames.
 .IP \(bu 2
 Fullscreen frames appear on top of raised floating frames.
+.PP
+.B shod
+sets the property
+.B _SHOD_TAB_GROUP
+on each window to the ID of the window of the focused tab of its frame.
+All the windows in the focused frame have the
+.B _NET_WM_STATE_FOCUSED
+atom set in the
+.B _NET_WM_STATE
+property.
 .SH USAGE
 .B shod
 has several ways of manipulating windows.
@@ -135,6 +145,8 @@ without pressing any modifier.
 A tab can be detached from its frame by dragging it with the Button 3;
 a detached frame, while being dragged with the Button 3,
 can be attached into another frame by dropping it into another frame's title bar.
+.PP
+Double clicking on a tab shades or unshades the frame.
 .PP
 Each frame has two buttons on its title bar.
 Clicking with the mouse Button 1 on the frame's left button (called the minimize button)
@@ -334,9 +346,14 @@ If set to \(lqtrue\(rq, a single tiled frame does not have borders.
 .B shod.mergeBorders
 If set to \(lqtrue\(rq, the borders of adjacent tiled frames are merged into a single border.
 .TP
-.B shod.tabClass
-If set to \(lqtrue\(rq, a new window is tab with the focused frame,
-if the focused window on that frame has the same class as the new window.
+.B shod.autotab
+Controls whether a new window should be tabbed with the focused window if they have the same class.
+If set to \(lqfloating\(rq, auto tabbing occurs if the focused window is floating.
+If set to \(lqtiledAlways\(rq, auto tabbing occurs if the focused window is tiled.
+If set to \(lqtiledMulti\(rq, auto tabbing occurs if the focused window is tiled
+and there is at least two tiled windows.
+If set to \(lqalways\(rq, auto tabbing occurs if the focused window has a visible title bar.
+If set to \(lqoff\(rq, auto tabbing does not occur.
 .SH EXAMPLES
 The following is a sample configuration for X resources.
 It must be placed in

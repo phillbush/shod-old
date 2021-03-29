@@ -16,7 +16,7 @@ struct Config config = {
 	.mergeborders  = 0,     /* whether to merge borders of tiled windows */
 
 	/* whether a new window should be tabbed with the focused window if they have the same class */
-	.tabclass      = 0,
+	.autotab       = NoAutoTab,
 
 	/* mouse control (these configuration cannot be set via X resources) */
 	.modifier = Mod1Mask,   /* modifier pressed with mouse button */

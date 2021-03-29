@@ -90,6 +90,8 @@ enum {
 	NetFrameExtents,
 	NetDesktopViewport,
 
+	ShodTabGroup,
+
 	AtomLast
 };
 
@@ -127,6 +129,15 @@ enum {
 	FrameButtonRight,
 	FrameTitle,
 	FrameBorder,
+};
+
+/* auto-tab behavior */
+enum {
+	NoAutoTab,
+	TabFloating,
+	TabTiledAlways,
+	TabTiledMulti,
+	TabAlways
 };
 
 /* window eight sections (aka octants) */
@@ -223,7 +234,7 @@ struct Config {
 	int ignoreborders;
 	int mergeborders;
 	int hidetitle;
-	int tabclass;
+	int autotab;
 
 	int gapinner;
 	int gapouter;
