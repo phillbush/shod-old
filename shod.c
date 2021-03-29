@@ -217,9 +217,9 @@ getresources(void)
 		if (strcasecmp(xval.addr, "floating") == 0) {
 			config.autotab = TabFloating;
 		} else if (strcasecmp(xval.addr, "tilingAlways") == 0) {
-			config.autotab = TabTiledAlways;
+			config.autotab = TabTilingAlways;
 		} else if (strcasecmp(xval.addr, "tilingMulti") == 0) {
-			config.autotab = TabTiledMulti;
+			config.autotab = TabTilingMulti;
 		} else if (strcasecmp(xval.addr, "always") == 0) {
 			config.autotab = TabAlways;
 		} else {
@@ -884,21 +884,6 @@ gettab(struct Client *c, Window win)
 					return t;
 				}
 			}
-		}
-	}
-	return NULL;
-}
-
-/* check if there is a titlebar of a client under cursor; return client */
-static struct Client *
-getclientbytitle(int x, int y, int *pos)
-{
-	struct Client *c;
-
-	for (c = clients; c; c = c->next) {
-		if (clientisvisible(c) && y >= c->y - c->t - c->b && y < c->y && x >= c->x && x < c->x + c->w) {
-			*pos = (1 + (2 * c->ntabs * (x - c->x)) / c->w) / 2;
-			return c;
 		}
 	}
 	return NULL;
@@ -2704,6 +2689,21 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 	}
 }
 
+/* check if there is a titlebar of a client under cursor; return client */
+static struct Client *
+getclientbytitle(int x, int y, int *pos)
+{
+	struct Client *c;
+
+	for (c = clients; c; c = c->next) {
+		if (clientisvisible(c) && y >= c->y - c->t - c->b && y < c->y && x >= c->x && x < c->x + c->w) {
+			*pos = (1 + (2 * c->ntabs * (x - c->x)) / c->w) / 2;
+			return c;
+		}
+	}
+	return NULL;
+}
+
 /* check whether to place new window in tab rather than in new frame*/
 static int
 autotab(struct Tab *t)
@@ -2727,9 +2727,9 @@ autotab(struct Tab *t)
 	switch (config.autotab) {
 	case TabFloating:
 		return focused->state != Tiled;
-	case TabTiledAlways:
+	case TabTilingAlways:
 		return focused->state == Tiled;
-	case TabTiledMulti:
+	case TabTilingMulti:
 		return focused->state == Tiled && (focused->desk->col->next || focused->desk->col->row->next);
 	case TabAlways:
 		return 1;

@@ -135,8 +135,8 @@ enum {
 enum {
 	NoAutoTab,
 	TabFloating,
-	TabTiledAlways,
-	TabTiledMulti,
+	TabTilingAlways,
+	TabTilingMulti,
 	TabAlways
 };
 
