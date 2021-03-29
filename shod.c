@@ -1257,8 +1257,7 @@ clientmoveresize(struct Client *c)
 			XUnmapWindow(dpy, t->title);
 		}
 	}
-	if (mouseaction == NoAction)
-		clientnotify(c);
+	clientnotify(c);
 }
 
 /* print client geometry */
