@@ -38,6 +38,7 @@ static int button;      /* size of the title bar and the buttons */
 static int minsize;     /* minimum size of a window */
 
 /* mouse manipulation variables */
+static int mousex_root = -1, mousey_root = -1;
 static int mousex = -1, mousey = -1;
 static int mouseaction = NoAction;
 static int pressed;
@@ -1256,7 +1257,8 @@ clientmoveresize(struct Client *c)
 			XUnmapWindow(dpy, t->title);
 		}
 	}
-	clientnotify(c);
+	if (mouseaction == NoAction)
+		clientnotify(c);
 }
 
 /* print client geometry */
@@ -2980,12 +2982,23 @@ xeventbuttonpress(XEvent *e)
 				break;
 			}
 		}
-
+		if (octant & W)
+			mousex = ev->x_root - c->x + c->b;
+		else if (octant & E)
+			mousex = c->x + c->w + c->b - ev->x_root;
+		else
+			mousex = 0;
+		if (octant & N)
+			mousey = ev->y_root - c->y + c->b + c->t;
+		else if (octant & S)
+			mousey = c->y + c->h + c->b - ev->y_root;
+		else
+			mousey = 0;
 		XGrabPointer(dpy, c->frame, False,
 		             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 		             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
-		mousex = ev->x_root;
-		mousey = ev->y_root;
+		mousex_root = ev->x_root;
+		mousey_root = ev->y_root;
 		clientdecorate(c, clientgetstyle(c));
 		clientmoveresize(c);
 	}
@@ -3039,26 +3052,26 @@ xeventbuttonrelease(XEvent *e)
 			c = clientadd(ev->x_root, ev->y_root, movetab->winw, movetab->winh, 0);
 			manage(c, movetab, None);
 		}
-	} else {
-		c = getclient(ev->window);
-		if (ev->window == c->frame && mouseaction == Button && target == c) {
-			region = frameregion(c, ev->window, ev->x, ev->y);
-			if (pressed == region) {
-				switch (region) {
-				case FrameButtonLeft:
-					clientminimize(c, 1);
-					break;
-				case FrameButtonRight:
-					if (c->seltab) {
-						windowclose(c->seltab->win);
-					}
-					break;
+	} else if ((c = getclient(ev->window)) != NULL &&
+	           ev->window == c->frame && mouseaction == Button && target == c) {
+		region = frameregion(c, ev->window, ev->x, ev->y);
+		if (pressed == region) {
+			switch (region) {
+			case FrameButtonLeft:
+				clientminimize(c, 1);
+				break;
+			case FrameButtonRight:
+				if (c->seltab) {
+					windowclose(c->seltab->win);
 				}
+				break;
 			}
 		}
 	}
 	XUngrabPointer(dpy, CurrentTime);
 	mouseaction = NoAction;
+	mousex_root = -1;
+	mousey_root = -1;
 	mousex = -1;
 	mousey = -1;
 	movetab = NULL;
@@ -3142,7 +3155,7 @@ xeventclientmessage(XEvent *e)
 		if (c == NULL)
 			return;
 		windowclose(ev->window);
-	} else if (ev->message_type == atoms[NetMoveresizeWindow]) {
+	} else if (ev->message_type == atoms[NetMoveresizeWindow] && mouseaction == NoAction) {
 		if (c == NULL)
 			return;
 		if (ev->data.l[0] & 1 << 8) {
@@ -3192,8 +3205,8 @@ xeventclientmessage(XEvent *e)
 		if (ev->data.l[2] == _NET_WM_MOVERESIZE_CANCEL) {
 			XUngrabPointer(dpy, CurrentTime);
 			mouseaction = NoAction;
-			mousex = -1;
-			mousey = -1;
+			mousex_root = -1;
+			mousey_root = -1;
 		} else {
 			switch (ev->data.l[2]) {
 			case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
@@ -3243,8 +3256,20 @@ xeventclientmessage(XEvent *e)
 			default:
 				return;
 			}
-			mousex = ev->data.l[0];
-			mousey = ev->data.l[1];
+			mousex_root = ev->data.l[0];
+			mousey_root = ev->data.l[1];
+			if (octant & W)
+				mousex = ev->data.l[0] - c->x + c->b;
+			else if (octant & E)
+				mousex = c->x + c->w + c->b - ev->data.l[0];
+			else
+				mousex = 0;
+			if (octant & N)
+				mousey = ev->data.l[1] - c->y + c->b + c->t;
+			else if (octant & S)
+				mousey = c->y + c->h + c->b - ev->data.l[1];
+			else
+				mousey = 0;
 			XGrabPointer(dpy, c->frame, False,
 			             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 			             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
@@ -3282,9 +3307,10 @@ xeventconfigurerequest(XEvent *e)
 	wc.border_width = ev->border_width;
 	wc.sibling = ev->above;
 	wc.stack_mode = ev->detail;
-	if ((c = getclient(ev->window)) != NULL) {
+	c = getclient(ev->window);
+	if (c != NULL && mouseaction == NoAction) {
 		clientconfigure(c, ev->value_mask, &wc);
-	} else {
+	} else if (c == NULL){
 		XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
 	}
 }
@@ -3425,7 +3451,7 @@ xeventmotionnotify(XEvent *e)
 {
 	XMotionEvent *ev = &e->xmotion;
 	struct Client *c;
-	int x, y;
+	int x = 0, y = 0;
 	int b;          /* border + inner gaps */
 
 	if (mouseaction == Retabbing) {
@@ -3471,60 +3497,26 @@ xeventmotionnotify(XEvent *e)
 		}
 		return;
 	} else if (mouseaction == Resizing) {
-		switch(octant) {
-		case NW:
-			x = mousex - ev->x_root;
-			y = mousey - ev->y_root;
-			if ((y > 0 && ev->y_root > c->y) || (y < 0 && ev->y_root < c->y) ||
-			    (x > 0 && ev->x_root > c->x) || (x < 0 && ev->x_root < c->x))
-				goto done;
-			break;
-		case NE:
-			x = ev->x_root - mousex;
-			y = mousey - ev->y_root;
-			if ((y > 0 && ev->y_root > c->y) || (y < 0 && ev->y_root < c->y) ||
-			    (x > 0 && ev->x_root < c->x + c->w) || (x < 0 && ev->x_root > c->x + c->w))
-				goto done;
-			break;
-		case SW:
-			x = mousex - ev->x_root;
-			y = ev->y_root - mousey;
-			if ((y > 0 && ev->y_root < c->y + c->h) || (y < 0 && ev->y_root > c->y + c->h) ||
-			    (x > 0 && ev->x_root > c->x) || (x < 0 && ev->x_root < c->x))
-				goto done;
-			break;
-		case SE:
-			x = ev->x_root - mousex;
-			y = ev->y_root - mousey;
-			if ((y > 0 && ev->y_root < c->y + c->h) || (y < 0 && ev->y_root > c->y + c->h) ||
-			    (x > 0 && ev->x_root < c->x + c->w) || (x < 0 && ev->x_root > c->x + c->w))
-				goto done;
-			break;
-		case N:
-			x = 0;
-			y = mousey - ev->y_root;
-			if (y == 0 || (y > 0 && ev->y_root > c->y) || (y < 0 && ev->y_root < c->y))
-				goto done;
-			break;
-		case S:
-			x = 0;
-			y = ev->y_root - mousey;
-			if (y == 0 || (y > 0 && ev->y_root < c->y + c->h) || (y < 0 && ev->y_root > c->y + c->h))
-				goto done;
-			break;
-		case W:
-			x = mousex - ev->x_root;
-			y = 0;
-			if (x == 0 || (x > 0 && ev->x_root > c->x) || (x < 0 && ev->x_root < c->x))
-				goto done;
-			break;
-		case E:
-			x = ev->x_root - mousex;
-			y = 0;
-			if (x == 0 || (x > 0 && ev->x_root < c->x + c->w) || (x < 0 && ev->x_root > c->x + c->w))
-				goto done;
-			break;
-		}
+		if (mousex > c->w + 2 * c->b)
+			mousex = c->b;
+		if (mousey > c->h + 2 * c->b + c->t)
+			mousey = c->b;
+		if (octant & W &&
+		    ((ev->x_root < mousex_root && mousex > ev->x_root - c->x + c->b) ||
+		     (ev->x_root > mousex_root && mousex < ev->x_root - c->x + c->b)))
+			x = mousex_root - ev->x_root;
+		else if (octant & E &&
+		    ((ev->x_root > mousex_root && mousex > c->x + c->w + c->b - ev->x_root) ||
+		     (ev->x_root < mousex_root && mousex < c->x + c->w + c->b - ev->x_root)))
+			x = ev->x_root - mousex_root;
+		if (octant & N &&
+		    ((ev->y_root < mousey_root && mousey > ev->y_root - c->y + c->b + c->t) ||
+		     (ev->y_root > mousey_root && mousey < ev->y_root - c->y + c->b + c->t)))
+			y = mousey_root - ev->y_root;
+		else if (octant & S &&
+		    ((ev->y_root > mousey_root && mousey > c->y + c->h + c->b - ev->y_root) ||
+		     (ev->y_root < mousey_root && mousey < c->y + c->h + c->b - ev->y_root)))
+			y = ev->y_root - mousey_root;
 		clientincrresize(c, octant, x, y);
 	} else if (mouseaction == Moving) {
 		if (c->state == Tiled) {
@@ -3542,14 +3534,13 @@ xeventmotionnotify(XEvent *e)
 			else
 				y = 0;
 		} else {
-			x = ev->x_root - mousex;
-			y = ev->y_root - mousey;
+			x = ev->x_root - mousex_root;
+			y = ev->y_root - mousey_root;
 		}
 		clientincrmove(c, x, y);
 	}
-done:
-	mousex = ev->x_root;
-	mousey = ev->y_root;
+	mousex_root = ev->x_root;
+	mousey_root = ev->y_root;
 }
 
 /* update client properties */
