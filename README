@@ -1,10 +1,11 @@
                                 Shod
 
-Shod is an hybrid (tiling and floating) multimonitor X11 window manager.
-Shod sets no keybindings; reads no configuration other than X resources;
-and works only via mouse with a given key modifier (Alt by default), and
-by responding to client messages with EWMH hints (so you must use wmctrl
-to control shod).
+Shod is an hybrid (tiling and floating) reparenting and themeable
+multimonitor X11 window manager which support tabs.  Shod sets no
+keybindings; reads no configuration other than X resources; and works
+only via mouse with a given key modifier (Alt by default), and by
+responding to client messages with EWMH hints (so it is needed
+wmctrl(1) to control shod).
 
 WARNING: Shod is attempt of mine to write a Wm and better understand how
          X11 works, Shod is only meant for me for educational purposes.
@@ -20,6 +21,10 @@ Non-features:
 • No bar/panels (I do not use panels, so I add no support for them).
 
 Features:
+• Shod can tab windows. Just move the tab from a window to another with
+  the right mouse button.  Windows can be automatically tabbed by
+  setting the `shod.autoTab` X resource (see the manual).
+
 • Shod uses EWMH-based maximization to implement tiled windows; that is,
   when you maximize a window (seting BOTH '_NET_WM_STATE_MAXIMIZED_HORZ'
   and '_NET_WM_STATE_MAXIMIZED_VERT') it is tiled rather than maximized
@@ -59,14 +64,10 @@ TODO.
   X resources.
 
 See also.
-For a better experience with shod see also focus[1], which include tools
-to change the focused window, focused desktop and focused monitor;  With
-this utility, you can focus the tiled window on the right, for instance.
 For scripting, see also lsd[2] and lsc[3], which list useful information
 about desktop and clients.  For a desktop menu and desktop prompt, check
 out xmenu[4] and xprompt[5].  For other handful utilities for X11, check
 out xutils[6].
-[1] https://github.com/phillbush/focus
 [2] https://github.com/phillbush/lsd
 [3] https://github.com/phillbush/lsc
 [4] https://github.com/phillbush/xmenu
