@@ -1232,18 +1232,13 @@ clienttitlewidth(struct Client *c, int title)
 	c->t = title;
 }
 
-/* commit floating client size and position */
+/* move and resize tabs within frame */
 static void
-clientmoveresize(struct Client *c)
+clientretab(struct Client *c)
 {
 	struct Tab *t;
 	int i;
 
-	if (c == NULL)
-		return;
-	calctabs(c);
-	XMoveResizeWindow(dpy, c->frame, c->x - c->b, c->y - c->b - c->t, c->w + c->b * 2, c->h + c->b * 2 + c->t);
-	XMoveResizeWindow(dpy, c->curswin, 0, 0, c->w + c->b * 2, c->h + c->b * 2 + c->t);
 	for (i = 0, t = c->tabs; t; t = t->next, i++) {
 		if (c->isshaded) {
 			XMoveResizeWindow(dpy, t->win, c->b, 2 * c->b + c->t, c->w, c->saveh);
@@ -1257,6 +1252,18 @@ clientmoveresize(struct Client *c)
 			XUnmapWindow(dpy, t->title);
 		}
 	}
+}
+
+/* commit floating client size and position */
+static void
+clientmoveresize(struct Client *c)
+{
+	if (c == NULL)
+		return;
+	calctabs(c);
+	XMoveResizeWindow(dpy, c->frame, c->x - c->b, c->y - c->b - c->t, c->w + c->b * 2, c->h + c->b * 2 + c->t);
+	XMoveResizeWindow(dpy, c->curswin, 0, 0, c->w + c->b * 2, c->h + c->b * 2 + c->t);
+	clientretab(c);
 	clientnotify(c);
 }
 
@@ -1680,6 +1687,85 @@ frameregion(struct Client *c, Window win, int x, int y)
 	return FrameNone;
 }
 
+/* get in which corner or side of window the cursor is in */
+static enum Octant
+frameoctant(struct Client *c, Window win, int x, int y)
+{
+	double tan;
+	int wm, hm;
+	int w, h;
+	int b;
+
+	if (c == NULL || c->state == Minimized)
+		return SE;
+	if (win == c->frame || win == c->curswin) {
+		x -= c->b;
+		y -= c->b + c->t;
+	}
+	w = c->w;
+	h = c->h;
+	b = corner - c->b;
+	if (x > 0 && x >= w - b && y > 0 && y >= h - b)
+		return SE;
+	if (x > 0 && x >= w - b && y < h && y <= b)
+		return NE;
+	if (x < w && x <= b && y > 0 && y >= h - b)
+		return SW;
+	if (x < w && x <= b && y < h && y <= b)
+		return NW;
+	if (x < 0)
+		return W;
+	if (y < 0)
+		return N;
+	if (x >= w)
+		return E;
+	if (y >= h)
+		return S;
+	wm = w / 2;
+	hm = h / 2;
+	if (c->state == Tiled) {
+		tan = (double)h/w;
+		if (tan == 0.0)
+			tan = 1.0;
+		if (y >= hm) {
+			h = y - hm;
+			w = h / tan;
+			if (x < wm - w) {
+				return W;
+			} if (x > wm + w) {
+				return E;
+			} else {
+				return S;
+			}
+		} else {
+			h = hm - y;
+			w = h / tan;
+			if (x < wm - w) {
+				return W;
+			} if (x > wm + w) {
+				return E;
+			} else {
+				return N;
+			}
+		}
+		return N;
+	} else {
+		if (x >= wm && y >= hm) {
+			return SE;
+		}
+		if (x >= wm && y <= hm) {
+			return NE;
+		}
+		if (x <= wm && y >= hm) {
+			return SW;
+		}
+		if (x <= wm && y <= hm) {
+			return NW;
+		}
+	}
+	return SE;
+}
+
 #define DIV       15      /* number to divide the screen into grids */
 #define WIDTH(x)  ((x)->fw + 2 * c->b)
 #define HEIGHT(x) ((x)->fh + 2 * c->b + c->t)
@@ -1697,8 +1783,6 @@ clientplace(struct Client *c, struct Desktop *desk)
 	int posi, posj;         /* position of the larger region */
 	int lw, lh;             /* larger region width and height */
 	int origw, origh;
-
-	/* TODO: rewrite this function, it doesn't consider the client size */
 
 	if (desk == NULL || c == NULL || c->state == Tiled || c->isfullscreen || c->state == Minimized)
 		return;
@@ -1829,81 +1913,6 @@ clientplace(struct Client *c, struct Desktop *desk)
 		c->fx = max(mon->gx + c->b, c->fx);
 		c->fx = min(c->fx, maxx);
 	}
-}
-
-/* get in which corner or side of window the cursor is in */
-static enum Octant
-clientoctant(struct Client *c, int x, int y)
-{
-	double tan;
-	int wm, hm;
-	int w, h;
-	int b;
-
-	if (c == NULL || c->state == Minimized)
-		return SE;
-	w = c->w;
-	h = c->h;
-	b = corner - c->b;
-	if (x > 0 && x >= w - b && y > 0 && y >= h - b)
-		return SE;
-	if (x > 0 && x >= w - b && y < h && y <= b)
-		return NE;
-	if (x < w && x <= b && y > 0 && y >= h - b)
-		return SW;
-	if (x < w && x <= b && y < h && y <= b)
-		return NW;
-	if (x < 0)
-		return W;
-	if (y < 0)
-		return N;
-	if (x >= w)
-		return E;
-	if (y >= h)
-		return S;
-	wm = w / 2;
-	hm = h / 2;
-	if (c->state == Tiled) {
-		tan = (double)h/w;
-		if (tan == 0.0)
-			tan = 1.0;
-		if (y >= hm) {
-			h = y - hm;
-			w = h / tan;
-			if (x < wm - w) {
-				return W;
-			} if (x > wm + w) {
-				return E;
-			} else {
-				return S;
-			}
-		} else {
-			h = hm - y;
-			w = h / tan;
-			if (x < wm - w) {
-				return W;
-			} if (x > wm + w) {
-				return E;
-			} else {
-				return N;
-			}
-		}
-		return N;
-	} else {
-		if (x >= wm && y >= hm) {
-			return SE;
-		}
-		if (x >= wm && y <= hm) {
-			return NE;
-		}
-		if (x <= wm && y >= hm) {
-			return SW;
-		}
-		if (x <= wm && y <= hm) {
-			return NW;
-		}
-	}
-	return SE;
 }
 
 /* check if new size is ok */
@@ -2865,7 +2874,7 @@ mapfocuswin(void)
 	XMapWindow(dpy, focuswin);
 }
 
-/* focus window when clicking on it, and activate moving/resizing */
+/* handle mouse operation, focusing and raising */
 static void
 xeventbuttonpress(XEvent *e)
 {
@@ -2875,7 +2884,9 @@ xeventbuttonpress(XEvent *e)
 	struct Monitor *mon;
 	struct Client *c;
 	struct Tab *t;
+	Window grabwin = None;
 	Cursor curs = None;
+	unsigned int mask;
 	int region;
 	int focus = 0;
 	int raise = 0;
@@ -2885,24 +2896,17 @@ xeventbuttonpress(XEvent *e)
 		mon = getmon(ev->x_root, ev->y_root);
 		if (mon)
 			deskchange(mon->seldesk);
-		goto done;
-	}
-
-	region = frameregion(c, ev->window, ev->x, ev->y);
-
-	if (region == FrameButtonLeft || region == FrameButtonRight) {
-		target = c;
-		pressed = region;
-		mouseaction = Button;
-		XGrabPointer(dpy, c->frame, False,
-		             ButtonReleaseMask,
-		             GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
-		clientdecorate(c, clientgetstyle(c));
 		return;
 	}
 
-	/* check action performed by mouse */
-	if (ev->state == config.modifier && ev->button == Button1) {
+	/* get region and octant of the frame the mouse pointer is in */
+	region = frameregion(c, ev->window, ev->x, ev->y);
+	octant = frameoctant(c, ev->window, ev->x, ev->y);
+
+	/* get action performed by mouse */
+	if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
+		mouseaction = Button;
+	} else if (ev->state == config.modifier && ev->button == Button1) {
 		mouseaction = Moving;
 	} else if (ev->state == config.modifier && ev->button == Button3) {
 		mouseaction = Resizing;
@@ -2921,85 +2925,91 @@ xeventbuttonpress(XEvent *e)
 			return;
 		}
 		pressed = FrameTitle;
-		mouseaction = Moving;
 		lastc = c;
 		lasttime = ev->time;
+		mouseaction = Moving;
 	} else {
 		mouseaction = NoAction;
 	}
 
-	/* user is dragging window title with right mouse button */
-	if (mouseaction == Retabbing) {
+	/* operate on basis of mouse action */
+	switch (mouseaction) {
+	case Button:
+		pressed = region;
+		grabwin = c->frame;
+		mask = ButtonReleaseMask;
+		curs = cursor[CursNormal];
+		break;
+	case Retabbing:
 		if ((t = gettab(NULL, ev->window)) == NULL || t->title != ev->window) {
 			mouseaction = NoAction;
-			return;
+			break;
 		}
+		mask = ButtonReleaseMask | Button3MotionMask;
+		grabwin = t->title;
 		movetab = t;
 		mousex = ev->x;
 		mousey = ev->y;
 		tabdetach(t, ev->x_root - mousex, ev->y_root - mousey);
 		tabfocus(c->seltab);
-		clientmoveresize(c);
-		clientdecorate(c, clientgetstyle(c));
-		XGrabPointer(dpy, t->title, False,
-		             ButtonReleaseMask | Button3MotionMask,
-		             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
-		return;
+		clientretab(c);
+		curs = cursor[CursNormal];
+		break;
+	case Moving:
+		mask = ButtonReleaseMask | Button1MotionMask | Button3MotionMask;
+		grabwin = c->frame;
+		curs = cursor[CursMove];
+		break;
+	case Resizing:
+		mask = ButtonReleaseMask | Button1MotionMask | Button3MotionMask;
+		grabwin = c->frame;
+		switch (octant) {
+		case NW:
+			curs = c->isshaded ? cursor[CursW] : cursor[CursNW];
+			mousex = ev->x_root - c->x + c->b;
+			mousey = ev->y_root - c->y + c->b + c->t;
+			break;
+		case NE:
+			curs = c->isshaded ? cursor[CursE] : cursor[CursNE];
+			mousex = c->x + c->w + c->b - ev->x_root;
+			mousey = ev->y_root - c->y + c->b + c->t;
+			break;
+		case SW:
+			curs = c->isshaded ? cursor[CursW] : cursor[CursSW];
+			mousex = ev->x_root - c->x + c->b;
+			mousey = c->y + c->h + c->b - ev->y_root;
+			break;
+		case SE:
+			curs = c->isshaded ? cursor[CursE] : cursor[CursSE];
+			mousex = c->x + c->w + c->b - ev->x_root;
+			mousey = c->y + c->h + c->b - ev->y_root;
+			break;
+		case N:
+			curs = cursor[CursN];
+			mousey = ev->y_root - c->y + c->b + c->t;
+			break;
+		case S:
+			curs = cursor[CursS];
+			mousey = c->y + c->h + c->b - ev->y_root;
+			break;
+		case W:
+			curs = cursor[CursW];
+			mousex = ev->x_root - c->x + c->b;
+			break;
+		case E:
+			curs = cursor[CursE];
+			mousex = c->x + c->w + c->b - ev->x_root;
+			break;
+		}
+		break;
 	}
 
-	/* user is dragging window while clicking modifier or dragging window's border */
+	/* if performing a mouse action, set global variables and grab the pointer */
 	if (mouseaction != NoAction) {
 		target = c;
-		octant = clientoctant(c, ev->x_root - c->x, ev->y_root - c->y);
-		if (mouseaction == Moving) {
-			curs = cursor[CursMove];
-		} else {
-			switch (octant) {
-			case NW:
-				curs = c->isshaded ? cursor[CursW] : cursor[CursNW];
-				break;
-			case NE:
-				curs = c->isshaded ? cursor[CursE] : cursor[CursNE];
-				break;
-			case SW:
-				curs = c->isshaded ? cursor[CursW] : cursor[CursSW];
-				break;
-			case SE:
-				curs = c->isshaded ? cursor[CursE] : cursor[CursSE];
-				break;
-			case N:
-				curs = cursor[CursN];
-				break;
-			case S:
-				curs = cursor[CursS];
-				break;
-			case W:
-				curs = cursor[CursW];
-				break;
-			case E:
-				curs = cursor[CursE];
-				break;
-			}
-		}
-		if (octant & W)
-			mousex = ev->x_root - c->x + c->b;
-		else if (octant & E)
-			mousex = c->x + c->w + c->b - ev->x_root;
-		else
-			mousex = 0;
-		if (octant & N)
-			mousey = ev->y_root - c->y + c->b + c->t;
-		else if (octant & S)
-			mousey = c->y + c->h + c->b - ev->y_root;
-		else
-			mousey = 0;
-		XGrabPointer(dpy, c->frame, False,
-		             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
-		             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
 		mousex_root = ev->x_root;
 		mousey_root = ev->y_root;
-		clientdecorate(c, clientgetstyle(c));
-		clientmoveresize(c);
+		XGrabPointer(dpy, grabwin, False, mask, GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
 	}
 
 	/* focus client */
@@ -3015,6 +3025,8 @@ xeventbuttonpress(XEvent *e)
 		focus = 1;
 	if (focus)
 		clientfocus(c);
+	else
+		clientdecorate(c, clientgetstyle(c));
 
 	/* raise client */
 	if (ev->button == Button1 && config.raisebuttons & 1 << 0)
@@ -3030,7 +3042,6 @@ xeventbuttonpress(XEvent *e)
 	if (raise)
 		clientraise(c);
 
-done:
 	XAllowEvents(dpy, ReplayPointer, CurrentTime);
 }
 
@@ -3465,7 +3476,7 @@ xeventmotionnotify(XEvent *e)
 		return;
 	if (mouseaction == NoAction && ev->subwindow == c->curswin) {
 		if (frameregion(c, ev->window, ev->x, ev->y) == FrameBorder) {
-			switch (clientoctant(c, ev->x - c->b, ev->y - c->b - c->t)) {
+			switch (frameoctant(c, ev->window, ev->x, ev->y)) {
 			case NW:
 				XDefineCursor(dpy, c->curswin, (c->isshaded ? cursor[CursW] : cursor[CursNW]));
 				break;
