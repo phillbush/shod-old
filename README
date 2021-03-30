@@ -57,6 +57,7 @@ Features:
   raise a window.
 
 TODO.
+• Fix transient window placement and stacking order.
 • Handle window urgency and _NET_WM_STATE_DEMANDS_ATTENTION state.
 • Add support to panels/bars.
 • Add support for window rules.
