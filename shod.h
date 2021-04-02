@@ -1,5 +1,5 @@
 #define DOUBLECLICK  250        /* time in miliseconds of a double click */
-#define NAMEMAXLEN   128        /* maximum length of window's name */
+#define NAMEMAXLEN   1024       /* maximum length of window's name */
 
 /* window states */
 enum {
@@ -152,11 +152,24 @@ enum Octant {
 	SE = (1 << 1) | (1 << 3),
 };
 
+/* transient window structure */
+struct Transient {
+	struct Transient *prev, *next;
+	struct Tab *t;
+	Window frame;
+	Window win;
+	int x, y, w, h;
+	int maxw, maxh;
+	int ignoreunmap;
+};
+
 /* tab structure */
 struct Tab {
 	struct Tab *prev, *next;
 	struct Client *c;
+	struct Transient *trans;
 	Window title;
+	Window frame;
 	Window win;
 	char *name;
 	char *class;
@@ -269,4 +282,17 @@ struct Decor {
 	Pixmap se;
 	unsigned long fg;
 	unsigned long bg;
+};
+
+/* union returned by getclient */
+struct Winres {
+	struct Client *c;
+	struct Tab *t;
+	struct Transient *trans;
+};
+
+/* rectangle */
+struct Outline {
+	int x, y, w, h;
+	int diffx, diffy;
 };
