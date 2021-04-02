@@ -21,6 +21,9 @@ Non-features:
 • No bar/panels (I do not use panels, so I add no support for them).
 
 Features:
+• Shod maps transient windows, like dialogs, the same way macos does:
+  inside the frame of the main window.
+
 • Shod can tab windows. Just move the tab from a window to another with
   the right mouse button.  Windows can be automatically tabbed by
   setting the `shod.autoTab` X resource (see the manual).
