@@ -62,7 +62,7 @@ static int showingdesk = 0;
 static XSetWindowAttributes clientswa = {
 	.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
 		    | SubstructureRedirectMask | ButtonPressMask | FocusChangeMask
-		    | PointerMotionMask,
+		    | PointerMotionMask
 };
 
 /* other variables */
@@ -834,7 +834,7 @@ ewmhsetclientsstacking(void)
 	size_t i = 0, nwins = 0;
 
 	last = NULL;
-	for (c = clients; c; c = c->next) {
+	for (c = focused; c; c = c->fnext) {
 		last = c;
 		for (t = c->tabs; t; t = t->next) {
 			for (trans = t->trans; trans; trans = trans->next) {
@@ -3161,6 +3161,21 @@ outlinedraw(void)
 	XChangeGC(dpy, gc, GCFunction | GCSubwindowMode, &val);
 }
 
+/* ungrab pointer and set mouse action to NoAction */
+static void
+ungrab(void)
+{
+	XUngrabPointer(dpy, CurrentTime);
+	mouseaction = NoAction;
+	mousex_root = -1;
+	mousey_root = -1;
+	mousex = -1;
+	mousey = -1;
+	movetab = NULL;
+	target = NULL;
+	pressed = FrameNone;
+}
+
 /* handle mouse operation, focusing and raising */
 static void
 xeventbuttonpress(XEvent *e)
@@ -3399,15 +3414,7 @@ xeventbuttonrelease(XEvent *e)
 		outline.diffy = 0;
 		outlinedraw();
 	}
-	XUngrabPointer(dpy, CurrentTime);
-	mouseaction = NoAction;
-	mousex_root = -1;
-	mousey_root = -1;
-	mousex = -1;
-	mousey = -1;
-	movetab = NULL;
-	target = NULL;
-	pressed = FrameNone;
+	ungrab();
 	if (c != NULL) {
 		clientdecorate(c, clientgetstyle(c), 1);
 		if (clientisvisible(c)) {
@@ -3539,10 +3546,7 @@ xeventclientmessage(XEvent *e)
 		if (c == NULL)
 			return;
 		if (ev->data.l[2] == _NET_WM_MOVERESIZE_CANCEL) {
-			XUngrabPointer(dpy, CurrentTime);
-			mouseaction = NoAction;
-			mousex_root = -1;
-			mousey_root = -1;
+			ungrab();
 		} else {
 			switch (ev->data.l[2]) {
 			case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
@@ -3592,6 +3596,7 @@ xeventclientmessage(XEvent *e)
 			default:
 				return;
 			}
+			target = c;
 			mousex_root = ev->data.l[0];
 			mousey_root = ev->data.l[1];
 			if (octant & W)
