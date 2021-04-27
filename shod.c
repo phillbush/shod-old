@@ -1218,6 +1218,10 @@ tabdecorate(struct Tab *t, int style)
 		y = (button - box.height) / 2 - box.y;
 		XmbDrawString(dpy, t->title, fontset, gc, x, y, t->name, len);
 	}
+	val.foreground = d->bg;
+	val.fill_style = FillSolid;
+	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
+	XFillRectangle(dpy, t->frame, gc, 0, 0, t->c->w, t->c->h);
 }
 
 /* get decoration style (and state) of client */
@@ -1334,9 +1338,9 @@ clientdecorate(struct Client *c, int style, int decorateall)
 	XCopyArea(dpy, (octant == W) ? dp->wf : d->wf, c->frame, gc, 0, 0, border, edge, origin, origin + corner);
 	XCopyArea(dpy, (octant == N) ? dp->nl : d->nl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin);
 	XCopyArea(dpy, (octant == E) ? dp->ef : d->ef, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner);
-	XCopyArea(dpy, (octant == S) ? dp->sf : d->sf, c->frame, gc, 0, 0, edge, border, origin + corner, origin + border + c->h);
+	XCopyArea(dpy, (octant == S) ? dp->sf : d->sf, c->frame, gc, 0, 0, edge, border, origin + corner, origin + border + c->t + c->h);
 	XCopyArea(dpy, (octant == W) ? dp->wl : d->wl, c->frame, gc, 0, 0, border, edge, origin, origin + corner + h - edge);
-	XCopyArea(dpy, (octant == S) ? dp->sl : d->sl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin + border + c->h);
+	XCopyArea(dpy, (octant == S) ? dp->sl : d->sl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin + border + c->t + c->h);
 	XCopyArea(dpy, (octant == E) ? dp->el : d->el, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner + h - edge);
 	XCopyArea(dpy, (octant == NW || (octant == SW && c->isshaded)) ? dp->nw : d->nw, c->frame, gc, 0, corner/2, corner, corner/2+1, origin, origin + corner/2);
 	XCopyArea(dpy, (octant == NE || (octant == SE && c->isshaded)) ? dp->ne : d->ne, c->frame, gc, 0, corner/2, corner, corner/2+1, fullw - corner - origin, origin + corner/2);
@@ -1348,10 +1352,6 @@ clientdecorate(struct Client *c, int style, int decorateall)
 	XCopyArea(dpy, (octant == SE || (octant == NE && c->isshaded)) ? dp->se : d->se, c->frame, gc, 0, corner/2, corner, corner/2+1, fullw - corner - origin, fullh - corner - origin + corner/2);
 
 	/* draw title and buttons */
-	val.foreground = d->bg;
-	val.fill_style = FillSolid;
-	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
-	XFillRectangle(dpy, c->frame, gc, c->b, c->b, c->w, c->h + c->t);
 	if (c->t > 0) {
 		dp = (c == target && mouseaction == Button && (pressed == FrameButtonLeft || pressed == FrameButtonRight)) ? &decor[style][1] : &decor[style][0];
 		XCopyArea(dpy, dp->bl, c->frame, gc, 0, 0, button, button, c->b, c->b);
