@@ -1351,6 +1351,12 @@ clientdecorate(struct Client *c, int style, int decorateall)
 	XCopyArea(dpy, (octant == SW || (octant == NW && c->isshaded)) ? dp->sw : d->sw, c->frame, gc, 0, corner/2, corner, corner/2+1, origin, fullh - corner - origin + corner/2);
 	XCopyArea(dpy, (octant == SE || (octant == NE && c->isshaded)) ? dp->se : d->se, c->frame, gc, 0, corner/2, corner, corner/2+1, fullw - corner - origin, fullh - corner - origin + corner/2);
 
+	/* draw background */
+	val.foreground = d->bg;
+	val.fill_style = FillSolid;
+	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
+	XFillRectangle(dpy, c->frame, gc, c->b, c->b, c->w, c->h + c->t);
+
 	/* draw title and buttons */
 	if (c->t > 0) {
 		dp = (c == target && mouseaction == Button && (pressed == FrameButtonLeft || pressed == FrameButtonRight)) ? &decor[style][1] : &decor[style][0];
@@ -3176,6 +3182,104 @@ ungrab(void)
 	pressed = FrameNone;
 }
 
+/* initiate button pressing and grab pointer */
+static void
+grabbutton(struct Client *c, int xroot, int yroot, int region)
+{
+	pressed = region;
+	target = c;
+	mousex_root = xroot;
+	mousey_root = yroot;
+	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
+}
+
+/* initiate retabbing and grab pointer */
+static void
+grabretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
+{
+	movetab = t;
+	target = c;
+	mousex_root = xroot;
+	mousey_root = yroot;
+	mousex = x;
+	mousey = y;
+	tabdetach(t, xroot - x, yroot - y);
+	tabfocus(c->seltab);
+	clientretab(c);
+	XGrabPointer(dpy, t->title, False, ButtonReleaseMask | Button3MotionMask, GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
+}
+
+/* initiate moving with mouse and grab pointer */
+static void
+grabmove(struct Client *c, int xroot, int yroot)
+{
+	target = c;
+	mousex_root = xroot;
+	mousey_root = yroot;
+	XGrabPointer(dpy, c->frame, False,
+	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
+	             GrabModeAsync, GrabModeAsync, None, cursor[CursMove], CurrentTime);
+}
+
+/* initiate resizing with mouse and grab pointer */
+static void
+grabresize(struct Client *c, int xroot, int yroot, enum Octant o)
+{
+	Cursor curs = None;
+
+	outline.x = c->x - c->b;
+	outline.y = c->y - c->b - c->t;
+	outline.w = c->w + 2 * c->b;
+	outline.h = c->h + 2 * c->b + c->t;
+	outline.diffx = 0;
+	outline.diffy = 0;
+	octant = o;
+	target = c;
+	mousex_root = xroot;
+	mousey_root = yroot;
+	switch (octant) {
+	case NW:
+		curs = c->isshaded ? cursor[CursW] : cursor[CursNW];
+		break;
+	case NE:
+		curs = c->isshaded ? cursor[CursE] : cursor[CursNE];
+		break;
+	case SW:
+		curs = c->isshaded ? cursor[CursW] : cursor[CursSW];
+		break;
+	case SE:
+		curs = c->isshaded ? cursor[CursE] : cursor[CursSE];
+		break;
+	case N:
+		curs = cursor[CursN];
+		break;
+	case S:
+		curs = cursor[CursS];
+		break;
+	case W:
+		curs = cursor[CursW];
+		break;
+	case E:
+		curs = cursor[CursE];
+		break;
+	}
+	if (octant & W)
+		mousex = xroot - c->x + c->b;
+	else if (octant & E)
+		mousex = c->x + c->w + c->b - xroot;
+	else
+		mousex = 0;
+	if (octant & N)
+		mousey = yroot - c->y + c->b + c->t;
+	else if (octant & S)
+		mousey = c->y + c->h + c->b - yroot;
+	else
+		mousey = 0;
+	XGrabPointer(dpy, c->frame, False,
+	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
+	             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+}
+
 /* handle mouse operation, focusing and raising */
 static void
 xeventbuttonpress(XEvent *e)
@@ -3187,9 +3291,6 @@ xeventbuttonpress(XEvent *e)
 	struct Monitor *mon;
 	struct Client *c;
 	struct Tab *t;
-	Window grabwin = None;
-	Cursor curs = None;
-	unsigned int mask;
 	int region;
 	int focus = 0;
 	int raise = 0;
@@ -3221,7 +3322,7 @@ xeventbuttonpress(XEvent *e)
 		mouseaction = Moving;
 	} else if (region == FrameBorder && ev->button == Button1) {
 		mouseaction = Resizing;
-	} else if (region == FrameTitle && ev->button == Button3) {
+	} else if (region == FrameTitle && ev->button == Button3 && t != NULL && t->c != NULL && t->title == ev->window) {
 		mouseaction = Retabbing;
 	} else if (region == FrameTitle && ev->button == Button1) {
 		tabfocus(t);
@@ -3238,99 +3339,26 @@ xeventbuttonpress(XEvent *e)
 	} else {
 		mouseaction = NoAction;
 	}
+	if (mouseaction == Resizing && c->state == Tiled &&
+	    ((c->row->col->next == NULL && octant & E) || (c->row->col->prev == NULL && octant & W) ||
+	     (c->row->prev == NULL && octant & N) || (c->row->next == NULL && octant & S))) {
+		mouseaction = NoAction;
+	}
 
 	/* operate on basis of mouse action */
 	switch (mouseaction) {
 	case Button:
-		pressed = region;
-		grabwin = c->frame;
-		mask = ButtonReleaseMask;
-		curs = cursor[CursNormal];
+		grabbutton(c, ev->x_root, ev->y_root, region);
 		break;
 	case Retabbing:
-		if (t == NULL || t->title != ev->window) {
-			mouseaction = NoAction;
-			break;
-		}
-		mask = ButtonReleaseMask | Button3MotionMask;
-		grabwin = t->title;
-		movetab = t;
-		mousex = ev->x;
-		mousey = ev->y;
-		tabdetach(t, ev->x_root - mousex, ev->y_root - mousey);
-		tabfocus(c->seltab);
-		clientretab(c);
-		curs = cursor[CursNormal];
+		grabretab(c, t, ev->x_root, ev->y_root, ev->x, ev->y);
 		break;
 	case Moving:
-		mask = ButtonReleaseMask | Button1MotionMask | Button3MotionMask;
-		grabwin = c->frame;
-		curs = cursor[CursMove];
+		grabmove(c, ev->x_root, ev->y_root);
 		break;
 	case Resizing:
-		if (c->state == Tiled &&
-		    ((c->row->col->next == NULL && octant & E) ||
-		     (c->row->col->prev == NULL && octant & W) ||
-		     (c->row->prev == NULL && octant & N) ||
-		     (c->row->next == NULL && octant & S))) {
-			mouseaction = NoAction;
-			break;
-		}
-		outline.x = c->x - c->b;
-		outline.y = c->y - c->b - c->t;
-		outline.w = c->w + 2 * c->b;
-		outline.h = c->h + 2 * c->b + c->t;
-		outline.diffx = 0;
-		outline.diffy = 0;
-		mask = ButtonReleaseMask | Button1MotionMask | Button3MotionMask;
-		grabwin = c->frame;
-		switch (octant) {
-		case NW:
-			curs = c->isshaded ? cursor[CursW] : cursor[CursNW];
-			mousex = ev->x_root - c->x + c->b;
-			mousey = ev->y_root - c->y + c->b + c->t;
-			break;
-		case NE:
-			curs = c->isshaded ? cursor[CursE] : cursor[CursNE];
-			mousex = c->x + c->w + c->b - ev->x_root;
-			mousey = ev->y_root - c->y + c->b + c->t;
-			break;
-		case SW:
-			curs = c->isshaded ? cursor[CursW] : cursor[CursSW];
-			mousex = ev->x_root - c->x + c->b;
-			mousey = c->y + c->h + c->b - ev->y_root;
-			break;
-		case SE:
-			curs = c->isshaded ? cursor[CursE] : cursor[CursSE];
-			mousex = c->x + c->w + c->b - ev->x_root;
-			mousey = c->y + c->h + c->b - ev->y_root;
-			break;
-		case N:
-			curs = cursor[CursN];
-			mousey = ev->y_root - c->y + c->b + c->t;
-			break;
-		case S:
-			curs = cursor[CursS];
-			mousey = c->y + c->h + c->b - ev->y_root;
-			break;
-		case W:
-			curs = cursor[CursW];
-			mousex = ev->x_root - c->x + c->b;
-			break;
-		case E:
-			curs = cursor[CursE];
-			mousex = c->x + c->w + c->b - ev->x_root;
-			break;
-		}
+		grabresize(c, ev->x_root, ev->y_root, octant);
 		break;
-	}
-
-	/* if performing a mouse action, set global variables and grab the pointer */
-	if (mouseaction != NoAction) {
-		target = c;
-		mousex_root = ev->x_root;
-		mousey_root = ev->y_root;
-		XGrabPointer(dpy, grabwin, False, mask, GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
 	}
 
 	/* focus client */
@@ -3432,7 +3460,6 @@ xeventclientmessage(XEvent *e)
 	unsigned value_mask = 0;
 	struct Winres res;
 	struct Client *c;
-	Cursor curs = None;
 	int i;
 
 	res = getwin(ev->window);
@@ -3545,75 +3572,39 @@ xeventclientmessage(XEvent *e)
 #define _NET_WM_MOVERESIZE_CANCEL           11   /* cancel operation */
 		if (c == NULL)
 			return;
-		if (ev->data.l[2] == _NET_WM_MOVERESIZE_CANCEL) {
+		switch (ev->data.l[2]) {
+		case _NET_WM_MOVERESIZE_CANCEL:
 			ungrab();
-		} else {
-			switch (ev->data.l[2]) {
-			case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
-				octant = NW;
-				curs = cursor[CursNW];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_SIZE_TOP:
-				octant = N;
-				curs = cursor[CursN];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_SIZE_TOPRIGHT:
-				octant = NE;
-				curs = cursor[CursNE];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_SIZE_RIGHT:
-				octant = E;
-				curs = cursor[CursE];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT:
-				octant = SE;
-				curs = cursor[CursSE];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_SIZE_BOTTOM:
-				octant = S;
-				curs = cursor[CursS];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT:
-				octant = SW;
-				curs = cursor[CursSW];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_SIZE_LEFT:
-				octant = W;
-				curs = cursor[CursW];
-				mouseaction = Resizing;
-				break;
-			case _NET_WM_MOVERESIZE_MOVE:
-				curs = cursor[CursMove];
-				mouseaction = Moving;
-				break;
-			default:
-				return;
-			}
-			target = c;
-			mousex_root = ev->data.l[0];
-			mousey_root = ev->data.l[1];
-			if (octant & W)
-				mousex = ev->data.l[0] - c->x + c->b;
-			else if (octant & E)
-				mousex = c->x + c->w + c->b - ev->data.l[0];
-			else
-				mousex = 0;
-			if (octant & N)
-				mousey = ev->data.l[1] - c->y + c->b + c->t;
-			else if (octant & S)
-				mousey = c->y + c->h + c->b - ev->data.l[1];
-			else
-				mousey = 0;
-			XGrabPointer(dpy, c->frame, False,
-			             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
-			             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
+			grabresize(c, ev->data.l[0], ev->data.l[1], NW);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_TOP:
+			grabresize(c, ev->data.l[0], ev->data.l[1], N);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_TOPRIGHT:
+			grabresize(c, ev->data.l[0], ev->data.l[1], NE);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_RIGHT:
+			grabresize(c, ev->data.l[0], ev->data.l[1], E);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT:
+			grabresize(c, ev->data.l[0], ev->data.l[1], SE);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_BOTTOM:
+			grabresize(c, ev->data.l[0], ev->data.l[1], S);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT:
+			grabresize(c, ev->data.l[0], ev->data.l[1], SW);
+			break;
+		case _NET_WM_MOVERESIZE_SIZE_LEFT:
+			grabresize(c, ev->data.l[0], ev->data.l[1], W);
+			break;
+		case _NET_WM_MOVERESIZE_MOVE:
+			grabmove(c, ev->data.l[0], ev->data.l[1]);
+			break;
+		default:
+			return;
 		}
 	}
 }
