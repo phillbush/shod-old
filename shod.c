@@ -1359,9 +1359,9 @@ clientdecorate(struct Client *c, int style, int decorateall)
 
 	/* draw title and buttons */
 	if (c->t > 0) {
-		dp = (c == target && mouseaction == Button && (pressed == FrameButtonLeft || pressed == FrameButtonRight)) ? &decor[style][1] : &decor[style][0];
-		XCopyArea(dpy, dp->bl, c->frame, gc, 0, 0, button, button, c->b, c->b);
-		XCopyArea(dpy, dp->br, c->frame, gc, 0, 0, button, button, fullw - button - c->b, c->b);
+		dp = (c == target && mouseaction == Button) ? &decor[style][1] : &decor[style][0];
+		XCopyArea(dpy, (pressed == FrameButtonLeft) ? dp->bl : d->bl, c->frame, gc, 0, 0, button, button, c->b, c->b);
+		XCopyArea(dpy, (pressed == FrameButtonRight) ? dp->br : d->br, c->frame, gc, 0, 0, button, button, fullw - button - c->b, c->b);
 	}
 	if (decorateall) {
 		for (t = c->tabs; t; t = t->next) {
@@ -1959,14 +1959,17 @@ clientplace(struct Client *c, struct Desktop *desk)
 	mon = desk->mon;
 
 	/* if window is bigger than monitor, resize it while maintaining proportion */
-	origw = w = c->fw + 2 * c->b;
-	origh = h = c->fh + 2 * c->b + c->t;
-	w = min(w, mon->gw);
-	h = min(h, mon->gh);
-	if (origw - c->fw < origh - c->fh)
+	origw = WIDTH(c);
+	origh = HEIGHT(c);
+	w = min(origw, mon->gw);
+	h = min(origh, mon->gh);
+	if (origw * h > origh * w) {
 		h = (origh * w) / origw;
-	else
 		w = (origw * h) / origh;
+	} else {
+		w = (origw * h) / origh;
+		h = (origh * w) / origw;
+	}
 	c->fw = max(minsize, w - (2 * c->b));
 	c->fh = max(minsize, h - (2 * c->b + c->t));
 
@@ -3186,6 +3189,7 @@ ungrab(void)
 static void
 grabbutton(struct Client *c, int xroot, int yroot, int region)
 {
+	mouseaction = Button;
 	pressed = region;
 	target = c;
 	mousex_root = xroot;
@@ -3197,6 +3201,7 @@ grabbutton(struct Client *c, int xroot, int yroot, int region)
 static void
 grabretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
 {
+	mouseaction = Retabbing;
 	movetab = t;
 	target = c;
 	mousex_root = xroot;
@@ -3213,6 +3218,7 @@ grabretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
 static void
 grabmove(struct Client *c, int xroot, int yroot)
 {
+	mouseaction = Moving;
 	target = c;
 	mousex_root = xroot;
 	mousey_root = yroot;
@@ -3227,6 +3233,13 @@ grabresize(struct Client *c, int xroot, int yroot, enum Octant o)
 {
 	Cursor curs = None;
 
+	if (c->state == Tiled &&
+	    ((c->row->col->next == NULL && octant & E) || (c->row->col->prev == NULL && octant & W) ||
+	     (c->row->prev == NULL && octant & N) || (c->row->next == NULL && octant & S))) {
+		mouseaction = NoAction;
+		return;
+	}
+	mouseaction = Resizing;
 	outline.x = c->x - c->b;
 	outline.y = c->y - c->b - c->t;
 	outline.w = c->w + 2 * c->b;
@@ -3313,17 +3326,15 @@ xeventbuttonpress(XEvent *e)
 
 	/* get action performed by mouse */
 	if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
-		mouseaction = Button;
-	} else if (ev->state == config.modifier && ev->button == Button1) {
-		mouseaction = Moving;
-	} else if (ev->state == config.modifier && ev->button == Button3) {
-		mouseaction = Resizing;
-	} else if (region == FrameBorder && ev->button == Button3) {
-		mouseaction = Moving;
-	} else if (region == FrameBorder && ev->button == Button1) {
-		mouseaction = Resizing;
+		grabbutton(c, ev->x_root, ev->y_root, region);
+	} else if ((ev->state == config.modifier && ev->button == Button1) ||
+	           (region == FrameBorder && ev->button == Button3)) {
+		grabmove(c, ev->x_root, ev->y_root);
+	} else if ((ev->state == config.modifier && ev->button == Button3) ||
+	           (region == FrameBorder && ev->button == Button1)) {
+		grabresize(c, ev->x_root, ev->y_root, octant);
 	} else if (region == FrameTitle && ev->button == Button3 && t != NULL && t->c != NULL && t->title == ev->window) {
-		mouseaction = Retabbing;
+		grabretab(c, t, ev->x_root, ev->y_root, ev->x, ev->y);
 	} else if (region == FrameTitle && ev->button == Button1) {
 		tabfocus(t);
 		if (lastc == c && ev->time - lasttime < DOUBLECLICK) {
@@ -3335,30 +3346,9 @@ xeventbuttonpress(XEvent *e)
 		pressed = FrameTitle;
 		lastc = c;
 		lasttime = ev->time;
-		mouseaction = Moving;
+		grabmove(c, ev->x_root, ev->y_root);
 	} else {
 		mouseaction = NoAction;
-	}
-	if (mouseaction == Resizing && c->state == Tiled &&
-	    ((c->row->col->next == NULL && octant & E) || (c->row->col->prev == NULL && octant & W) ||
-	     (c->row->prev == NULL && octant & N) || (c->row->next == NULL && octant & S))) {
-		mouseaction = NoAction;
-	}
-
-	/* operate on basis of mouse action */
-	switch (mouseaction) {
-	case Button:
-		grabbutton(c, ev->x_root, ev->y_root, region);
-		break;
-	case Retabbing:
-		grabretab(c, t, ev->x_root, ev->y_root, ev->x, ev->y);
-		break;
-	case Moving:
-		grabmove(c, ev->x_root, ev->y_root);
-		break;
-	case Resizing:
-		grabresize(c, ev->x_root, ev->y_root, octant);
-		break;
 	}
 
 	/* focus client */
