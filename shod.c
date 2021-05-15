@@ -53,6 +53,7 @@ static Window focuswin;                 /* dummy window to get focus */
 static Window layerwin[LayerLast];      /* dummy windows used to restack clients */
 
 /* windows, desktops, monitors */
+static struct Prompt prompt = {.win = None};
 static struct Client *clients = NULL;
 static struct Client *focused = NULL;
 static struct Monitor *selmon = NULL;
@@ -423,6 +424,7 @@ initatoms(void)
 		[NetWMWindowTypeToolbar]     = "_NET_WM_WINDOW_TYPE_TOOLBAR",
 		[NetWMWindowTypeMenu]        = "_NET_WM_WINDOW_TYPE_MENU",
 		[NetWMWindowTypeSplash]      = "_NET_WM_WINDOW_TYPE_SPLASH",
+		[NetWMWindowTypePrompt]      = "_NET_WM_WINDOW_TYPE_PROMPT",
 		[NetWMWindowTypeDialog]      = "_NET_WM_WINDOW_TYPE_DIALOG",
 		[NetWMWindowTypeUtility]     = "_NET_WM_WINDOW_TYPE_UTILITY",
 		[NetWMState]                 = "_NET_WM_STATE",
@@ -2315,6 +2317,10 @@ clientfocus(struct Client *c)
 {
 	struct Client *prevfocused, *fullscreen;
 
+	if (prompt.win != None) {
+		XSetInputFocus(dpy, prompt.win, RevertToParent, CurrentTime);
+		return;
+	}
 	clientdecorate(focused, Unfocused, 1);
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
@@ -2980,9 +2986,99 @@ preparewin(Window win)
 	XSetWindowBorderWidth(dpy, win, 0);
 }
 
+/* destroy prompt window */
+static void
+promptdel(void)
+{
+	struct Client *c;
+
+	XReparentWindow(dpy, prompt.win, root, 0, 0);
+	XDestroyWindow(dpy, prompt.frame);
+	prompt.win = None;
+	c = getfocused(NULL);
+	clientfocus(c);
+}
+
+/* create prompt window */
+static void
+promptadd(Window win, int w, int h, int ignoreunmap)
+{
+	int x, y;
+
+	if (prompt.win != None) {       /* there should only be one prompt */
+		XDestroyWindow(dpy, win);
+		return;
+	}
+	w = min(w, selmon->ww - border * 2);
+	h = min(h, selmon->wh - border);
+	x = selmon->wx + (selmon->ww - w) / 2 - border;
+	y = 0;
+	prompt.win = win;
+	prompt.w = w;
+	prompt.h = h;
+	prompt.ignoreunmap = ignoreunmap;
+	prompt.frame = XCreateWindow(dpy, root, x, y, w + border * 2, h + border, 0,
+	                             CopyFromParent, CopyFromParent, CopyFromParent,
+	                             CWEventMask, &clientswa);
+	XReparentWindow(dpy, prompt.win, prompt.frame, border, 0);
+	XMapWindow(dpy, prompt.win);
+	XMapWindow(dpy, prompt.frame);
+	XSetInputFocus(dpy, prompt.win, RevertToParent, CurrentTime);
+}
+
+/* resize prompt window */
+static void
+promptresize(int w, int h)
+{
+	int x, y;
+
+	prompt.w = w = min(w, selmon->ww - border * 2);
+	prompt.h = h = min(h, selmon->wh - border);
+	x = selmon->wx + (selmon->ww - w) / 2 - border;
+	y = 0;
+	XMoveResizeWindow(dpy, prompt.frame, x, y, w + border * 2, h + border);
+	XMoveResizeWindow(dpy, prompt.win, border, 0, w, h);
+}
+
+/* decorate prompt frame */
+static void
+promptdecorate(void)
+{
+	XGCValues val;
+
+	val.fill_style = FillSolid;
+	val.foreground = decor[Focused][2].bg;
+	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
+	XFillRectangle(dpy, prompt.frame, gc, border, border, prompt.w, prompt.h);
+
+	val.fill_style = FillTiled;
+	val.tile = decor[Focused][2].w;
+	val.ts_x_origin = 0;
+	val.ts_y_origin = 0;
+	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
+	XFillRectangle(dpy, prompt.frame, gc, 0, 0, border, prompt.h + border);
+
+	val.fill_style = FillTiled;
+	val.tile = decor[Focused][2].e;
+	val.ts_x_origin = border + prompt.w;
+	val.ts_y_origin = 0;
+	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
+	XFillRectangle(dpy, prompt.frame, gc, border + prompt.w, 0, border, prompt.h + border);
+
+	val.fill_style = FillTiled;
+	val.tile = decor[Focused][2].s;
+	val.ts_x_origin = 0;
+	val.ts_y_origin = border + prompt.h;
+	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
+	XFillRectangle(dpy, prompt.frame, gc, border, prompt.h, prompt.w + 2 * border, border);
+
+	XCopyArea(dpy, decor[Focused][2].sw, prompt.frame, gc, 0, 0, corner, corner, 0, prompt.h + border - corner);
+	XCopyArea(dpy, decor[Focused][2].se, prompt.frame, gc, 0, 0, corner, corner, prompt.w + 2 * border - corner, prompt.h + border - corner);
+}
+
 /* create client for tab */
 static void
-manage(struct Client *c, struct Tab *t)
+managenormal(struct Client *c, struct Tab *t)
 {
 	struct Client *f;
 	unsigned long *values;
@@ -3061,13 +3157,70 @@ unmanage(struct Tab *t)
 	}
 }
 
-/* scan for already existing windows and adopt them */
+/* call one of the manage- functions */
 static void
-scan(void)
+manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 {
 	struct Winres res;
 	struct Client *c;
 	struct Tab *t;
+	struct Tab *transfor = NULL;
+	XSizeHints size;
+	Atom prop = None;
+	Window tmpwin, wins[2];
+	int isuserplaced = 0;
+	long dl;
+
+	wins[1] = win;
+	prop = getatomprop(win, atoms[NetWMWindowType]);
+	if (prop == atoms[NetWMWindowTypeDesktop]) {
+		XMapWindow(dpy, win);
+		wins[0] = layerwin[LayerDesktop];
+		XRestackWindows(dpy, wins, sizeof wins);
+	} else if (prop == atoms[NetWMWindowTypeDock]) {
+		XMapWindow(dpy, win);
+		wins[0] = layerwin[LayerBars];
+		XRestackWindows(dpy, wins, sizeof wins);
+	} else {
+		res = getwin(win);
+		if (res.c != NULL)
+			return;
+		preparewin(win);
+		if (XGetTransientForHint(dpy, win, &tmpwin)) {
+			res = getwin(tmpwin);
+			transfor = res.t;
+		}
+		if (XGetWMNormalHints(dpy, win, &size, &dl) && (size.flags & USPosition)) {
+			isuserplaced = 1;
+		}
+		if (transfor != NULL) {
+			managetrans(transfor, win, wa->width, wa->height, ignoreunmap);
+			return;
+		}
+		if (prop == atoms[NetWMWindowTypePrompt]) {
+			promptadd(win, wa->width, wa->height, ignoreunmap);
+			return;
+		}
+		t = tabadd(win, 0);
+		if (!isuserplaced && autotab(t)) {
+			clienttab(focused, t, -1);
+			clientdecorate(focused, Focused, 1);
+			clientmoveresize(focused);
+			if (focused->state == Tiled) {
+				desktile(focused->desk);
+			}
+		} else {
+			t = tabadd(win, ignoreunmap);
+			c = clientadd(wa->x, wa->y, wa->width, wa->height, isuserplaced);
+			managenormal(c, t);
+		}
+	}
+}
+
+/* scan for already existing windows and adopt them */
+static void
+scan(void)
+{
 	unsigned int i, num;
 	Window d1, d2, transwin, *wins = NULL;
 	XWindowAttributes wa;
@@ -3078,10 +3231,7 @@ scan(void)
 			|| wa.override_redirect || XGetTransientForHint(dpy, wins[i], &d1))
 				continue;
 			if (wa.map_state == IsViewable || getstate(wins[i]) == IconicState) {
-				preparewin(wins[i]);
-				t = tabadd(wins[i], 2);
-				c = clientadd(wa.x, wa.y, wa.width, wa.height, 0);
-				manage(c, t);
+				manage(wins[i], &wa, 2);
 			}
 		}
 		for (i = 0; i < num; i++) { /* now the transients */
@@ -3089,19 +3239,12 @@ scan(void)
 				continue;
 			if (XGetTransientForHint(dpy, wins[i], &transwin) &&
 			   (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)) {
-				preparewin(wins[i]);
-				res = getwin(transwin);
-				if (res.t != NULL) {
-					managetrans(res.t, transwin, wa.width, wa.height, 2);
-				} else {
-					t = tabadd(wins[i], 2);
-					c = clientadd(wa.x, wa.y, wa.width, wa.height, 0);
-					manage(c, t);
-				}
+				manage(wins[i], &wa, 2);
 			}
 		}
-		if (wins)
+		if (wins) {
 			XFree(wins);
+		}
 	}
 }
 
@@ -3308,6 +3451,13 @@ xeventbuttonpress(XEvent *e)
 	int focus = 0;
 	int raise = 0;
 
+	if (prompt.win != None) {       /* ignore button presses when prompt is active */
+		if (ev->window != prompt.win && ev->window != prompt.frame) {
+			windowclose(prompt.win);
+		}
+		goto done;
+	}
+
 	res = getwin(ev->window);
 	c = res.c;
 	t = res.t;
@@ -3381,6 +3531,7 @@ xeventbuttonpress(XEvent *e)
 	if (raise)
 		clientraise(c);
 
+done:
 	XAllowEvents(dpy, ReplayPointer, CurrentTime);
 }
 
@@ -3399,7 +3550,7 @@ xeventbuttonrelease(XEvent *e)
 			clienttab(c, movetab, pos);
 		} else {
 			c = clientadd(ev->x_root, ev->y_root, movetab->winw, movetab->winh, 0);
-			manage(c, movetab);
+			managenormal(c, movetab);
 		}
 	} else {
 		c = target;
@@ -3629,6 +3780,10 @@ xeventconfigurerequest(XEvent *e)
 	wc.border_width = ev->border_width;
 	wc.sibling = ev->above;
 	wc.stack_mode = ev->detail;
+	if (ev->window == prompt.win) {
+		promptresize(wc.width, wc.height);
+		return;
+	}
 	res = getwin(ev->window);
 	if (res.trans != NULL && mouseaction == NoAction) {
 		transconfigure(res.trans, ev->value_mask, &wc);
@@ -3646,6 +3801,9 @@ xeventdestroynotify(XEvent *e)
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 	struct Winres res;
 
+	if (ev->window == prompt.win) {
+		promptdel();
+	}
 	res = getwin(ev->window);
 	if (res.trans && ev->window == res.trans->win) {
 		transdel(res.trans, 1);
@@ -3677,7 +3835,9 @@ xeventexpose(XEvent *e)
 	struct Winres res;
 
 	if (ev->count == 0) {
-		if (movetab && (ev->window == movetab->title ||
+		if (ev->window == prompt.frame) {
+			promptdecorate();
+		} else if (movetab && (ev->window == movetab->title ||
 		    (movetab->trans && ev->window == movetab->trans->frame))) {
 			tabdecorate(movetab, clientgetstyle(movetab->c));
 		} else {
@@ -3717,63 +3877,14 @@ xeventkeypress(XEvent *e)
 static void
 xeventmaprequest(XEvent *e)
 {
-	struct Winres res;
-	struct Client *c;
-	struct Tab *t;
-	struct Tab *transfor = NULL;
 	XMapRequestEvent *ev = &e->xmaprequest;
 	XWindowAttributes wa;
-	XSizeHints size;
-	Atom prop = None;
-	Window win, wins[2];
-	int isuserplaced = 0;
-	long dl;
-
 
 	if (!XGetWindowAttributes(dpy, ev->window, &wa))
 		return;
 	if (wa.override_redirect)
 		return;
-	wins[1] = ev->window;
-	prop = getatomprop(ev->window, atoms[NetWMWindowType]);
-	if (prop == atoms[NetWMWindowTypeDesktop]) {
-		XMapWindow(dpy, ev->window);
-		wins[0] = layerwin[LayerDesktop];
-		XRestackWindows(dpy, wins, sizeof wins);
-	} else if (prop == atoms[NetWMWindowTypeDock]) {
-		XMapWindow(dpy, ev->window);
-		wins[0] = layerwin[LayerBars];
-		XRestackWindows(dpy, wins, sizeof wins);
-	} else {
-		res = getwin(ev->window);
-		if (res.c != NULL)
-			return;
-		preparewin(ev->window);
-		if (XGetTransientForHint(dpy, ev->window, &win)) {
-			res = getwin(win);
-			transfor = res.t;
-		}
-		if (XGetWMNormalHints(dpy, ev->window, &size, &dl) && (size.flags & USPosition)) {
-			isuserplaced = 1;
-		}
-		if (transfor != NULL) {
-			managetrans(transfor, ev->window, wa.width, wa.height, 0);
-			return;
-		}
-		t = tabadd(ev->window, 0);
-		if (!isuserplaced && autotab(t)) {
-			clienttab(focused, t, -1);
-			clientdecorate(focused, Focused, 1);
-			clientmoveresize(focused);
-			if (focused->state == Tiled) {
-				desktile(focused->desk);
-			}
-		} else {
-			t = tabadd(ev->window, 0);
-			c = clientadd(wa.x, wa.y, wa.width, wa.height, isuserplaced);
-			manage(c, t);
-		}
-	}
+	manage(ev->window, &wa, 0);
 }
 
 /* run mouse action */
@@ -3925,6 +4036,14 @@ xeventunmapnotify(XEvent *e)
 	XUnmapEvent *ev = &e->xunmap;
 	struct Winres res;
 
+	if (ev->window == prompt.win) {
+		if (prompt.ignoreunmap) {
+			prompt.ignoreunmap--;
+		} else {
+			promptdel();
+		}
+		return;
+	}
 	res = getwin(ev->window);
 	if (res.trans && ev->window == res.trans->win) {
 		if (res.trans->ignoreunmap) {
@@ -3954,6 +4073,9 @@ cleanclients(void)
 	}
 	while (mons) {
 		mondel(mons);
+	}
+	if (prompt.win != None) {
+		promptdel();
 	}
 }
 

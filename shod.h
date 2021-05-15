@@ -61,6 +61,7 @@ enum {
 	NetWMWindowTypeDialog,
 	NetWMWindowTypeUtility,
 	NetWMWindowTypeSplash,
+	NetWMWindowTypePrompt,
 	NetWMState,
 	NetWMStateSticky,
 	NetWMStateMaximizedVert,
@@ -160,6 +161,14 @@ struct Transient {
 	Window win;
 	int x, y, w, h;
 	int maxw, maxh;
+	int ignoreunmap;
+};
+
+/* prompt structure */
+struct Prompt {
+	Window frame;
+	Window win;
+	int x, y, w, h;
 	int ignoreunmap;
 };
 
