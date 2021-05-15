@@ -16,6 +16,8 @@
 #include "shod.h"
 #include "theme.xpm"
 
+#define IGNOREUNMAP 6
+
 /* X stuff */
 static Display *dpy;
 static Window root;
@@ -53,7 +55,6 @@ static Window focuswin;                 /* dummy window to get focus */
 static Window layerwin[LayerLast];      /* dummy windows used to restack clients */
 
 /* windows, desktops, monitors */
-static struct Prompt prompt = {.win = None};
 static struct Client *clients = NULL;
 static struct Client *focused = NULL;
 static struct Monitor *selmon = NULL;
@@ -1076,7 +1077,7 @@ tabdetach(struct Tab *t, int x, int y)
 		}
 	}
 	t->c->ntabs--;
-	t->ignoreunmap = 2;
+	t->ignoreunmap = IGNOREUNMAP;
 	XReparentWindow(dpy, t->title, root, x, y);
 	if (t->next)
 		t->next->prev = t->prev;
@@ -2317,10 +2318,6 @@ clientfocus(struct Client *c)
 {
 	struct Client *prevfocused, *fullscreen;
 
-	if (prompt.win != None) {
-		XSetInputFocus(dpy, prompt.win, RevertToParent, CurrentTime);
-		return;
-	}
 	clientdecorate(focused, Unfocused, 1);
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
@@ -2986,94 +2983,132 @@ preparewin(Window win)
 	XSetWindowBorderWidth(dpy, win, 0);
 }
 
-/* destroy prompt window */
-static void
-promptdel(void)
+/* check if event is related to the prompt or its frame */
+static Bool
+promptvalidevent(Display *dpy, XEvent *ev, XPointer arg)
 {
-	struct Client *c;
+	struct Prompt *prompt;
 
-	XReparentWindow(dpy, prompt.win, root, 0, 0);
-	XDestroyWindow(dpy, prompt.frame);
-	prompt.win = None;
-	c = getfocused(NULL);
-	clientfocus(c);
-}
-
-/* create prompt window */
-static void
-promptadd(Window win, int w, int h, int ignoreunmap)
-{
-	int x, y;
-
-	if (prompt.win != None) {       /* there should only be one prompt */
-		XDestroyWindow(dpy, win);
-		return;
+	(void)dpy;
+	prompt = (struct Prompt *)arg;
+	switch(ev->type) {
+	case Expose:
+		if (ev->xexpose.window == prompt->frame)
+			return True;
+		break;
+	case DestroyNotify:
+		if (ev->xdestroywindow.window == prompt->win)
+			return True;
+		break;
+	case UnmapNotify:
+		if (ev->xunmap.window == prompt->win)
+			return True;
+		break;
+	case ConfigureRequest:
+		if (ev->xconfigurerequest.window == prompt->win)
+			return True;
+		break;
+	case ButtonPress:
+		return True;
 	}
-	w = min(w, selmon->ww - border * 2);
-	h = min(h, selmon->wh - border);
-	x = selmon->wx + (selmon->ww - w) / 2 - border;
-	y = 0;
-	prompt.win = win;
-	prompt.w = w;
-	prompt.h = h;
-	prompt.ignoreunmap = ignoreunmap;
-	prompt.frame = XCreateWindow(dpy, root, x, y, w + border * 2, h + border, 0,
-	                             CopyFromParent, CopyFromParent, CopyFromParent,
-	                             CWEventMask, &clientswa);
-	XReparentWindow(dpy, prompt.win, prompt.frame, border, 0);
-	XMapWindow(dpy, prompt.win);
-	XMapWindow(dpy, prompt.frame);
-	XSetInputFocus(dpy, prompt.win, RevertToParent, CurrentTime);
-}
-
-/* resize prompt window */
-static void
-promptresize(int w, int h)
-{
-	int x, y;
-
-	prompt.w = w = min(w, selmon->ww - border * 2);
-	prompt.h = h = min(h, selmon->wh - border);
-	x = selmon->wx + (selmon->ww - w) / 2 - border;
-	y = 0;
-	XMoveResizeWindow(dpy, prompt.frame, x, y, w + border * 2, h + border);
-	XMoveResizeWindow(dpy, prompt.win, border, 0, w, h);
+	return False;
 }
 
 /* decorate prompt frame */
 static void
-promptdecorate(void)
+promptdecorate(Window frame, int w, int h)
 {
 	XGCValues val;
 
 	val.fill_style = FillSolid;
 	val.foreground = decor[Focused][2].bg;
 	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
-	XFillRectangle(dpy, prompt.frame, gc, border, border, prompt.w, prompt.h);
+	XFillRectangle(dpy, frame, gc, border, border, w, h);
 
 	val.fill_style = FillTiled;
 	val.tile = decor[Focused][2].w;
 	val.ts_x_origin = 0;
 	val.ts_y_origin = 0;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-	XFillRectangle(dpy, prompt.frame, gc, 0, 0, border, prompt.h + border);
+	XFillRectangle(dpy, frame, gc, 0, 0, border, h + border);
 
 	val.fill_style = FillTiled;
 	val.tile = decor[Focused][2].e;
-	val.ts_x_origin = border + prompt.w;
+	val.ts_x_origin = border + w;
 	val.ts_y_origin = 0;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-	XFillRectangle(dpy, prompt.frame, gc, border + prompt.w, 0, border, prompt.h + border);
+	XFillRectangle(dpy, frame, gc, border + w, 0, border, h + border);
 
 	val.fill_style = FillTiled;
 	val.tile = decor[Focused][2].s;
 	val.ts_x_origin = 0;
-	val.ts_y_origin = border + prompt.h;
+	val.ts_y_origin = border + h;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-	XFillRectangle(dpy, prompt.frame, gc, border, prompt.h, prompt.w + 2 * border, border);
+	XFillRectangle(dpy, frame, gc, border, h, w + 2 * border, border);
 
-	XCopyArea(dpy, decor[Focused][2].sw, prompt.frame, gc, 0, 0, corner, corner, 0, prompt.h + border - corner);
-	XCopyArea(dpy, decor[Focused][2].se, prompt.frame, gc, 0, 0, corner, corner, prompt.w + 2 * border - corner, prompt.h + border - corner);
+	XCopyArea(dpy, decor[Focused][2].sw, frame, gc, 0, 0, corner, corner, 0, h + border - corner);
+	XCopyArea(dpy, decor[Focused][2].se, frame, gc, 0, 0, corner, corner, w + 2 * border - corner, h + border - corner);
+}
+
+/* calculate position and size of prompt window and the size of its frame */
+static void
+promptcalcgeom(int *x, int *y, int *w, int *h, int *fw, int *fh)
+{
+	*w = min(*w, selmon->ww - border * 2);
+	*h = min(*h, selmon->wh - border);
+	*x = selmon->wx + (selmon->ww - *w) / 2 - border;
+	*y = 0;
+	*fw = *w + border * 2;
+	*fh = *h + border;
+}
+
+/* map prompt, give it focus, wait for it to close, then revert focus to previously focused window */
+static void
+prompt(Window win, int w, int h)
+{
+	struct Prompt prompt;
+	struct Client *c;
+	XEvent ev;
+	int x, y, fw, fh;
+
+	promptcalcgeom(&x, &y, &w, &h, &fw, &fh);
+	prompt.frame = XCreateWindow(dpy, root, x, y, fw, fh, 0,
+	                             CopyFromParent, CopyFromParent, CopyFromParent,
+	                             CWEventMask, &clientswa);
+	XReparentWindow(dpy, win, prompt.frame, border, 0);
+	XMapWindow(dpy, win);
+	XMapWindow(dpy, prompt.frame);
+	XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
+	prompt.win = win;
+	while (!XIfEvent(dpy, &ev, promptvalidevent, (XPointer)&prompt)) {
+		switch(ev.type) {
+		case Expose:
+			if (ev.xexpose.count == 0)
+				promptdecorate(prompt.frame, w, h);
+			break;
+		case DestroyNotify:
+		case UnmapNotify:
+			goto done;
+			break;
+		case ConfigureRequest:
+			w = ev.xconfigurerequest.width;
+			h = ev.xconfigurerequest.height;
+			promptcalcgeom(&x, &y, &w, &h, &fw, &fh);
+			XMoveResizeWindow(dpy, prompt.frame, x, y, fw, fh);
+			XMoveResizeWindow(dpy, win, border, 0, w, h);
+			break;
+		case ButtonPress:
+			if (ev.xbutton.window != win && ev.xbutton.window != prompt.frame)
+				windowclose(win);
+			XAllowEvents(dpy, ReplayPointer, CurrentTime);
+			break;
+		}
+	}
+done:
+	XReparentWindow(dpy, win, root, 0, 0);
+	XDestroyWindow(dpy, prompt.frame);
+	c = getfocused(NULL);
+	clientfocus(c);
 }
 
 /* create client for tab */
@@ -3197,8 +3232,8 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 			managetrans(transfor, win, wa->width, wa->height, ignoreunmap);
 			return;
 		}
-		if (prop == atoms[NetWMWindowTypePrompt]) {
-			promptadd(win, wa->width, wa->height, ignoreunmap);
+		if (prop == atoms[NetWMWindowTypePrompt] && !ignoreunmap) {
+			prompt(win, wa->width, wa->height);
 			return;
 		}
 		t = tabadd(win, 0);
@@ -3231,7 +3266,7 @@ scan(void)
 			|| wa.override_redirect || XGetTransientForHint(dpy, wins[i], &d1))
 				continue;
 			if (wa.map_state == IsViewable || getstate(wins[i]) == IconicState) {
-				manage(wins[i], &wa, 2);
+				manage(wins[i], &wa, IGNOREUNMAP);
 			}
 		}
 		for (i = 0; i < num; i++) { /* now the transients */
@@ -3239,7 +3274,7 @@ scan(void)
 				continue;
 			if (XGetTransientForHint(dpy, wins[i], &transwin) &&
 			   (wa.map_state == IsViewable || getstate(wins[i]) == IconicState)) {
-				manage(wins[i], &wa, 2);
+				manage(wins[i], &wa, IGNOREUNMAP);
 			}
 		}
 		if (wins) {
@@ -3451,13 +3486,6 @@ xeventbuttonpress(XEvent *e)
 	int focus = 0;
 	int raise = 0;
 
-	if (prompt.win != None) {       /* ignore button presses when prompt is active */
-		if (ev->window != prompt.win && ev->window != prompt.frame) {
-			windowclose(prompt.win);
-		}
-		goto done;
-	}
-
 	res = getwin(ev->window);
 	c = res.c;
 	t = res.t;
@@ -3531,7 +3559,6 @@ xeventbuttonpress(XEvent *e)
 	if (raise)
 		clientraise(c);
 
-done:
 	XAllowEvents(dpy, ReplayPointer, CurrentTime);
 }
 
@@ -3780,10 +3807,6 @@ xeventconfigurerequest(XEvent *e)
 	wc.border_width = ev->border_width;
 	wc.sibling = ev->above;
 	wc.stack_mode = ev->detail;
-	if (ev->window == prompt.win) {
-		promptresize(wc.width, wc.height);
-		return;
-	}
 	res = getwin(ev->window);
 	if (res.trans != NULL && mouseaction == NoAction) {
 		transconfigure(res.trans, ev->value_mask, &wc);
@@ -3801,9 +3824,6 @@ xeventdestroynotify(XEvent *e)
 	XDestroyWindowEvent *ev = &e->xdestroywindow;
 	struct Winres res;
 
-	if (ev->window == prompt.win) {
-		promptdel();
-	}
 	res = getwin(ev->window);
 	if (res.trans && ev->window == res.trans->win) {
 		transdel(res.trans, 1);
@@ -3835,9 +3855,7 @@ xeventexpose(XEvent *e)
 	struct Winres res;
 
 	if (ev->count == 0) {
-		if (ev->window == prompt.frame) {
-			promptdecorate();
-		} else if (movetab && (ev->window == movetab->title ||
+		if (movetab && (ev->window == movetab->title ||
 		    (movetab->trans && ev->window == movetab->trans->frame))) {
 			tabdecorate(movetab, clientgetstyle(movetab->c));
 		} else {
@@ -4036,14 +4054,6 @@ xeventunmapnotify(XEvent *e)
 	XUnmapEvent *ev = &e->xunmap;
 	struct Winres res;
 
-	if (ev->window == prompt.win) {
-		if (prompt.ignoreunmap) {
-			prompt.ignoreunmap--;
-		} else {
-			promptdel();
-		}
-		return;
-	}
 	res = getwin(ev->window);
 	if (res.trans && ev->window == res.trans->win) {
 		if (res.trans->ignoreunmap) {
@@ -4073,9 +4083,6 @@ cleanclients(void)
 	}
 	while (mons) {
 		mondel(mons);
-	}
-	if (prompt.win != None) {
-		promptdel();
 	}
 }
 

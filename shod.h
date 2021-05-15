@@ -164,12 +164,9 @@ struct Transient {
 	int ignoreunmap;
 };
 
-/* prompt structure */
+/* prompt structure, used only when calling promptisvalid() */
 struct Prompt {
-	Window frame;
-	Window win;
-	int x, y, w, h;
-	int ignoreunmap;
+	Window win, frame;
 };
 
 /* tab structure */
