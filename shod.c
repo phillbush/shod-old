@@ -3340,7 +3340,7 @@ outlinedraw(struct Outline *outline)
 	XChangeGC(dpy, gc, GCFunction | GCSubwindowMode, &val);
 }
 
-/* initiate button pressing and grab pointer */
+/* press button with mouse */
 static void
 mousebutton(struct Client *c, int region)
 {
@@ -3381,18 +3381,18 @@ done:
 	XUngrabPointer(dpy, CurrentTime);
 }
 
-/* initiate retabbing and grab pointer */
+/* detach tab from window with mouse */
 static void
-mouseretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
+mouseretab(struct Tab *t, int xroot, int yroot, int x, int y)
 {
-	struct Client *newc;
+	struct Client *c;
 	struct Winres res;
 	XEvent ev;
 	int pos;
 
 	tabdetach(t, xroot - x, yroot - y);
-	tabfocus(c->seltab);
-	clientretab(c);
+	tabfocus(t->c->seltab);
+	clientretab(t->c);
 	XGrabPointer(dpy, t->title, False, ButtonReleaseMask | Button3MotionMask, GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
 		switch(ev.type) {
@@ -3409,6 +3409,7 @@ mouseretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
 		case ButtonRelease:
 			xroot = ev.xbutton.x_root;
 			yroot = ev.xbutton.y_root;
+			XUnmapWindow(dpy, t->title);
 			goto done;
 		case MotionNotify:
 			tabmove(t, ev.xmotion.x_root - x, ev.xmotion.y_root - y);
@@ -3416,16 +3417,18 @@ mouseretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
 		}
 	}
 done:
-	if ((newc = getclientbytitle(xroot, yroot, &pos)) != NULL) {
-		clienttab(newc, t, pos);
+	if ((c = getclientbytitle(xroot, yroot, &pos)) != NULL) {
+		clienttab(c, t, pos);
 	} else {
-		newc = clientadd(xroot, yroot, t->winw, t->winh, 0);
-		managenormal(newc, t);
+		c = clientadd(xroot, yroot, t->winw, t->winh, 0);
+		managenormal(c, t);
 	}
+	clientretab(c);
+	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
 	XUngrabPointer(dpy, CurrentTime);
 }
 
-/* initiate moving with mouse and grab pointer */
+/* move frame with mouse */
 static void
 mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant octant, int region)
 {
@@ -3478,7 +3481,7 @@ done:
 	XUngrabPointer(dpy, CurrentTime);
 }
 
-/* initiate resizing with mouse and grab pointer */
+/* resize frame with mouse */
 static void
 mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 {
@@ -3673,7 +3676,7 @@ xeventbuttonpress(XEvent *e)
 	           (region == FrameBorder && ev->button == Button1)) {
 		mouseresize(c, ev->x_root, ev->y_root, octant);
 	} else if (region == FrameTitle && ev->button == Button3 && t != NULL && t->c != NULL && t->title == ev->window) {
-		mouseretab(c, t, ev->x_root, ev->y_root, ev->x, ev->y);
+		mouseretab(t, ev->x_root, ev->y_root, ev->x, ev->y);
 	} else if (region == FrameTitle && ev->button == Button1) {
 		tabfocus(t);
 		if (lastc == c && ev->time - lasttime < DOUBLECLICK) {
