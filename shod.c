@@ -39,16 +39,6 @@ static int center;      /* size of the decoration center */
 static int button;      /* size of the title bar and the buttons */
 static int minsize;     /* minimum size of a window */
 
-/* mouse manipulation variables */
-static struct Outline outline;
-static int mousex_root = -1, mousey_root = -1;
-static int mousex = -1, mousey = -1;
-static int mouseaction = NoAction;
-static int pressed;
-static enum Octant octant = SE;
-static struct Client *target = NULL;
-static struct Tab *movetab = NULL;      /* tab being boved */
-
 /* dummy windows */
 static Window wmcheckwin;
 static Window focuswin;                 /* dummy window to get focus */
@@ -1189,7 +1179,7 @@ tabfocus(struct Tab *t)
 
 /* decorate tab */
 static void
-tabdecorate(struct Tab *t, int style)
+tabdecorate(struct Tab *t, int style, int pressed)
 {
 	XGCValues val;
 	XRectangle box, dr;
@@ -1199,7 +1189,7 @@ tabdecorate(struct Tab *t, int style)
 
 	if (t->c && t != t->c->seltab)
 		d = &decor[style][2];
-	else if (t->c && t->c == target && mouseaction == Moving && pressed == FrameTitle)
+	else if (t->c && pressed == FrameTitle)
 		d = &decor[style][1];
 	else
 		d = &decor[style][0];
@@ -1281,7 +1271,7 @@ clientnotify(struct Client *c)
 
 /* draw decoration on the frame window */
 static void
-clientdecorate(struct Client *c, int style, int decorateall)
+clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant, int region)
 {
 	XGCValues val;
 	struct Tab *t;
@@ -1298,7 +1288,7 @@ clientdecorate(struct Client *c, int style, int decorateall)
 	if ((c->state & Tiled) && config.mergeborders)
 		j = 2;
 	d = &decor[style][j];
-	dp = (c == target && mouseaction == Resizing && j == 0) ? &decor[style][1] : d;
+	dp = (octant && j == 0) ? &decor[style][1] : d;
 	origin = c->b - border;
 	fullw = c->w + c->b * 2;
 	fullh = c->h + c->b * 2 + c->t;
@@ -1362,9 +1352,9 @@ clientdecorate(struct Client *c, int style, int decorateall)
 
 	/* draw title and buttons */
 	if (c->t > 0) {
-		dp = (c == target && mouseaction == Button) ? &decor[style][1] : &decor[style][0];
-		XCopyArea(dpy, (pressed == FrameButtonLeft) ? dp->bl : d->bl, c->frame, gc, 0, 0, button, button, c->b, c->b);
-		XCopyArea(dpy, (pressed == FrameButtonRight) ? dp->br : d->br, c->frame, gc, 0, 0, button, button, fullw - button - c->b, c->b);
+		dp = region ? &decor[style][1] : &decor[style][0];
+		XCopyArea(dpy, (region == FrameButtonLeft) ? dp->bl : d->bl, c->frame, gc, 0, 0, button, button, c->b, c->b);
+		XCopyArea(dpy, (region == FrameButtonRight) ? dp->br : d->br, c->frame, gc, 0, 0, button, button, fullw - button - c->b, c->b);
 	}
 	if (decorateall) {
 		for (t = c->tabs; t; t = t->next) {
@@ -1372,7 +1362,7 @@ clientdecorate(struct Client *c, int style, int decorateall)
 				transdecorate(t->trans, style);
 			}
 			if (c->t > 0) {
-				tabdecorate(t, style);
+				tabdecorate(t, style, FrameNone);
 			}
 		}
 	}
@@ -1434,17 +1424,7 @@ clientmoveresize(struct Client *c)
 	XMoveResizeWindow(dpy, c->frame, c->x - c->b, c->y - c->b - c->t, c->w + c->b * 2, c->h + c->b * 2 + c->t);
 	XMoveResizeWindow(dpy, c->curswin, 0, 0, c->w + c->b * 2, c->h + c->b * 2 + c->t);
 	clientretab(c);
-	if (mouseaction == NoAction) {
-		clientnotify(c);
-	}
-}
-
-/* print client geometry */
-static void
-clientprintgeometry(struct Client *c)
-{
-	(void)printf("%dx%d%+d%+d\n", c->w + 2 * c->b, c->h + 2 * c->b + c->t, c->x - c->b, c->y - c->b - c->t);
-	(void)fflush(stdout);
+	clientnotify(c);
 }
 
 /* check if desktop is visible */
@@ -2318,7 +2298,7 @@ clientfocus(struct Client *c)
 {
 	struct Client *prevfocused, *fullscreen;
 
-	clientdecorate(focused, Unfocused, 1);
+	clientdecorate(focused, Unfocused, 1, 0, FrameNone);
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
@@ -2335,7 +2315,7 @@ clientfocus(struct Client *c)
 	if (showingdesk)
 		clientshowdesk(0);
 	clientaddfocus(c);
-	clientdecorate(c, Focused, 1);
+	clientdecorate(c, Focused, 1, 0, FrameNone);
 	if (c->state == Minimized)
 		clientminimize(c, 0);
 	ewmhsetstate(prevfocused);
@@ -2524,9 +2504,6 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 		c->x = c->fx;
 		c->y = c->fy;
 		clientmoveresize(c);
-		if (origx != c->x || origy != c->y || origw != c->w || origh != c->h) {
-			clientprintgeometry(c);
-		}
 	}
 }
 
@@ -2596,7 +2573,6 @@ clientincrmove(struct Client *c, int x, int y)
 		c->x = c->fx;
 		c->y = c->fy;
 		clientmoveresize(c);
-		clientprintgeometry(c);
 		if (c->state != Sticky) {
 			monto = getmon(c->fx + c->fw / 2, c->fy + c->fh / 2);
 			if (monto && monto != c->mon) {
@@ -2950,6 +2926,19 @@ autotab(struct Tab *t)
 	return 0;
 }
 
+/* call the proper decorate function */
+static void
+decorate(struct Winres *res, enum Octant octant, int pressed)
+{
+	if (res->trans) {
+		transdecorate(res->trans, clientgetstyle(res->c));
+	} else if (res->t) {
+		tabdecorate(res->t, clientgetstyle(res->c), pressed);
+	} else if (res->c) {
+		clientdecorate(res->c, clientgetstyle(res->c), 0, octant, pressed);
+	}
+}
+
 /* send a WM_DELETE message to client */
 static void
 windowclose(Window win)
@@ -2977,8 +2966,7 @@ preparewin(Window win)
 {
 	XSelectInput(dpy, win, EnterWindowMask | StructureNotifyMask
 	                     | PropertyChangeMask | FocusChangeMask);
-	XGrabButton(dpy, AnyButton, AnyModifier, win, False,
-	            ButtonPressMask | ButtonReleaseMask,
+	XGrabButton(dpy, AnyButton, AnyModifier, win, False, ButtonPressMask,
 	            GrabModeSync, GrabModeSync, None, None);
 	XSetWindowBorderWidth(dpy, win, 0);
 }
@@ -2992,10 +2980,6 @@ promptvalidevent(Display *dpy, XEvent *ev, XPointer arg)
 	(void)dpy;
 	prompt = (struct Prompt *)arg;
 	switch(ev->type) {
-	case Expose:
-		if (ev->xexpose.window == prompt->frame)
-			return True;
-		break;
 	case DestroyNotify:
 		if (ev->xdestroywindow.window == prompt->win)
 			return True;
@@ -3008,6 +2992,7 @@ promptvalidevent(Display *dpy, XEvent *ev, XPointer arg)
 		if (ev->xconfigurerequest.window == prompt->win)
 			return True;
 		break;
+	case Expose:
 	case ButtonPress:
 		return True;
 	}
@@ -3068,6 +3053,7 @@ prompt(Window win, int w, int h)
 {
 	struct Prompt prompt;
 	struct Client *c;
+	struct Winres res;
 	XEvent ev;
 	int x, y, fw, fh;
 
@@ -3083,8 +3069,14 @@ prompt(Window win, int w, int h)
 	while (!XIfEvent(dpy, &ev, promptvalidevent, (XPointer)&prompt)) {
 		switch(ev.type) {
 		case Expose:
-			if (ev.xexpose.count == 0)
-				promptdecorate(prompt.frame, w, h);
+			if (ev.xexpose.count == 0) {
+				if (ev.xexpose.window == prompt.frame) {
+					promptdecorate(prompt.frame, w, h);
+				} else {
+					res = getwin(ev.xexpose.window);
+					decorate(&res, 0, FrameNone);
+				}
+			}
 			break;
 		case DestroyNotify:
 		case UnmapNotify:
@@ -3131,7 +3123,7 @@ managenormal(struct Client *c, struct Tab *t)
 	if (focus && f != NULL && f->isfullscreen)
 		focus = 0;
 	if (!focus)
-		clientdecorate(c, Unfocused, 1);
+		clientdecorate(c, Unfocused, 1, 0, FrameNone);
 	clientsendtodesk(c, selmon->seldesk, 1, focus);
 }
 
@@ -3164,7 +3156,7 @@ managetrans(struct Tab *t, Window win, int maxw, int maxh, int ignoreunmap)
 	t->trans = trans;
 	icccmwmstate(win, NormalState);
 	if (clientisvisible(t->c)) {
-		clientdecorate(t->c, clientgetstyle(t->c), 1);
+		clientdecorate(t->c, clientgetstyle(t->c), 1, 0, FrameNone);
 		clientmoveresize(t->c);
 	}
 	XMapRaised(dpy, trans->frame);
@@ -3184,7 +3176,7 @@ unmanage(struct Tab *t)
 	if (c->ntabs == 0) {
 		clientdel(c, 1);
 	} else {
-		clientdecorate(c, clientgetstyle(c), 1);
+		clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
 		clientmoveresize(c);
 		if (c == getfocused(NULL)) {
 			tabfocus(c->seltab);
@@ -3239,7 +3231,7 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 		t = tabadd(win, 0);
 		if (!isuserplaced && autotab(t)) {
 			clienttab(focused, t, -1);
-			clientdecorate(focused, Focused, 1);
+			clientdecorate(focused, Focused, 1, 0, FrameNone);
 			clientmoveresize(focused);
 			if (focused->state == Tiled) {
 				desktile(focused->desk);
@@ -3293,7 +3285,7 @@ mapfocuswin(void)
 
 /* draw outline while resizing */
 static void
-outlinedraw(void)
+outlinedraw(struct Outline *outline)
 {
 	static struct Outline oldoutline = {0, 0, 0, 0, 0, 0};
 	XGCValues val;
@@ -3323,111 +3315,190 @@ outlinedraw(void)
 		rects[3].height = oldoutline.h;
 		XFillRectangles(dpy, root, gc, rects, 4);
 	}
-	if (outline.w != 0 && outline.h != 0) {
-		rects[0].x = outline.x + 1;
-		rects[0].y = outline.y;
-		rects[0].width = outline.w - 2;
+	if (outline->w != 0 && outline->h != 0) {
+		rects[0].x = outline->x + 1;
+		rects[0].y = outline->y;
+		rects[0].width = outline->w - 2;
 		rects[0].height = 1;
-		rects[1].x = outline.x;
-		rects[1].y = outline.y;
+		rects[1].x = outline->x;
+		rects[1].y = outline->y;
 		rects[1].width = 1;
-		rects[1].height = outline.h;
-		rects[2].x = outline.x + 1;
-		rects[2].y = outline.y + outline.h - 1;
-		rects[2].width = outline.w - 2;
+		rects[1].height = outline->h;
+		rects[2].x = outline->x + 1;
+		rects[2].y = outline->y + outline->h - 1;
+		rects[2].width = outline->w - 2;
 		rects[2].height = 1;
-		rects[3].x = outline.x + outline.w - 1;
-		rects[3].y = outline.y;
+		rects[3].x = outline->x + outline->w - 1;
+		rects[3].y = outline->y;
 		rects[3].width = 1;
-		rects[3].height = outline.h;
+		rects[3].height = outline->h;
 		XFillRectangles(dpy, root, gc, rects, 4);
 	}
-	oldoutline = outline;
+	oldoutline = *outline;
 	val.function = GXcopy;
 	val.subwindow_mode = ClipByChildren;
 	XChangeGC(dpy, gc, GCFunction | GCSubwindowMode, &val);
 }
 
-/* ungrab pointer and set mouse action to NoAction */
-static void
-ungrab(void)
-{
-	XUngrabPointer(dpy, CurrentTime);
-	mouseaction = NoAction;
-	mousex_root = -1;
-	mousey_root = -1;
-	mousex = -1;
-	mousey = -1;
-	movetab = NULL;
-	target = NULL;
-	pressed = FrameNone;
-}
-
 /* initiate button pressing and grab pointer */
 static void
-grabbutton(struct Client *c, int xroot, int yroot, int region)
+mousebutton(struct Client *c, int region)
 {
-	mouseaction = Button;
-	pressed = region;
-	target = c;
-	mousex_root = xroot;
-	mousey_root = yroot;
+	struct Winres res;
+	XEvent ev;
+	int released = region;
+
 	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
+	clientdecorate(c, clientgetstyle(c), 0, 0, region);     /* draw pressed button */
+	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | ExposureMask, &ev)) {
+		switch(ev.type) {
+		case Expose:
+			if (ev.xexpose.count == 0) {
+				res = getwin(ev.xexpose.window);
+				printf("ASDA: %p\n", res.c);
+				decorate(&res, 0, (res.c == c ? region : FrameNone));
+			}
+			break;
+		case ButtonRelease:
+			released = frameregion(c, ev.xbutton.window, ev.xbutton.x, ev.xbutton.y);
+			goto done;
+		}
+	}
+done:
+	clientdecorate(c, clientgetstyle(c), 0, 0, FrameNone);  /* draw pressed button */
+	if (released == region) {
+		switch (released) {
+		case FrameButtonLeft:
+			clientminimize(c, 1);
+			break;
+		case FrameButtonRight:
+			if (c->seltab) {
+				windowclose(c->seltab->win);
+			}
+			break;
+		}
+	}
+	XUngrabPointer(dpy, CurrentTime);
 }
 
 /* initiate retabbing and grab pointer */
 static void
-grabretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
+mouseretab(struct Client *c, struct Tab *t, int xroot, int yroot, int x, int y)
 {
-	mouseaction = Retabbing;
-	movetab = t;
-	target = c;
-	mousex_root = xroot;
-	mousey_root = yroot;
-	mousex = x;
-	mousey = y;
+	struct Client *newc;
+	struct Winres res;
+	XEvent ev;
+	int pos;
+
 	tabdetach(t, xroot - x, yroot - y);
 	tabfocus(c->seltab);
 	clientretab(c);
 	XGrabPointer(dpy, t->title, False, ButtonReleaseMask | Button3MotionMask, GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
+	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
+		switch(ev.type) {
+		case Expose:
+			if (ev.xexpose.count == 0) {
+				if (ev.xexpose.window == t->title || (t->trans && ev.xexpose.window == t->trans->frame)) {
+					tabdecorate(t, clientgetstyle(t->c), FrameNone);
+				} else {
+					res = getwin(ev.xexpose.window);
+					decorate(&res, 0, FrameNone);
+				}
+			}
+			break;
+		case ButtonRelease:
+			xroot = ev.xbutton.x_root;
+			yroot = ev.xbutton.y_root;
+			goto done;
+		case MotionNotify:
+			tabmove(t, ev.xmotion.x_root - x, ev.xmotion.y_root - y);
+			break;
+		}
+	}
+done:
+	if ((newc = getclientbytitle(xroot, yroot, &pos)) != NULL) {
+		clienttab(newc, t, pos);
+	} else {
+		newc = clientadd(xroot, yroot, t->winw, t->winh, 0);
+		managenormal(newc, t);
+	}
+	XUngrabPointer(dpy, CurrentTime);
 }
 
 /* initiate moving with mouse and grab pointer */
 static void
-grabmove(struct Client *c, int xroot, int yroot)
+mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant octant, int region)
 {
-	mouseaction = Moving;
-	target = c;
-	mousex_root = xroot;
-	mousey_root = yroot;
+	struct Winres res;
+	XEvent ev;
+	int x = 0, y = 0;
+	int b;
+
 	XGrabPointer(dpy, c->frame, False,
 	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 	             GrabModeAsync, GrabModeAsync, None, cursor[CursMove], CurrentTime);
+	decorate(&(struct Winres){.c = c, .t = t, .trans = NULL}, octant, region);        /* draw pressed region */
+	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
+		switch(ev.type) {
+		case Expose:
+			if (ev.xexpose.count == 0) {
+				res = getwin(ev.xexpose.window);
+				decorate(&res, (res.c == c ? octant : FrameNone), (res.c == c ? region : FrameNone));
+			}
+			break;
+		case ButtonRelease:
+			goto done;
+		case MotionNotify:
+			if (c->state == Tiled) {
+				b = c->b + c->t + config.gapinner;
+				if (ev.xmotion.x_root > c->x + c->w + (c->row->col->next ? b : 0))
+					x = +1;
+				else if (ev.xmotion.x_root < c->x - (c->row->col->prev ? b : 0))
+					x = -1;
+				else
+					x = 0;
+				if (ev.xmotion.y_root > c->y + c->h + (c->row->next ? b : 0))
+					y = +1;
+				else if (ev.xmotion.y_root < c->y - (c->row->prev ? b : 0))
+					y = -1;
+				else
+					y = 0;
+			} else {
+				x = ev.xmotion.x_root - xroot;
+				y = ev.xmotion.y_root - yroot;
+			}
+			clientincrmove(c, x, y);
+			xroot = ev.xmotion.x_root;
+			yroot = ev.xmotion.y_root;
+			break;
+		}
+	}
+done:
+	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);          /* draw pressed region */
+	XUngrabPointer(dpy, CurrentTime);
 }
 
 /* initiate resizing with mouse and grab pointer */
 static void
-grabresize(struct Client *c, int xroot, int yroot, enum Octant o)
+mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 {
+	struct Outline outline;
+	struct Winres res;
 	Cursor curs = None;
+	XEvent ev;
+	int x, y;
 
-	if (c->state == Tiled &&
+	if (c->isfullscreen || (c->state == Tiled &&
 	    ((c->row->col->next == NULL && octant & E) || (c->row->col->prev == NULL && octant & W) ||
-	     (c->row->prev == NULL && octant & N) || (c->row->next == NULL && octant & S))) {
-		mouseaction = NoAction;
+	     (c->row->prev == NULL && octant & N) || (c->row->next == NULL && octant & S)))) {
 		return;
 	}
-	mouseaction = Resizing;
 	outline.x = c->x - c->b;
 	outline.y = c->y - c->b - c->t;
 	outline.w = c->w + 2 * c->b;
 	outline.h = c->h + 2 * c->b + c->t;
 	outline.diffx = 0;
 	outline.diffy = 0;
-	octant = o;
-	target = c;
-	mousex_root = xroot;
-	mousey_root = yroot;
 	switch (octant) {
 	case NW:
 		curs = c->isshaded ? cursor[CursW] : cursor[CursNW];
@@ -3453,22 +3524,85 @@ grabresize(struct Client *c, int xroot, int yroot, enum Octant o)
 	case E:
 		curs = cursor[CursE];
 		break;
+	case C:
+		curs = cursor[CursNormal];
 	}
 	if (octant & W)
-		mousex = xroot - c->x + c->b;
+		x = xroot - c->x + c->b;
 	else if (octant & E)
-		mousex = c->x + c->w + c->b - xroot;
+		x = c->x + c->w + c->b - xroot;
 	else
-		mousex = 0;
+		x = 0;
 	if (octant & N)
-		mousey = yroot - c->y + c->b + c->t;
+		y = yroot - c->y + c->b + c->t;
 	else if (octant & S)
-		mousey = c->y + c->h + c->b - yroot;
+		y = c->y + c->h + c->b - yroot;
 	else
-		mousey = 0;
-	XGrabPointer(dpy, c->frame, False,
-	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
-	             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+		y = 0;
+	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+	clientdecorate(c, clientgetstyle(c), 0, octant, FrameNone);     /* draw pressed region */
+	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
+		switch(ev.type) {
+		case Expose:
+			if (ev.xexpose.count == 0) {
+				res = getwin(ev.xexpose.window);
+				decorate(&res, octant, FrameNone);
+			}
+			break;
+		case ButtonRelease:
+			goto done;
+		case MotionNotify:
+			if (x > outline.w)
+				x = 0;
+			if (y > outline.h)
+				y = 0;
+			if (octant & W &&
+			    ((ev.xmotion.x_root < xroot && x > ev.xmotion.x_root - outline.x) ||
+			     (ev.xmotion.x_root > xroot && x < ev.xmotion.x_root - outline.x))) {
+				x = xroot - ev.xmotion.x_root;
+				if (clientvalidsize(c, octant, outline.diffx + x, 0)) {
+					outline.x -= x;
+					outline.w += x;
+					outline.diffx += x;
+				}
+			} else if (octant & E &&
+			    ((ev.xmotion.x_root > xroot && x > outline.x + outline.w - ev.xmotion.x_root) ||
+			     (ev.xmotion.x_root < xroot && x < outline.x + outline.w - ev.xmotion.x_root))) {
+				x = ev.xmotion.x_root - xroot;
+				if (clientvalidsize(c, octant, outline.diffx + x, 0)) {
+					outline.w += x;
+					outline.diffx += x;
+				}
+			}
+			if (octant & N &&
+			    ((ev.xmotion.y_root < yroot && y > ev.xmotion.y_root - outline.y) ||
+			     (ev.xmotion.y_root > yroot && y < ev.xmotion.y_root - outline.y))) {
+				y = yroot - ev.xmotion.y_root;
+				if (clientvalidsize(c, octant, 0, outline.diffy + y)) {
+					outline.y -= y;
+					outline.h += y;
+					outline.diffy += y;
+				}
+			} else if (octant & S &&
+			    ((ev.xmotion.y_root > yroot && y > outline.y + outline.h - ev.xmotion.y_root) ||
+			     (ev.xmotion.y_root < yroot && y < outline.y + outline.h - ev.xmotion.y_root))) {
+				y = ev.xmotion.y_root - yroot;
+				if (clientvalidsize(c, octant, 0, outline.diffy + y)) {
+					outline.h += y;
+					outline.diffy += y;
+				}
+			}
+			outlinedraw(&outline);
+			xroot = ev.xmotion.x_root;
+			yroot = ev.xmotion.y_root;
+			break;
+		}
+	}
+done:
+	clientincrresize(c, octant, outline.diffx, outline.diffy);
+	outlinedraw(&(struct Outline){0, 0, 0, 0, 0, 0});
+	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);          /* draw pressed region */
+	XUngrabPointer(dpy, CurrentTime);
 }
 
 /* handle mouse operation, focusing and raising */
@@ -3482,6 +3616,7 @@ xeventbuttonpress(XEvent *e)
 	struct Monitor *mon;
 	struct Client *c;
 	struct Tab *t;
+	enum Octant octant;
 	int region;
 	int focus = 0;
 	int raise = 0;
@@ -3498,37 +3633,6 @@ xeventbuttonpress(XEvent *e)
 		return;
 	}
 
-	/* get region and octant of the frame the mouse pointer is in */
-	region = frameregion(c, ev->window, ev->x, ev->y);
-	octant = frameoctant(c, ev->window, ev->x, ev->y);
-
-	/* get action performed by mouse */
-	if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
-		grabbutton(c, ev->x_root, ev->y_root, region);
-	} else if ((ev->state == config.modifier && ev->button == Button1) ||
-	           (region == FrameBorder && ev->button == Button3)) {
-		grabmove(c, ev->x_root, ev->y_root);
-	} else if ((ev->state == config.modifier && ev->button == Button3) ||
-	           (region == FrameBorder && ev->button == Button1)) {
-		grabresize(c, ev->x_root, ev->y_root, octant);
-	} else if (region == FrameTitle && ev->button == Button3 && t != NULL && t->c != NULL && t->title == ev->window) {
-		grabretab(c, t, ev->x_root, ev->y_root, ev->x, ev->y);
-	} else if (region == FrameTitle && ev->button == Button1) {
-		tabfocus(t);
-		if (lastc == c && ev->time - lasttime < DOUBLECLICK) {
-			clientshade(c, !c->isshaded);
-			lasttime = 0;
-			lastc = NULL;
-			return;
-		}
-		pressed = FrameTitle;
-		lastc = c;
-		lasttime = ev->time;
-		grabmove(c, ev->x_root, ev->y_root);
-	} else {
-		mouseaction = NoAction;
-	}
-
 	/* focus client */
 	if (ev->button == Button1 && config.focusbuttons & 1 << 0)
 		focus = 1;
@@ -3542,8 +3646,6 @@ xeventbuttonpress(XEvent *e)
 		focus = 1;
 	if (focus)
 		clientfocus(c);
-	else
-		clientdecorate(c, clientgetstyle(c), 1);
 
 	/* raise client */
 	if (ev->button == Button1 && config.raisebuttons & 1 << 0)
@@ -3559,64 +3661,33 @@ xeventbuttonpress(XEvent *e)
 	if (raise)
 		clientraise(c);
 
+	/* get action performed by mouse */
+	region = frameregion(c, ev->window, ev->x, ev->y);
+	octant = frameoctant(c, ev->window, ev->x, ev->y);
+	if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
+		mousebutton(c, region);
+	} else if ((ev->state == config.modifier && ev->button == Button1) ||
+	           (region == FrameBorder && ev->button == Button3)) {
+		mousemove(c, NULL, ev->x_root, ev->y_root, octant, region);
+	} else if ((ev->state == config.modifier && ev->button == Button3) ||
+	           (region == FrameBorder && ev->button == Button1)) {
+		mouseresize(c, ev->x_root, ev->y_root, octant);
+	} else if (region == FrameTitle && ev->button == Button3 && t != NULL && t->c != NULL && t->title == ev->window) {
+		mouseretab(c, t, ev->x_root, ev->y_root, ev->x, ev->y);
+	} else if (region == FrameTitle && ev->button == Button1) {
+		tabfocus(t);
+		if (lastc == c && ev->time - lasttime < DOUBLECLICK) {
+			clientshade(c, !c->isshaded);
+			lasttime = 0;
+			lastc = NULL;
+			return;
+		}
+		lastc = c;
+		lasttime = ev->time;
+		mousemove(c, t, ev->x_root, ev->y_root, 0, region);
+	}
+
 	XAllowEvents(dpy, ReplayPointer, CurrentTime);
-}
-
-/* interrupt moving/resizing action */
-static void
-xeventbuttonrelease(XEvent *e)
-{
-	XButtonReleasedEvent *ev = &e->xbutton;
-	struct Client *c;
-	int region;
-	int pos;
-
-	if (mouseaction == Retabbing && movetab != NULL) {
-		c = getclientbytitle(ev->x_root, ev->y_root, &pos);
-		if (c != NULL) {
-			clienttab(c, movetab, pos);
-		} else {
-			c = clientadd(ev->x_root, ev->y_root, movetab->winw, movetab->winh, 0);
-			managenormal(c, movetab);
-		}
-	} else {
-		c = target;
-		if (c != NULL && ev->window == c->frame && mouseaction == Button && target == c) {
-			region = frameregion(c, ev->window, ev->x, ev->y);
-			if (pressed == region) {
-				switch (region) {
-				case FrameButtonLeft:
-					clientminimize(c, 1);
-					break;
-				case FrameButtonRight:
-					if (c->seltab) {
-						windowclose(c->seltab->win);
-					}
-					break;
-				}
-			}
-		}
-	}
-	if (c) {
-		clientnotify(c);
-	}
-	if (mouseaction == Resizing) {
-		clientincrresize(c, octant, outline.diffx, outline.diffy);
-		outline.x = 0;
-		outline.y = 0;
-		outline.w = 0;
-		outline.h = 0;
-		outline.diffx = 0;
-		outline.diffy = 0;
-		outlinedraw();
-	}
-	ungrab();
-	if (c != NULL) {
-		clientdecorate(c, clientgetstyle(c), 1);
-		if (clientisvisible(c)) {
-			clientmoveresize(c);
-		}
-	}
 }
 
 /* handle client message event */
@@ -3689,7 +3760,7 @@ xeventclientmessage(XEvent *e)
 		if (c == NULL)
 			return;
 		windowclose(ev->window);
-	} else if (ev->message_type == atoms[NetMoveresizeWindow] && mouseaction == NoAction) {
+	} else if (ev->message_type == atoms[NetMoveresizeWindow]) {
 		if (c == NULL)
 			return;
 		if (ev->data.l[0] & 1 << 8) {
@@ -3742,34 +3813,34 @@ xeventclientmessage(XEvent *e)
 			return;
 		switch (ev->data.l[2]) {
 		case _NET_WM_MOVERESIZE_CANCEL:
-			ungrab();
+			XUngrabPointer(dpy, CurrentTime);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
-			grabresize(c, ev->data.l[0], ev->data.l[1], NW);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], NW);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_TOP:
-			grabresize(c, ev->data.l[0], ev->data.l[1], N);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], N);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_TOPRIGHT:
-			grabresize(c, ev->data.l[0], ev->data.l[1], NE);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], NE);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_RIGHT:
-			grabresize(c, ev->data.l[0], ev->data.l[1], E);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], E);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT:
-			grabresize(c, ev->data.l[0], ev->data.l[1], SE);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], SE);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_BOTTOM:
-			grabresize(c, ev->data.l[0], ev->data.l[1], S);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], S);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT:
-			grabresize(c, ev->data.l[0], ev->data.l[1], SW);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], SW);
 			break;
 		case _NET_WM_MOVERESIZE_SIZE_LEFT:
-			grabresize(c, ev->data.l[0], ev->data.l[1], W);
+			mouseresize(c, ev->data.l[0], ev->data.l[1], W);
 			break;
 		case _NET_WM_MOVERESIZE_MOVE:
-			grabmove(c, ev->data.l[0], ev->data.l[1]);
+			mousemove(c, NULL, ev->data.l[0], ev->data.l[1], 0, FrameNone);
 			break;
 		default:
 			return;
@@ -3808,9 +3879,9 @@ xeventconfigurerequest(XEvent *e)
 	wc.sibling = ev->above;
 	wc.stack_mode = ev->detail;
 	res = getwin(ev->window);
-	if (res.trans != NULL && mouseaction == NoAction) {
+	if (res.trans != NULL) {
 		transconfigure(res.trans, ev->value_mask, &wc);
-	} else if (res.c != NULL && mouseaction == NoAction) {
+	} else if (res.c != NULL) {
 		clientconfigure(res.c, ev->value_mask, &wc);
 	} else if (res.c == NULL){
 		XConfigureWindow(dpy, ev->window, ev->value_mask, &wc);
@@ -3855,19 +3926,8 @@ xeventexpose(XEvent *e)
 	struct Winres res;
 
 	if (ev->count == 0) {
-		if (movetab && (ev->window == movetab->title ||
-		    (movetab->trans && ev->window == movetab->trans->frame))) {
-			tabdecorate(movetab, clientgetstyle(movetab->c));
-		} else {
-			res = getwin(ev->window);
-			if (res.c && ev->window == res.c->frame) {
-				clientdecorate(res.c, clientgetstyle(res.c), 0);
-			} else if (res.t && ev->window == res.t->title) {
-				tabdecorate(res.t, clientgetstyle(res.c));
-			} else if (res.trans && ev->window == res.trans->frame) {
-				transdecorate(res.trans, clientgetstyle(res.c));
-			}
-		}
+		res = getwin(ev->window);
+		decorate(&res, 0, FrameNone);
 	}
 }
 
@@ -3911,121 +3971,42 @@ xeventmotionnotify(XEvent *e)
 {
 	XMotionEvent *ev = &e->xmotion;
 	struct Winres res;
-	int x = 0, y = 0;
-	int b;
 
-	switch (mouseaction) {
-	case NoAction:
-		res = getwin(ev->window);
-		if (res.c == NULL || ev->subwindow != res.c->curswin)
-			return;
-		if (frameregion(res.c, ev->window, ev->x, ev->y) == FrameBorder) {
-			switch (frameoctant(res.c, ev->window, ev->x, ev->y)) {
-			case NW:
-				XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursW] : cursor[CursNW]));
-				break;
-			case NE:
-				XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursE] : cursor[CursNE]));
-				break;
-			case SW:
-				XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursW] : cursor[CursSW]));
-				break;
-			case SE:
-				XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursE] : cursor[CursSE]));
-				break;
-			case N:
-				XDefineCursor(dpy, res.c->curswin, cursor[CursN]);
-				break;
-			case S:
-				XDefineCursor(dpy, res.c->curswin, cursor[CursS]);
-				break;
-			case W:
-				XDefineCursor(dpy, res.c->curswin, cursor[CursW]);
-				break;
-			case E:
-				XDefineCursor(dpy, res.c->curswin, cursor[CursE]);
-				break;
-			}
-		} else {
+	res = getwin(ev->window);
+	if (res.c == NULL || ev->subwindow != res.c->curswin)
+		return;
+	if (frameregion(res.c, ev->window, ev->x, ev->y) == FrameBorder) {
+		switch (frameoctant(res.c, ev->window, ev->x, ev->y)) {
+		case NW:
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursW] : cursor[CursNW]));
+			break;
+		case NE:
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursE] : cursor[CursNE]));
+			break;
+		case SW:
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursW] : cursor[CursSW]));
+			break;
+		case SE:
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursE] : cursor[CursSE]));
+			break;
+		case N:
+			XDefineCursor(dpy, res.c->curswin, cursor[CursN]);
+			break;
+		case S:
+			XDefineCursor(dpy, res.c->curswin, cursor[CursS]);
+			break;
+		case W:
+			XDefineCursor(dpy, res.c->curswin, cursor[CursW]);
+			break;
+		case E:
+			XDefineCursor(dpy, res.c->curswin, cursor[CursE]);
+			break;
+		default:
 			XDefineCursor(dpy, res.c->curswin, cursor[CursNormal]);
+			break;
 		}
-		break;
-	case Retabbing:
-		if (movetab == NULL) {
-			mouseaction = NoAction;
-			XUngrabPointer(dpy, CurrentTime);
-			return;
-		}
-		tabmove(movetab, ev->x_root - mousex, ev->y_root - mousey);
-		break;
-	case Resizing:
-		if (mousex > outline.w)
-			mousex = 0;
-		if (mousey > outline.h)
-			mousey = 0;
-		if (octant & W &&
-		    ((ev->x_root < mousex_root && mousex > ev->x_root - outline.x) ||
-		     (ev->x_root > mousex_root && mousex < ev->x_root - outline.x))) {
-			x = mousex_root - ev->x_root;
-			if (clientvalidsize(target, octant, outline.diffx + x, 0)) {
-				outline.x -= x;
-				outline.w += x;
-				outline.diffx += x;
-			}
-		} else if (octant & E &&
-		    ((ev->x_root > mousex_root && mousex > outline.x + outline.w - ev->x_root) ||
-		     (ev->x_root < mousex_root && mousex < outline.x + outline.w - ev->x_root))) {
-			x = ev->x_root - mousex_root;
-			if (clientvalidsize(target, octant, outline.diffx + x, 0)) {
-				outline.w += x;
-				outline.diffx += x;
-			}
-		}
-		if (octant & N &&
-		    ((ev->y_root < mousey_root && mousey > ev->y_root - outline.y) ||
-		     (ev->y_root > mousey_root && mousey < ev->y_root - outline.y))) {
-			y = mousey_root - ev->y_root;
-			if (clientvalidsize(target, octant, 0, outline.diffy + y)) {
-				outline.y -= y;
-				outline.h += y;
-				outline.diffy += y;
-			}
-		} else if (octant & S &&
-		    ((ev->y_root > mousey_root && mousey > outline.y + outline.h - ev->y_root) ||
-		     (ev->y_root < mousey_root && mousey < outline.y + outline.h - ev->y_root))) {
-			y = ev->y_root - mousey_root;
-			if (clientvalidsize(target, octant, 0, outline.diffy + y)) {
-				outline.h += y;
-				outline.diffy += y;
-			}
-		}
-		outlinedraw();
-		mousex_root = ev->x_root;
-		mousey_root = ev->y_root;
-		break;
-	case Moving:
-		if (target->state == Tiled) {
-			b = target->b + target->t + config.gapinner;
-			if (ev->x_root > target->x + target->w + (target->row->col->next ? b : 0))
-				x = +1;
-			else if (ev->x_root < target->x - (target->row->col->prev ? b : 0))
-				x = -1;
-			else
-				x = 0;
-			if (ev->y_root > target->y + target->h + (target->row->next ? b : 0))
-				y = +1;
-			else if (ev->y_root < target->y - (target->row->prev ? b : 0))
-				y = -1;
-			else
-				y = 0;
-		} else {
-			x = ev->x_root - mousex_root;
-			y = ev->y_root - mousey_root;
-		}
-		clientincrmove(target, x, y);
-		mousex_root = ev->x_root;
-		mousey_root = ev->y_root;
-		break;
+	} else {
+		XDefineCursor(dpy, res.c->curswin, cursor[CursNormal]);
 	}
 }
 
@@ -4041,7 +4022,7 @@ xeventpropertynotify(XEvent *e)
 		return;
 	if (ev->atom == XA_WM_NAME || ev->atom == atoms[NetWMName]) {
 		tabupdatetitle(res.t);
-		clientdecorate(res.t->c, clientgetstyle(res.t->c), 1);
+		clientdecorate(res.t->c, clientgetstyle(res.t->c), 1, 0, FrameNone);
 	} else if (ev->atom == XA_WM_CLASS) {
 		tabupdateclass(res.t);
 	}
@@ -4156,7 +4137,6 @@ main(void)
 	XSetWindowAttributes swa;
 	void (*xevents[LASTEvent])(XEvent *) = {
 		[ButtonPress]      = xeventbuttonpress,
-		[ButtonRelease]    = xeventbuttonrelease,
 		[ClientMessage]    = xeventclientmessage,
 		[ConfigureNotify]  = xeventconfigurenotify,
 		[ConfigureRequest] = xeventconfigurerequest,

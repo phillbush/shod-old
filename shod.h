@@ -125,11 +125,11 @@ enum {
 
 /* frame region */
 enum {
-	FrameNone,
-	FrameButtonLeft,
-	FrameButtonRight,
-	FrameTitle,
-	FrameBorder,
+	FrameNone = 0,
+	FrameButtonLeft = 1,
+	FrameButtonRight = 2,
+	FrameTitle = 3,
+	FrameBorder = 4,
 };
 
 /* auto-tab behavior */
@@ -143,6 +143,7 @@ enum {
 
 /* window eight sections (aka octants) */
 enum Octant {
+	C  = 0,
 	N  = (1 << 0),
 	S  = (1 << 1),
 	W  = (1 << 2),
