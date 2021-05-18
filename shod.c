@@ -46,6 +46,7 @@ static Window layerwin[LayerLast];      /* dummy windows used to restack clients
 
 /* windows, desktops, monitors */
 static struct Client *clients = NULL;
+static struct Client *focuslist = NULL;
 static struct Client *focused = NULL;
 static struct Monitor *selmon = NULL;
 static struct Monitor *mons = NULL;
@@ -551,9 +552,9 @@ settheme(void)
 	XFreePixmap(dpy, pix);
 }
 
-/* get focused client */
+/* get next focused client after old on selected monitor and desktop */
 static struct Client *
-getfocused(struct Client *old)
+getnextfocused(struct Client *old)
 {
 	struct Client *c;
 
@@ -569,7 +570,7 @@ getfocused(struct Client *old)
 				return old->row->col->next->row->c;
 			}
 		} else if (old->state == Normal || old->state == Sticky) {
-			for (c = focused; c; c = c->fnext) {
+			for (c = focuslist; c; c = c->fnext) {
 				if (c != old && ((c->state == Sticky && c->mon == selmon) ||
 				    (c->state == Normal && c->desk == selmon->seldesk))) {
 					return c;
@@ -577,7 +578,7 @@ getfocused(struct Client *old)
 			}
 		}
 	}
-	for (c = focused; c; c = c->fnext) {
+	for (c = focuslist; c; c = c->fnext) {
 		if (c != old && ((c->state == Sticky && c->mon == selmon) ||
 		    ((c->state == Normal || c->state == Tiled) &&
 		    c->desk == selmon->seldesk))) {
@@ -706,7 +707,7 @@ ewmhsetstate(struct Client *c)
 
 	if (c == NULL)
 		return;
-	if (c == getfocused(NULL))
+	if (c == focused)
 		data[n++] = atoms[NetWMStateFocused];
 	if (c->isfullscreen)
 		data[n++] = atoms[NetWMStateFullscreen];
@@ -827,7 +828,7 @@ ewmhsetclientsstacking(void)
 	size_t i = 0, nwins = 0;
 
 	last = NULL;
-	for (c = focused; c; c = c->fnext) {
+	for (c = focuslist; c; c = c->fnext) {
 		last = c;
 		for (t = c->tabs; t; t = t->next) {
 			for (trans = t->trans; trans; trans = trans->next) {
@@ -958,7 +959,7 @@ getfullscreen(struct Monitor *mon, struct Desktop *desk)
 {
 	struct Client *c;
 
-	for (c = focused; c; c = c->fnext)
+	for (c = focuslist; c; c = c->fnext)
 		if (c->isfullscreen &&
 		    (((c->state == Normal || c->state == Tiled) && c->desk == desk) ||
 		     (c->state == Sticky && c->mon == mon)))
@@ -1221,7 +1222,7 @@ tabdecorate(struct Tab *t, int style, int pressed)
 static int
 clientgetstyle(struct Client *c)
 {
-	return (c && c == getfocused(NULL)) ? Focused : Unfocused;
+	return (c && c == focused) ? Focused : Unfocused;
 }
 
 /* check if client is visible */
@@ -2092,8 +2093,8 @@ clientdelfocus(struct Client *c)
 	}
 	if (c->fprev) {
 		c->fprev->fnext = c->fnext;
-	} else if (focused == c) {
-		focused = c->fnext;
+	} else if (focuslist == c) {
+		focuslist = c->fnext;
 	}
 }
 
@@ -2104,11 +2105,11 @@ clientaddfocus(struct Client *c)
 	if (c == NULL || c->state == Minimized)
 		return;
 	clientdelfocus(c);
-	c->fnext = focused;
+	c->fnext = focuslist;
 	c->fprev = NULL;
-	if (focused)
-		focused->fprev = c;
-	focused = c;
+	if (focuslist)
+		focuslist->fprev = c;
+	focuslist = c;
 }
 
 /* raise client */
@@ -2260,7 +2261,7 @@ clientminimize(struct Client *c, int minimize)
 		c->desk = NULL;
 		c->mon = NULL;
 		c->state = Minimized;
-		clientfocus(getfocused(c));
+		clientfocus(getnextfocused(c));
 		ewmhsetwmdesktop();
 	} else if (!minimize && c->state == Minimized) {
 		c->state = Normal;
@@ -2296,18 +2297,18 @@ clientbelow(struct Client *c, int below)
 void
 clientfocus(struct Client *c)
 {
-	struct Client *prevfocused, *fullscreen;
+	struct Client *fullscreen;
 
 	clientdecorate(focused, Unfocused, 1, 0, FrameNone);
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
+		focused = NULL;
 		return;
 	}
 	fullscreen = getfullscreen(c->mon, c->desk);
 	if (fullscreen != NULL && fullscreen != c && fullscreen != c->trans)
 		return;         /* we should not focus a client below a fullscreen client */
-	prevfocused = focused;
 	if (c->mon)
 		selmon = c->mon;
 	if (c->state != Sticky && c->state != Minimized)
@@ -2318,8 +2319,9 @@ clientfocus(struct Client *c)
 	clientdecorate(c, Focused, 1, 0, FrameNone);
 	if (c->state == Minimized)
 		clientminimize(c, 0);
-	ewmhsetstate(prevfocused);
+	ewmhsetstate(focused);
 	tabfocus(c->seltab);
+	focused = c;
 	ewmhsetclientsstacking();
 	ewmhsetcurrentdesktop(getdesknum(selmon->seldesk));
 }
@@ -2348,7 +2350,7 @@ clientshade(struct Client *c, int shade)
 		clientmoveresize(c);
 	if (c->state == Tiled)
 		desktile(c->desk);
-	if (c == getfocused(NULL))
+	if (c == focused)
 		clientfocus(c);
 	ewmhsetstate(c);
 }
@@ -2438,7 +2440,7 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 	if (focus)
 		clientfocus(c);
 	else if (focusother)
-		clientfocus(getfocused(NULL));
+		clientfocus(getnextfocused(NULL));
 	ewmhsetwmdesktop();
 	ewmhsetnumberofdesktops();
 	XSync(dpy, False);
@@ -2631,7 +2633,7 @@ clientdel(struct Client *c, int updateprops)
 {
 	struct Client *focus;
 
-	focus = getfocused(c);
+	focus = getnextfocused(c);
 	clientdelfocus(c);
 	if (c->next)
 		c->next->prev = c->prev;
@@ -2780,7 +2782,7 @@ deskchange(struct Desktop *desk)
 	}
 
 	/* focus client on the new current desktop */
-	clientfocus(getfocused(NULL));
+	clientfocus(getnextfocused(NULL));
 }
 
 /* configure client size and position */
@@ -2902,7 +2904,7 @@ autotab(struct Tab *t)
 		return 0;
 
 	/* there should be a focused frame */
-	if (!focused || focused != getfocused(NULL))
+	if (!focused)
 		return 0;
 
 	/* focused frame must be unshaded with title bar visible */
@@ -3052,7 +3054,6 @@ static void
 prompt(Window win, int w, int h)
 {
 	struct Prompt prompt;
-	struct Client *c;
 	struct Winres res;
 	XEvent ev;
 	int x, y, fw, fh;
@@ -3099,28 +3100,25 @@ prompt(Window win, int w, int h)
 done:
 	XReparentWindow(dpy, win, root, 0, 0);
 	XDestroyWindow(dpy, prompt.frame);
-	c = getfocused(NULL);
-	clientfocus(c);
+	clientfocus(focused);
 }
 
 /* create client for tab */
 static void
 managenormal(struct Client *c, struct Tab *t)
 {
-	struct Client *f;
 	unsigned long *values;
 	int focus = 1;          /* whether to focus window */
 
 	clienttab(c, t, 0);
 	clientnotify(c);
 	clientraise(c);
-	f = getfocused(NULL);
 	if ((values = getcardinalprop(t->win, atoms[NetWMUserTime], 1)) != NULL) {
 		if (values[0] == 0)
 			focus = 0;
 		XFree(values);
 	}
-	if (focus && f != NULL && f->isfullscreen)
+	if (focus && focused && focused->isfullscreen)
 		focus = 0;
 	if (!focus)
 		clientdecorate(c, Unfocused, 1, 0, FrameNone);
@@ -3178,7 +3176,7 @@ unmanage(struct Tab *t)
 	} else {
 		clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
 		clientmoveresize(c);
-		if (c == getfocused(NULL)) {
+		if (c == focused) {
 			tabfocus(c->seltab);
 		}
 	}
@@ -3712,7 +3710,7 @@ xeventclientmessage(XEvent *e)
 		if (ev->data.l[0]) {
 			clientshowdesk(1);
 		} else {
-			clientfocus(getfocused(NULL));
+			clientfocus(focused);
 		}
 	} else if (ev->message_type == atoms[NetRequestFrameExtents]) {
 		if (c == NULL)
@@ -3940,7 +3938,7 @@ xeventfocusin(XEvent *e)
 {
 	(void)e;
 
-	clientfocus(getfocused(NULL));
+	clientfocus(focused);
 }
 
 /* key press event on focuswin */
