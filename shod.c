@@ -2297,7 +2297,7 @@ clientbelow(struct Client *c, int below)
 void
 clientfocus(struct Client *c)
 {
-	struct Client *fullscreen;
+	struct Client *prevfocused, *fullscreen;
 
 	clientdecorate(focused, Unfocused, 1, 0, FrameNone);
 	if (c == NULL || c->state == Minimized) {
@@ -2309,6 +2309,8 @@ clientfocus(struct Client *c)
 	fullscreen = getfullscreen(c->mon, c->desk);
 	if (fullscreen != NULL && fullscreen != c && fullscreen != c->trans)
 		return;         /* we should not focus a client below a fullscreen client */
+	prevfocused = focused;
+	focused = c;
 	if (c->mon)
 		selmon = c->mon;
 	if (c->state != Sticky && c->state != Minimized)
@@ -2319,9 +2321,8 @@ clientfocus(struct Client *c)
 	clientdecorate(c, Focused, 1, 0, FrameNone);
 	if (c->state == Minimized)
 		clientminimize(c, 0);
-	ewmhsetstate(focused);
+	ewmhsetstate(prevfocused);
 	tabfocus(c->seltab);
-	focused = c;
 	ewmhsetclientsstacking();
 	ewmhsetcurrentdesktop(getdesknum(selmon->seldesk));
 }
