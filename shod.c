@@ -2217,7 +2217,7 @@ clientaddraise(struct Client *c)
 	c->rnext = raiselist;
 	c->rprev = NULL;
 	if (raiselist)
-		raiselist->fprev = c;
+		raiselist->rprev = c;
 	raiselist = c;
 	raised = c;
 }
