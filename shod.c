@@ -2412,7 +2412,8 @@ clientfocus(struct Client *c)
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
-		focused = NULL;
+		if (focused)
+			clientdelfocus(focused);
 		return;
 	}
 	fullscreen = getfullscreen(c->mon, c->desk);
