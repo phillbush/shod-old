@@ -16,7 +16,6 @@ INCS = -I${LOCALINC} -I${X11INC}
 LIBS = -L${LOCALLIB} -L${X11LIB} -lX11 -lXinerama -lXpm
 
 # flags
-CPPFLAGS =
 CFLAGS = -Wall -Wextra ${INCS} ${CPPFLAGS}
 LDFLAGS = ${LIBS}
 

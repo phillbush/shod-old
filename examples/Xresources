@@ -1,6 +1,2 @@
-shod.borderWidth:   3
 shod.gapOuter:      7
 shod.gapInner:      7
-shod.urgent:        #cc0000
-shod.focused:       #3465a4
-shod.unfocused:     #555753

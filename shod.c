@@ -16,8 +16,6 @@
 #include "shod.h"
 #include "theme.xpm"
 
-#define IGNOREUNMAP 6
-
 /* X stuff */
 static Display *dpy;
 static Window root;
@@ -41,7 +39,7 @@ static int minsize;     /* minimum size of a window */
 
 /* dummy windows */
 static Window wmcheckwin;
-static Window focuswin;                 /* dummy window to get focus */
+static Window focuswin;                 /* dummy window to get focus when no other window has focus */
 static Window layerwin[LayerLast];      /* dummy windows used to restack clients */
 
 /* windows, desktops, monitors */
@@ -63,6 +61,14 @@ volatile sig_atomic_t running = 1;
 
 /* include default configuration */
 #include "config.h"
+
+/* show usage and exit */
+static void
+usage(void)
+{
+	(void)fprintf(stderr, "usage: shod [-f buttons] [-m modifier] [-r buttons]\n");
+	exit(1);
+}
 
 /* get maximum */
 static int
@@ -175,6 +181,43 @@ getwinname(Window win)
 	return name;
 }
 
+/* parse buttons string */
+static unsigned int
+parsebuttons(const char *s)
+{
+	const char *origs;
+	unsigned int buttons;
+
+	origs = s;
+	buttons = 0;
+	while (*s != '\0') {
+		if (*s < '1' || *s > '5')
+			errx(1, "improper buttons string %s", origs);
+		buttons |= 1 << (*s - '1');
+		s++;
+	}
+	return buttons;
+}
+
+/* parse modifier string */
+static unsigned int
+parsemodifier(const char *s)
+{
+	if (strcasecmp(s, "Mod1") == 0)
+		return Mod1Mask;
+	else if (strcasecmp(s, "Mod2") == 0)
+		return Mod2Mask;
+	else if (strcasecmp(s, "Mod3") == 0)
+		return Mod3Mask;
+	else if (strcasecmp(s, "Mod4") == 0)
+		return Mod4Mask;
+	else if (strcasecmp(s, "Mod5") == 0)
+		return Mod5Mask;
+	else
+		errx(1, "improper modifier string %s", s);
+	return 0;
+}
+
 /* get configuration from X resources */
 static void
 getresources(void)
@@ -208,6 +251,12 @@ getresources(void)
 		config.theme_path = xval.addr;
 	if (XrmGetResource(xdb, "shod.font", "*", &type, &xval) == True)
 		config.font = xval.addr;
+	if (XrmGetResource(xdb, "shod.modifier", "*", &type, &xval) == True)
+		config.modifier = parsemodifier(xval.addr);
+	if (XrmGetResource(xdb, "shod.focusButtons", "*", &type, &xval) == True)
+		config.focusbuttons = parsebuttons(xval.addr);
+	if (XrmGetResource(xdb, "shod.raiseButtons", "*", &type, &xval) == True)
+		config.raisebuttons = parsebuttons(xval.addr);
 	if (XrmGetResource(xdb, "shod.autoTab", "*", &type, &xval) == True) {
 		if (strcasecmp(xval.addr, "floating") == 0) {
 			config.autotab = TabFloating;
@@ -220,6 +269,35 @@ getresources(void)
 		} else {
 			config.autotab = NoAutoTab;
 		}
+	}
+}
+
+/* get configuration from command-line */
+static void
+getoptions(int argc, char *argv[])
+{
+	int ch;
+
+	while ((ch = getopt(argc, argv, "f:m:r:")) != -1) {
+		switch (ch) {
+		case 'f':
+			config.focusbuttons = parsebuttons(optarg);
+			break;
+		case 'm':
+			config.modifier = parsemodifier(optarg);
+			break;
+		case 'r':
+			config.raisebuttons = parsebuttons(optarg);
+			break;
+		default:
+			usage();
+			break;
+		}
+	}
+	argc -= optind;
+	argv += optind;
+	if (argc != 0) {
+		usage();
 	}
 }
 
@@ -1919,10 +1997,6 @@ frameoctant(struct Client *c, Window win, int x, int y)
 	return SE;
 }
 
-#define DIV       15      /* number to divide the screen into grids */
-#define WIDTH(x)  ((x)->fw + 2 * c->b)
-#define HEIGHT(x) ((x)->fh + 2 * c->b + c->t)
-
 /* find best position to place a client on screen */
 static void
 clientplace(struct Client *c, struct Desktop *desk)
@@ -2794,10 +2868,6 @@ clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
 
 	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return;
-	if (valuemask & CWX)
-		wc->x -= c->b;
-	if (valuemask & CWY)
-		wc->y -= c->b + c->t;
 	if (c->state == Tiled) {
 		x = y = w = h = 0;
 		if (valuemask & CWX)
@@ -3384,6 +3454,7 @@ done:
 static void
 mouseretab(struct Tab *t, int xroot, int yroot, int x, int y)
 {
+	struct Monitor *mon;
 	struct Client *c;
 	struct Winres res;
 	XEvent ev;
@@ -3419,6 +3490,9 @@ done:
 	if ((c = getclientbytitle(xroot, yroot, &pos)) != NULL) {
 		clienttab(c, t, pos);
 	} else {
+		mon = getmon(xroot, yroot);
+		if (mon && mon != selmon)
+			deskchange(mon->seldesk);
 		c = clientadd(xroot, yroot, t->winw, t->winh, 0);
 		managenormal(c, t);
 	}
@@ -3668,8 +3742,9 @@ xeventbuttonpress(XEvent *e)
 	octant = frameoctant(c, ev->window, ev->x, ev->y);
 	if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
 		mousebutton(c, region);
-	} else if ((ev->state == config.modifier && ev->button == Button1) ||
-	           (region == FrameBorder && ev->button == Button3)) {
+	} else if (ev->state == config.modifier && ev->button == Button1) {
+		mousemove(c, NULL, ev->x_root, ev->y_root, 0, FrameNone);
+	} else if (region == FrameBorder && ev->button == Button3) {
 		mousemove(c, NULL, ev->x_root, ev->y_root, octant, region);
 	} else if ((ev->state == config.modifier && ev->button == Button3) ||
 	           (region == FrameBorder && ev->button == Button1)) {
@@ -4133,7 +4208,7 @@ cleanfontset(void)
 
 /* shod window manager */
 int
-main(void)
+main(int argc, char *argv[])
 {
 	XEvent ev;
 	XSetWindowAttributes swa;
@@ -4165,11 +4240,12 @@ main(void)
 	gc = XCreateGC(dpy, root, 0, NULL);
 	xerrorxlib = XSetErrorHandler(xerror);
 
-	/* initialize resources database */
+	/* initialize resources database, read options */
 	config.theme_path = NULL;
 	XrmInitialize();
 	if ((xrm = XResourceManagerString(dpy)) != NULL && (xdb = XrmGetStringDatabase(xrm)) != NULL)
 		getresources();
+	getoptions(argc, argv);
 
 	/* initialize */
 	initsignal();

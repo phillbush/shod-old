@@ -4,10 +4,15 @@
 \- hybrid window manager
 .SH SYNOPSIS
 .B shod
+.RB [ \-f
+.IR buttons ]
+.RB [ \-m
+.IR modifier ]
+.RB [ \-r
+.IR buttons ]
 .SH DESCRIPTION
 .B shod
-is an hybrid (tiling and floating) reparenting and themeable multimonitor X11 window manager
-which support tabs.
+is a hybrid (tiling and floating) reparenting X11 window manager which supports tabs, multiple monitors, and themes.
 .B shod
 sets no keybindings;
 reads no configuration other than X resources;
@@ -17,6 +22,39 @@ and by responding to client messages with EWMH hints
 .IR wmctrl (1)
 to control shod).
 .PP
+The options are as follows:
+.TP
+.BI -f " buttons"
+Which mouse buttons can be used to focus a window when clicking on it.
+.I buttons
+is a string of numbers 1 to 5 (corresponding to mouse buttons 1 to 5).
+For example,
+.B -f 13
+make windows be focused when clicking on them with the mouse buttons 1 and 3
+(the left and right mouse buttons, respectively).
+If this is set to a blank string, no mouse button is used to focus window,
+and
+.B shod
+uses the focus-follow-cursor focusing style.
+By default, focus follows mouse click on button 1.
+.TP
+.BI -m " modifier"
+Which modifier, from
+.B Mod1
+to
+.B Mod5
+is used to move and resize windows with the mouse pointer.
+.TP
+.BI -r " buttons"
+Which mouse buttons can be used to raise a window when clicking on it.
+.I buttons
+is a string of numbers 1 to 5 (corresponding to mouse buttons 1 to 5).
+For example,
+.B -r 13
+make windows be raised when clicking on them with the mouse buttons 1 and 3
+(the left and right mouse buttons, respectively).
+By default, raise occurs on mouse click on button 1.
+.PP
 .B shod
 maintains one monitor for each physical monitor found by
 .IR Xinerama (1).
@@ -24,11 +62,11 @@ One of the monitors is the focused one, where new windows go to when they are cr
 Each monitor contains a set of desktops.
 One of the desktops of a monitor is the focused desktop for that monitor.
 .B shod
-manages desktop just like how GNOME implements \(lqactions\(rq.
-If a window is open on the last empty desktop,
+manages desktop just like how GNOME:
+if a window is open on the last empty desktop,
 .B shod
-creates a new empty desktop on that monitor.
-When a desktop has no window, this desktop is deleted.
+creates a new empty desktop on that monitor;
+when a desktop has no window, this desktop is deleted.
 .PP
 Windows are displayed in frames.
 A frame contains borders (four edges and four corners),
@@ -100,36 +138,29 @@ atom set in the
 .B _NET_WM_STATE
 property.
 .SH USAGE
+There are several ways
 .B shod
-has several ways of manipulating windows.
+can manage windows.
 See the section
 .B EXAMPLES
 for examples on how to use
 .IR wmctrl (1)
 for controlling shod.
-.SS Manipulating with the mouse
-The main method for controlling windows is the mouse.
+.SS Managing windows with the mouse
+The main method for managing windows is the mouse.
 .PP
-The
-.B config.focusbuttons
-variable (set at compile time in config.h)
-specifies which mouse buttons can be used to focus a frame when clicking on it.
-Each bit represents a button.
-For example, if it is set to 5 (0101 in binary),
-a frame is focused when clicking on it with the first or the third mouse button.
-If this variable is set to 0, the focus follows the mouse pointer.
+The buttons set with the 
+.B -f
+command line option are used to focus a frame when clicking on it.
+If no button is specified, the focus follows the mouse pointer.
 .PP
-The
-.B config.raisebuttons
-variable (set at compile time in config.h)
-specifies which mouse buttons can be used to raise a frame when clicking on it.
-Each bit represents a button.
-If this variable is set to 0, all buttons raises a frame.
+The buttons set with the
+.B -r
+command line option are used to raise a frame when clicking on it.
 .PP
-The
-.B config.modifier
-variable (set at compile time in config.h)
-specifies the modifier key.
+The modifier set with the
+.B -m
+command line option is the modifier key.
 Pressing the modifier key and dragging a frame with the Button 1
 (the left mouse button) will move that frame.
 Pressing the modifier key and dragging a corner or edge of a frame with the Button 3
@@ -142,27 +173,24 @@ without pressing any modifier.
 .PP
 Moving frames can also be performed by dragging a tab of the frame with the Button 1,
 without pressing any modifier.
-A tab can be detached from its frame by dragging it with the Button 3;
-a detached frame, while being dragged with the Button 3,
+A tab can be detached from its frame by dragging it with the Button 3.
+A detached frame, while being dragged with the Button 3,
 can be attached into another frame by dropping it into another frame's title bar.
 .PP
 Double clicking on a tab shades or unshades the frame.
 .PP
-Dragging a tab from a frame with the Button 3 and dropping it on the
-title bar of another frame moves the tab from one frame to another.
-.PP
 Each frame has two buttons on its title bar.
-Clicking with the mouse Button 1 on the frame's left button (called the minimize button)
+Clicking with the mouse Button 1 on the left button (called the minimize button)
 minimzes the frame.
-Clicking with the mouse Button 1 on the frame's right button (called the close button)
+Clicking with the mouse Button 1 on the right button (called the close button)
 closes the window on the focused tab, and, if it was the last tab on the frame, deletes the frame.
-.SS Manipulating via window properties
+.SS Managing windows with state client messages
 The
 .IR wmctrl (1)
-utility can be used to set window properties,
+utility can be used to send client messages to the window manager,
 and
 .B shod
-respects and sets those properties in different ways.
+respects those messages in different ways.
 For example, running the following command toggles the sticky option
 on the active frame.
 .IP
@@ -172,40 +200,40 @@ $ wmctrl -r :ACTIVE: -b toggle,sticky
 .IP \(bu 2
 If the
 .B sticky
-property is set on a window, that window's frame becomes sticky
+state is set on a window, that window's frame becomes sticky
 (it is displayed on all desktops of the monitor the frame is in).
 .IP \(bu 2
 If the
 .BR maximize_vert " and " maximize_horz
-properties are set on a window, that window's frame is tiled.
+states are set on a window, that window's frame is tiled.
 For more information on manipulating tiled windows, see the section
-.B Manipulating tiled windows
+.B Managing tiled windows
 below.
 .IP \(bu 2
 If the
 .B hidden
-property is set on a window,
+state is set on a window,
 that window's frame becomes minimized
 (it won't be displayed on any desktop or on any monitor).
 .IP \(bu 2
 If the
 .B fullscreen
-property is set on a window, the content of that window's frame is maximized to fit the entire screen.
+state is set on a window, the content of that window's frame is maximized to fit the entire screen.
 .IP \(bu 2
 If the
 .B above
-property is set on a floating window, that window's frame is raised above all other floating frames.
+state is set on a floating window, that window's frame is raised above all other floating frames.
 .IP \(bu 2
 If the
 .B below
-property is set on a floating window, that window's frame is lowered below all other floating frames.
+state is set on a floating window, that window's frame is lowered below all other floating frames.
 .IP \(bu 2
 If the
 .B shaded
-property is set on a window, that window's frame collapsed into its title bar.
+state is set on a window, that window's frame collapsed into its title bar.
 .PP
-All other properties are ignored.
-.SS Manipulating via other EWMH client messages
+All other client messages are ignored.
+.SS Managing windows with other EWMH client messages
 .B shod
 acts upon other EWMH client messages sent to windows and to the root window.
 Most client messages can be sent via
@@ -276,11 +304,11 @@ option of
 makes
 shod
 move the frame of the specified window to the specified desktop.
-.SS Manipulating via configure request
+.SS Managing windows with configure request events
 .B shod
 acts upon configure request events sent to windows via by resizing and moving their frames
 just as if the user have resized or moved them with the mouse.
-.SS Manipulating tiled windows
+.SS Managing tiled windows
 When a window is maximized, its frame is tiled by
 .BR shod .
 A tiled frame behaves differently of regular frames.
@@ -304,6 +332,11 @@ Resizing a tiled frame with
 or with the mouse
 will change the size of the frame, the size of the column it is in,
 and the size of the neighboring frames.
+.SS Managing xprompt(1) windows
+.B shod
+manages
+.IR xprompt (1)
+windows.
 .SH ENVIRONMENT
 The following environment variables affect the execution of
 .B shod
@@ -315,6 +348,21 @@ on.
 .SH RESOURCES
 .B shod
 understands the following X resources.
+.TP
+.B shod.focusButtons
+Same as the
+.B -f
+command-line option.
+.TP
+.B shod.modifier
+Same as the
+.B -m
+command-line option.
+.TP
+.B shod.raiseButtons
+Same as the
+.B -r
+command-line option.
 .TP
 .B shod.font
 The font in the X Logical Font Description of the text in the title bar.
@@ -365,19 +413,14 @@ or
 .B $HOME/.Xdefaults
 or other file called by
 .IR xrdb (1).
-This example makes shod draw a 3 pixels wide border around windows,
-and a 7 pixels wide gap around and between tiled windows.
+This example makes shod uses a 7 pixels wide gap around and between tiled windows.
 It sets the color of the border of urgent windows to red;
 the border of the focused window to blue;
 and the border of regular windows to gray.
 .IP
 .EX
-shod.borderWidth:   3
 shod.gapOuter:      7
 shod.gapInner:      7
-shod.urgent:        #cc0000
-shod.focused:       #3465a4
-shod.unfocused:     #555753
 .EE
 .PP
 The following is a sample configuration for
@@ -392,7 +435,7 @@ It uses
 (a script shown below) for moving and resizing windows, respectively.
 .IP
 .EX
-# Start terminal (urxvt)
+# Start terminal
 mod1 + Return
 	xterm
 
@@ -401,7 +444,7 @@ mod1 + shift + q
 	wmctrl -c :ACTIVE:
 
 # Workspace
-mod1 + {1,2,3,4,5,6,7,8,9}
+mod1 + {1,2,3,4,5,6,7,8,9,0}
 	wmctrl -s {0,1,2,3,4,5,6,7,8,9}
 mod1 + shift + {1,2,3,4,5,6,7,8,9}
 	wmctrl -r :ACITVE: -t {0,1,2,3,4,5,6,7,8,9}
@@ -561,5 +604,6 @@ wmctrl -r :ACTIVE: -e 0,$X,$Y,$WIDTH,$HEIGHT
 .IR dmenu (1),
 .IR sxhkd (1),
 .IR wmctrl (1),
+.IR xprompt (1)
 .SH BUGS
 Yes.

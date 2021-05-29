@@ -1,5 +1,9 @@
+#define IGNOREUNMAP  6          /* number of unmap notifies to ignore while scanning existing clients */
+#define DIV          15         /* number to divide the screen into grids */
 #define DOUBLECLICK  250        /* time in miliseconds of a double click */
 #define NAMEMAXLEN   1024       /* maximum length of window's name */
+#define WIDTH(x)  ((x)->fw + 2 * c->b)
+#define HEIGHT(x) ((x)->fh + 2 * c->b + c->t)
 
 /* window states */
 enum {
