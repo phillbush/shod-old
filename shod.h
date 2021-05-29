@@ -193,7 +193,7 @@ struct Tab {
 struct Client {
 	struct Client *prev, *next;
 	struct Client *fprev, *fnext;
-	struct Client *trans;
+	struct Client *rprev, *rnext;
 	struct Monitor *mon;
 	struct Desktop *desk;
 	struct Row *row;

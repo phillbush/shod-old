@@ -43,13 +43,15 @@ static Window focuswin;                 /* dummy window to get focus when no oth
 static Window layerwin[LayerLast];      /* dummy windows used to restack clients */
 
 /* windows, desktops, monitors */
-static struct Client *clients = NULL;
-static struct Client *focuslist = NULL;
-static struct Client *focused = NULL;
-static struct Monitor *selmon = NULL;
-static struct Monitor *mons = NULL;
-static unsigned long deskcount = 0;
-static int showingdesk = 0;
+static struct Client *clients;
+static struct Client *focuslist;
+static struct Client *focused;
+static struct Client *raiselist;
+static struct Client *raised;
+static struct Monitor *selmon;
+static struct Monitor *mons;
+static unsigned long deskcount;
+static int showingdesk;
 static XSetWindowAttributes clientswa = {
 	.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
 		    | SubstructureRedirectMask | ButtonPressMask | FocusChangeMask
@@ -2170,6 +2172,9 @@ clientdelfocus(struct Client *c)
 	} else if (focuslist == c) {
 		focuslist = c->fnext;
 	}
+	if (focused == c) {
+		focused = NULL;
+	}
 }
 
 /* put client on beginning of focus list */
@@ -2184,6 +2189,37 @@ clientaddfocus(struct Client *c)
 	if (focuslist)
 		focuslist->fprev = c;
 	focuslist = c;
+	focused = c;
+}
+
+/* remove client from the raise list */
+static void
+clientdelraise(struct Client *c)
+{
+	if (c->rnext) {
+		c->rnext->rprev = c->rprev;
+	}
+	if (c->rprev) {
+		c->rprev->rnext = c->rnext;
+	} else if (raiselist == c) {
+		raiselist = c->rnext;
+	}
+	if (raised == c) {
+		raised = NULL;
+	}
+}
+
+/* put client on beginning of raise list */
+static void
+clientaddraise(struct Client *c)
+{
+	clientdelraise(c);
+	c->rnext = raiselist;
+	c->rprev = NULL;
+	if (raiselist)
+		raiselist->fprev = c;
+	raiselist = c;
+	raised = c;
 }
 
 /* raise client */
@@ -2194,9 +2230,8 @@ clientraise(struct Client *c)
 
 	if (c == NULL || c->state == Minimized)
 		return;
+	clientaddraise(c);
 	wins[1] = c->frame;
-	if (c->trans != NULL)
-		c = c->trans;
 	if (c->isfullscreen)
 		wins[0] = layerwin[LayerFullscreen];
 	else if (c->state == Tiled)
@@ -2381,10 +2416,9 @@ clientfocus(struct Client *c)
 		return;
 	}
 	fullscreen = getfullscreen(c->mon, c->desk);
-	if (fullscreen != NULL && fullscreen != c && fullscreen != c->trans)
+	if (fullscreen != NULL && fullscreen != c)
 		return;         /* we should not focus a client below a fullscreen client */
 	prevfocused = focused;
-	focused = c;
 	if (c->mon)
 		selmon = c->mon;
 	if (c->state != Sticky && c->state != Minimized)
@@ -2667,13 +2701,13 @@ clientadd(int x, int y, int w, int h, int isuserplaced)
 
 	c = emalloc(sizeof *c);
 	c->fprev = c->fnext = NULL;
+	c->rprev = c->rnext = NULL;
 	c->mon = NULL;
 	c->desk = NULL;
 	c->row = NULL;
 	c->isfullscreen = 0;
 	c->isuserplaced = isuserplaced;
 	c->isshaded = 0;
-	c->trans = NULL;
 	c->ishidden = 0;
 	c->state = Normal;
 	c->layer = 0;
@@ -2710,6 +2744,7 @@ clientdel(struct Client *c, int updateprops)
 
 	focus = getnextfocused(c);
 	clientdelfocus(c);
+	clientdelraise(c);
 	if (c->next)
 		c->next->prev = c->prev;
 	if (c->prev)
@@ -3694,8 +3729,6 @@ xeventbuttonpress(XEvent *e)
 	struct Tab *t;
 	enum Octant octant;
 	int region;
-	int focus = 0;
-	int raise = 0;
 
 	res = getwin(ev->window);
 	c = res.c;
@@ -3710,31 +3743,21 @@ xeventbuttonpress(XEvent *e)
 	}
 
 	/* focus client */
-	if (ev->button == Button1 && config.focusbuttons & 1 << 0)
-		focus = 1;
-	else if (ev->button == Button2 && config.focusbuttons & 1 << 1)
-		focus = 1;
-	else if (ev->button == Button3 && config.focusbuttons & 1 << 2)
-		focus = 1;
-	else if (ev->button == Button4 && config.focusbuttons & 1 << 3)
-		focus = 1;
-	else if (ev->button == Button5 && config.focusbuttons & 1 << 4)
-		focus = 1;
-	if (focus)
+	if (c != focused &&
+	    ((ev->button == Button1 && config.focusbuttons & 1 << 0) ||
+	     (ev->button == Button2 && config.focusbuttons & 1 << 1) ||
+	     (ev->button == Button3 && config.focusbuttons & 1 << 2) ||
+	     (ev->button == Button4 && config.focusbuttons & 1 << 3) ||
+	     (ev->button == Button5 && config.focusbuttons & 1 << 4)))
 		clientfocus(c);
 
 	/* raise client */
-	if (ev->button == Button1 && config.raisebuttons & 1 << 0)
-		raise = 1;
-	else if (ev->button == Button2 && config.raisebuttons & 1 << 1)
-		raise = 1;
-	else if (ev->button == Button3 && config.raisebuttons & 1 << 2)
-		raise = 1;
-	else if (ev->button == Button4 && config.raisebuttons & 1 << 3)
-		raise = 1;
-	else if (ev->button == Button5 && config.raisebuttons & 1 << 4)
-		raise = 1;
-	if (raise)
+	if (c != raised &&
+	    ((ev->button == Button1 && config.raisebuttons & 1 << 0) ||
+	     (ev->button == Button2 && config.raisebuttons & 1 << 1) ||
+	     (ev->button == Button3 && config.raisebuttons & 1 << 2) ||
+	     (ev->button == Button4 && config.raisebuttons & 1 << 3) ||
+	     (ev->button == Button5 && config.raisebuttons & 1 << 4)))
 		clientraise(c);
 
 	/* get action performed by mouse */
@@ -4152,8 +4175,9 @@ cleandummywindows(void)
 
 	XDestroyWindow(dpy, wmcheckwin);
 	XDestroyWindow(dpy, focuswin);
-	for (i = 0; i < LayerLast; i++)
+	for (i = 0; i < LayerLast; i++) {
 		XDestroyWindow(dpy, layerwin[i]);
+	}
 }
 
 /* free cursors */
@@ -4162,8 +4186,9 @@ cleancursors(void)
 {
 	size_t i;
 
-	for (i = 0; i < CursLast; i++)
+	for (i = 0; i < CursLast; i++) {
 		XFreeCursor(dpy, cursor[i]);
+	}
 }
 
 /* free pixmaps */
