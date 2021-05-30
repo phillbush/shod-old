@@ -2172,9 +2172,6 @@ clientdelfocus(struct Client *c)
 	} else if (focuslist == c) {
 		focuslist = c->fnext;
 	}
-	if (focused == c) {
-		focused = NULL;
-	}
 }
 
 /* put client on beginning of focus list */
@@ -2189,7 +2186,6 @@ clientaddfocus(struct Client *c)
 	if (focuslist)
 		focuslist->fprev = c;
 	focuslist = c;
-	focused = c;
 }
 
 /* remove client from the raise list */
@@ -2204,9 +2200,6 @@ clientdelraise(struct Client *c)
 	} else if (raiselist == c) {
 		raiselist = c->rnext;
 	}
-	if (raised == c) {
-		raised = NULL;
-	}
 }
 
 /* put client on beginning of raise list */
@@ -2219,7 +2212,6 @@ clientaddraise(struct Client *c)
 	if (raiselist)
 		raiselist->rprev = c;
 	raiselist = c;
-	raised = c;
 }
 
 /* raise client */
@@ -2412,14 +2404,14 @@ clientfocus(struct Client *c)
 	if (c == NULL || c->state == Minimized) {
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
-		if (focused)
-			clientdelfocus(focused);
+		focused = NULL;
 		return;
 	}
 	fullscreen = getfullscreen(c->mon, c->desk);
 	if (fullscreen != NULL && fullscreen != c)
 		return;         /* we should not focus a client below a fullscreen client */
 	prevfocused = focused;
+	focused = c;
 	if (c->mon)
 		selmon = c->mon;
 	if (c->state != Sticky && c->state != Minimized)
@@ -2746,6 +2738,10 @@ clientdel(struct Client *c, int updateprops)
 	focus = getnextfocused(c);
 	clientdelfocus(c);
 	clientdelraise(c);
+	if (focused == c)
+		focused = NULL;
+	if (raised == c)
+		raised = NULL;
 	if (c->next)
 		c->next->prev = c->prev;
 	if (c->prev)
