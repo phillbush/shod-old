@@ -22,4 +22,7 @@ struct Config config = {
 	.modifier = Mod1Mask,   /* modifier pressed with mouse button */
 	.focusbuttons = 1,      /* bit mask of mouse buttons that focus windows */
 	.raisebuttons = 1,      /* bit mask of mouse buttons that raise windows */
+
+	/* number of desktops */
+	.ndesktops = 10
 };

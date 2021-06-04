@@ -50,8 +50,9 @@ static struct Client *raiselist;
 static struct Client *raised;
 static struct Monitor *selmon;
 static struct Monitor *mons;
-static unsigned long deskcount;
+static struct Monitor *lastmon;
 static int showingdesk;
+static int moncount;
 static XSetWindowAttributes clientswa = {
 	.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
 		    | SubstructureRedirectMask | ButtonPressMask | FocusChangeMask
@@ -324,44 +325,30 @@ getstate(Window w)
 
 /* get desktop pointer from desktop index */
 static struct Desktop *
-getdesk(unsigned long n)
+getdesk(long int n)
 {
 	struct Monitor *mon;
-	struct Desktop *desk;
+	long int i, j;
 
-	if (n >= deskcount)
+	if (n < 0 || n >= config.ndesktops * moncount)
 		return NULL;
+	i = n / config.ndesktops;
+	j = n % config.ndesktops;
 	for (mon = mons; mon; mon = mon->next) {
-		for (desk = mon->desks; desk; desk = desk->next) {
-			if (n == 0) {
-				return desk;
-			} else {
-				n--;
-			}
+		if (i == 0) {
+			return &mon->desks[j];
+		} else {
+			i--;
 		}
 	}
 	return NULL;
 }
 
 /* get desktop index from desktop pointer */
-static unsigned long
+static long int
 getdesknum(struct Desktop *desk)
 {
-	struct Monitor *mon;
-	struct Desktop *tmp;
-	unsigned long n = 0;
-
-	for (mon = mons; mon; mon = mon->next) {
-		for (tmp = mon->desks; tmp; tmp = tmp->next) {
-			if (desk == tmp) {
-				goto done;
-			} else {
-				n++;
-			}
-		}
-	}
-done:
-	return n;
+	return (long int)(desk->mon->n * config.ndesktops + desk->n);
 }
 
 /* error handler */
@@ -742,19 +729,16 @@ ewmhsetactivewindow(Window w)
 static void
 ewmhsetnumberofdesktops(void)
 {
-    XChangeProperty(dpy, root, atoms[NetNumberOfDesktops],
-                    XA_CARDINAL, 32, PropModeReplace,
-                    (unsigned char *)&deskcount, 1);
+	unsigned long int n;
+
+	n = moncount * config.ndesktops;
+	XChangeProperty(dpy, root, atoms[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&n, 1);
 }
 
 static void
 ewmhsetcurrentdesktop(unsigned long n)
 {
-	if (n >= deskcount)
-		return;
-
-	XChangeProperty(dpy, root, atoms[NetCurrentDesktop], XA_CARDINAL, 32,
-	                PropModeReplace, (unsigned char *)&n, 1);
+	XChangeProperty(dpy, root, atoms[NetCurrentDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&n, 1);
 }
 
 static void
@@ -1515,60 +1499,19 @@ deskisvisible(struct Desktop *desk)
 	return desk->mon->seldesk == desk;
 }
 
-/* add desktop to monitor */
-static void
-deskadd(struct Monitor *mon)
+/* allocate array of desktops for monitor */
+static struct Desktop *
+desksadd(struct Monitor *mon)
 {
-	struct Desktop *desk, *lastdesk;
+	struct Desktop *desks;
+	int i;
 
-	desk = emalloc(sizeof *desk);
-	desk->prev = NULL;
-	desk->next = NULL;
-	desk->nclients = 0;
-	desk->col = NULL;
-	desk->mon = mon;
-	deskcount++;
-	for (lastdesk = mon->desks; lastdesk && lastdesk->next; lastdesk = lastdesk->next)
-		;
-	if (lastdesk == NULL) {
-		mon->desks = desk;
-	} else {
-		lastdesk->next = desk;
-		desk->prev = lastdesk;
+	desks = ecalloc(config.ndesktops, sizeof *desks);
+	for (i = 0; i < config.ndesktops; i++) {
+		desks[i].mon = mon;
+		desks[i].n = i;
 	}
-}
-
-/* delete desktop from monitor */
-static void
-deskdel(struct Desktop *desk)
-{
-	struct Column *col, *tcol;
-	struct Row *row, *trow;
-
-	if (desk == NULL)
-		return;
-	col = desk->col;
-	while (col) {
-		row = col->row;
-		while (row) {
-			trow = row;
-			row = row->next;
-			free(trow);
-		}
-		tcol = col;
-		col = col->next;
-		free(tcol);
-	}
-	if (desk->next)
-		desk->next->prev = desk->prev;
-	if (desk->prev)
-		desk->prev->next = desk->next;
-	else
-		desk->mon->desks = desk->next;
-	if (desk->mon->seldesk == desk)
-		desk->mon->seldesk = desk->mon->desks;
-	deskcount--;
-	free(desk);
+	return desks;
 }
 
 /* tile all clients in desktop */
@@ -1694,13 +1637,11 @@ monisuniquegeom(XineramaScreenInfo *unique, size_t n, XineramaScreenInfo *info)
 static void
 monadd(XineramaScreenInfo *info)
 {
-	struct Monitor *mon, *lastmon;
+	struct Monitor *mon;
 
 	mon = emalloc(sizeof *mon);
 	mon->prev = NULL;
 	mon->next = NULL;
-	mon->desks = NULL;
-	mon->seldesk = NULL;
 	mon->mx = mon->wx = info->x_org;
 	mon->my = mon->wy = info->y_org;
 	mon->mw = mon->ww = info->width;
@@ -1709,16 +1650,16 @@ monadd(XineramaScreenInfo *info)
 	mon->gy = mon->wy + config.gapouter;
 	mon->gw = mon->ww - config.gapouter * 2;
 	mon->gh = mon->wh - config.gapouter * 2;
-	deskadd(mon);
-	mon->seldesk = mon->desks;
-	for (lastmon = mons; lastmon && lastmon->next; lastmon = lastmon->next)
-		;
+	mon->desks = desksadd(mon);
+	mon->seldesk = &mon->desks[0];
 	if (lastmon) {
 		lastmon->next = mon;
 		mon->prev = lastmon;
 	} else {
 		mons = mon;
 	}
+	lastmon = mon;
+	moncount++;
 }
 
 /* delete monitor and set monitor of clients on it to NULL */
@@ -1727,10 +1668,10 @@ mondel(struct Monitor *mon)
 {
 	struct Client *c;
 
-	while (mon->desks)
-		deskdel(mon->desks);
 	if (mon->next)
 		mon->next->prev = mon->prev;
+	else
+		lastmon = mon->prev;
 	if (mon->prev)
 		mon->prev->next = mon->next;
 	else
@@ -1741,7 +1682,9 @@ mondel(struct Monitor *mon)
 			c->desk = NULL;
 		}
 	}
+	free(mon->desks);
 	free(mon);
+	moncount--;
 }
 
 /* update the list of monitors */
@@ -1805,6 +1748,10 @@ monupdate(void)
 	}
 	if (delselmon)
 		selmon = mons;
+
+	/* update monitor number */
+	for (i = 0, mon = mons; mon; mon = mon->next, i++)
+		mon->n = i;
 
 	/* send clients with do not belong to a window to selected desktop */
 	for (c = clients; c; c = c->next) {
@@ -2288,7 +2235,6 @@ clientstick(struct Client *c, int stick)
 
 	if (stick && c->state != Sticky) {
 		c->state = Sticky;
-		c->desk->nclients--;
 		c->desk = NULL;
 	} else if (!stick && c->state == Sticky) {
 		c->state = Normal;
@@ -2358,7 +2304,6 @@ clientminimize(struct Client *c, int minimize)
 	if (c->state == Tiled)
 		clienttile(c, 0);
 	if (minimize && c->state != Minimized) {
-		c->desk->nclients--;
 		c->desk = NULL;
 		c->mon = NULL;
 		c->state = Minimized;
@@ -2521,15 +2466,9 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 			focusother = 1;
 		clienthide(c, 1);
 	}
-	if (desk->nclients++ == 0 && desk->next == NULL)
-		deskadd(desk->mon);
-	if (c->desk && c->desk != desk)
-		c->desk->nclients--;
 	c->desk = desk;
 	c->mon = desk->mon;
 	clientraise(c);
-	if (desk->next == NULL)
-		deskadd(desk->mon);
 	if (place) {
 		clientplace(c, c->desk);
 		clientapplysize(c);
@@ -2544,7 +2483,6 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place, int focus)
 	else if (focusother)
 		clientfocus(getnextfocused(NULL));
 	ewmhsetwmdesktop();
-	ewmhsetnumberofdesktops();
 	XSync(dpy, False);
 }
 
@@ -2753,8 +2691,6 @@ clientdel(struct Client *c, int updateprops)
 	}
 	if (c->state != Minimized && c->mon == selmon)
 		clientfocus(focus);
-	if (c->state != Minimized && c->state != Sticky)
-		c->desk->nclients--;
 	if (c->state == Tiled)
 		desktile(c->desk);
 	while (c->tabs)
@@ -2825,11 +2761,8 @@ clienttab(struct Client *c, struct Tab *t, int pos)
 static void
 deskchange(struct Desktop *desk)
 {
-	struct Monitor *mon;
-	struct Desktop *d, *tmp;
 	struct Client *c;
 	int cursorx, cursory;
-	int deleted = 0;
 	Window da, db;          /* dummy variables */
 	int dx, dy;             /* dummy variables */
 	unsigned int du;        /* dummy variable */
@@ -2857,19 +2790,6 @@ deskchange(struct Desktop *desk)
 		}
 	}
 
-	/* if moving between desks in the same monitor, we can delete a desk */
-	for (mon = mons; mon; mon = mon->next) {
-		d = mon->desks;
-		while (d && d->next) {
-			tmp = d;
-			d = d->next;
-			if (tmp->nclients == 0 && tmp != desk) {
-				deskdel(tmp);
-				deleted = 1;
-			}
-		}
-	}
-
 	/* if changing focus to a new monitor and the cursor isn't there, warp it */
 	XQueryPointer(dpy, root, &da, &db, &cursorx, &cursory, &dx, &dy, &du);
 	if (desk->mon != selmon && desk->mon != getmon(cursorx, cursory)) {
@@ -2883,10 +2803,6 @@ deskchange(struct Desktop *desk)
 	if (showingdesk)
 		clientshowdesk(0);
 	ewmhsetcurrentdesktop(getdesknum(desk));
-	if (deleted) {
-		ewmhsetnumberofdesktops();
-		ewmhsetwmdesktop();
-	}
 
 	/* focus client on the new current desktop */
 	clientfocus(getnextfocused(NULL));
@@ -3213,9 +3129,6 @@ managenormal(struct Client *c, struct Tab *t)
 	unsigned long *values;
 	int focus = 1;          /* whether to focus window */
 
-	clienttab(c, t, 0);
-	clientnotify(c);
-	clientraise(c);
 	if ((values = getcardinalprop(t->win, atoms[NetWMUserTime], 1)) != NULL) {
 		if (values[0] == 0)
 			focus = 0;
@@ -3225,7 +3138,13 @@ managenormal(struct Client *c, struct Tab *t)
 		focus = 0;
 	if (!focus)
 		clientdecorate(c, Unfocused, 1, 0, FrameNone);
-	clientsendtodesk(c, selmon->seldesk, 1, focus);
+	clientsendtodesk(c, selmon->seldesk, 1, 0);
+	clienttab(c, t, 0);
+	clientnotify(c);
+	clientraise(c);
+	if (focus)
+		clientfocus(c);
+	clientmoveresize(c);
 }
 
 /* add transient window into tab */

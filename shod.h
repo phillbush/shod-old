@@ -231,10 +231,9 @@ struct Column {
 
 /* desktop of a monitor */
 struct Desktop {
-	struct Desktop *prev, *next;
 	struct Monitor *mon;
 	struct Column *col;
-	size_t nclients;
+	int n;                  /* desktop number */
 };
 
 /* data of a monitor */
@@ -245,6 +244,7 @@ struct Monitor {
 	int mx, my, mw, mh;     /* screen size */
 	int wx, wy, ww, wh;     /* window area */
 	int gx, gy, gw, gh;     /* window area with gaps */
+	int n;                  /* monitor number */
 };
 
 /* configuration set in config.h */
@@ -262,6 +262,8 @@ struct Config {
 
 	int gapinner;
 	int gapouter;
+
+	int ndesktops;
 
 	unsigned int modifier;
 	unsigned int focusbuttons;
