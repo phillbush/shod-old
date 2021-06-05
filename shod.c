@@ -782,25 +782,22 @@ ewmhsetdesktop(Window win, long d)
 }
 
 static void
-ewmhsetwmdesktop(void)
+ewmhsetwmdesktop(struct Client *c)
 {
-	struct Client *c;
 	struct Tab *t;
 	struct Transient *trans;
 
-	for (c = clients; c; c = c->next) {
-		for (t = c->tabs; t; t = t->next) {
+	for (t = c->tabs; t; t = t->next) {
+		if (c->state == Sticky || c->state == Minimized) {
+			ewmhsetdesktop(t->win, 0xFFFFFFFF);
+		} else {
+			ewmhsetdesktop(t->win, c->desk->n);
+		}
+		for (trans = t->trans; trans; trans = trans->next) {
 			if (c->state == Sticky || c->state == Minimized) {
-				ewmhsetdesktop(t->win, 0xFFFFFFFF);
+				ewmhsetdesktop(trans->win, 0xFFFFFFFF);
 			} else {
-				ewmhsetdesktop(t->win, c->desk->n);
-			}
-			for (trans = t->trans; trans; trans = trans->next) {
-				if (c->state == Sticky || c->state == Minimized) {
-					ewmhsetdesktop(trans->win, 0xFFFFFFFF);
-				} else {
-					ewmhsetdesktop(trans->win, c->desk->n);
-				}
+				ewmhsetdesktop(trans->win, c->desk->n);
 			}
 		}
 	}
@@ -932,7 +929,7 @@ ewmhupdate(void)
 {
 	ewmhsetclients();
 	ewmhsetclientsstacking();
-	ewmhsetwmdesktop();
+	//ewmhsetwmdesktop();
 }
 
 /* get pointer to client, tab or transient structure given a window */
@@ -2048,7 +2045,7 @@ clientshowdesk(int show)
 	ewmhsetshowingdesktop(show);
 }
 
-/* send client to desk and place it */
+/* send client to desktop, raise it and optionally place it */
 static void
 clientsendtodesk(struct Client *c, struct Desktop *desk, int place)
 {
@@ -2057,7 +2054,6 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place)
 	clienthide(c, (clientisvisible(c) && desk->mon->seldesk != desk));
 	c->desk = desk;
 	c->mon = desk->mon;
-	clientraise(c);
 	if (place) {
 		clientplace(c, c->desk);
 		clientapplysize(c);
@@ -2065,8 +2061,8 @@ clientsendtodesk(struct Client *c, struct Desktop *desk, int place)
 			clientmoveresize(c);
 		}
 	}
-	ewmhsetwmdesktop();
-	XSync(dpy, False);
+	clientraise(c);
+	ewmhsetwmdesktop(c);
 }
 
 /* stick a client to the monitor */
@@ -2138,7 +2134,7 @@ clientminimize(struct Client *c, int minimize)
 		c->desk = NULL;
 		c->mon = NULL;
 		c->state = Minimized;
-		ewmhsetwmdesktop();
+		ewmhsetwmdesktop(c);
 		clienthide(c, 1);
 	} else if (minimize != ADD && c->state == Minimized) {
 		c->state = Normal;
@@ -2581,7 +2577,7 @@ clientstate(struct Client *c, int state, long int flag)
 		if (c == NULL || c->state == Minimized || c->state == Tiled || c->isfullscreen)
 			break;
 		if (clientstick(c, flag)) {
-			ewmhsetwmdesktop();
+			ewmhsetwmdesktop(c);
 			ewmhsetstate(c);
 		}
 		break;
@@ -2589,7 +2585,7 @@ clientstate(struct Client *c, int state, long int flag)
 		if (c == NULL || c->state == Minimized || c->isfullscreen)
 			break;
 		if (clienttile(c, flag)) {
-			ewmhsetwmdesktop();
+			ewmhsetwmdesktop(c);
 			ewmhsetstate(c);
 		}
 		break;
@@ -2685,7 +2681,6 @@ clienttab(struct Client *c, struct Tab *t, int pos)
 	ewmhsetframeextents(t->win, c->b, c->t);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
-	ewmhsetwmdesktop();
 }
 
 /* change desktop */
@@ -2995,13 +2990,12 @@ managenormal(struct Client *c, struct Tab *t)
 		focus = 0;
 	if (!focus)
 		clientdecorate(c, Unfocused, 1, 0, FrameNone);
-	clientsendtodesk(c, selmon->seldesk, 1);
 	clienttab(c, t, 0);
+	clientsendtodesk(c, selmon->seldesk, 1);
 	clientnotify(c);
-	clientraise(c);
-	if (focus)
+	if (focus) {
 		clientstate(c, FOCUS, ADD);
-	clientmoveresize(c);
+	}
 }
 
 /* add transient window into tab */
@@ -3115,6 +3109,7 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 			if (focused->state == Tiled) {
 				desktile(focused->desk);
 			}
+			ewmhsetwmdesktop(focused);
 		} else {
 			t = tabadd(win, ignoreunmap);
 			c = clientadd(wa->x, wa->y, wa->width, wa->height, isuserplaced);
@@ -3454,6 +3449,7 @@ done:
 	clientretab(c);
 	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
 	XUngrabPointer(dpy, CurrentTime);
+	ewmhsetwmdesktop(c);
 }
 
 /* move frame with mouse */
@@ -3941,7 +3937,6 @@ static void
 xeventfocusin(XEvent *e)
 {
 	(void)e;
-
 	clientstate(focused, FOCUS, ADD);
 }
 
@@ -4208,7 +4203,6 @@ main(int argc, char *argv[])
 	ewmhsetshowingdesktop(0);
 	ewmhsetclients();
 	ewmhsetclientsstacking();
-	ewmhsetwmdesktop();
 	ewmhsetactivewindow(None);
 
 	/* setup theme */
