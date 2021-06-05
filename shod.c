@@ -2277,12 +2277,12 @@ clientfocus(struct Client *c, int focus)
 {
 	struct Client *prevfocused, *fullscreen;
 
-	if (c == NULL || focus == REMOVE) {
+	if (c == NULL || (focus != ADD && c == focused)) {
 		clientdecorate(focused, Unfocused, 1, 0, FrameNone);
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
 		focused = NULL;
-	} else if (focus == ADD &&
+	} else if (focus != REMOVE && c != focused &&
 	           ((fullscreen = getfullscreen(c->mon, c->desk)) == NULL ||
 	            fullscreen == c)) { /* we should not focus a client below a fullscreen client */
 		clientdecorate(focused, Unfocused, 1, 0, FrameNone);
@@ -3778,11 +3778,6 @@ xeventclientmessage(XEvent *e)
 	} else if (ev->message_type == atoms[NetWMState]) {
 		if (c == NULL)
 			return;
-		/*
-		 * ev->data.l[0] == 0: _NET_WM_STATE_REMOVE
-		 * ev->data.l[0] == 1: _NET_WM_STATE_ADD
-		 * ev->data.l[0] == 2: _NET_WM_STATE_TOGGLE
-		 */
 		if (((Atom)ev->data.l[1] == atoms[NetWMStateMaximizedVert] ||
 		     (Atom)ev->data.l[1] == atoms[NetWMStateMaximizedHorz]) &&
 		    ((Atom)ev->data.l[2] == atoms[NetWMStateMaximizedVert]  ||
