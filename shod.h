@@ -5,12 +5,31 @@
 #define WIDTH(x)  ((x)->fw + 2 * c->b)
 #define HEIGHT(x) ((x)->fh + 2 * c->b + c->t)
 
-/* window states */
+/* internal window states */
 enum {
 	Normal,         /* floating non-sticky window */
 	Sticky,         /* floating sticky window */
 	Tiled,          /* tiled window */
 	Minimized       /* hidden window */
+};
+
+/* EWMH window state actions */
+enum {
+	STICK,
+	MAXIMIZE,
+	SHADE,
+	HIDE,
+	FULLSCREEN,
+	ABOVE,
+	BELOW,
+	FOCUS
+};
+
+/* state flag */
+enum {
+	REMOVE = 0,
+	ADD    = 1,
+	TOGGLE = 2
 };
 
 /* motion action */
