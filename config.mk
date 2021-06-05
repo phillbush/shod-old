@@ -16,7 +16,7 @@ INCS = -I${LOCALINC} -I${X11INC}
 LIBS = -L${LOCALLIB} -L${X11LIB} -lX11 -lXinerama -lXpm
 
 # flags
-CFLAGS = -Wall -Wextra ${INCS} ${CPPFLAGS}
+CFLAGS = -g -O0 -Wall -Wextra ${INCS} ${CPPFLAGS}
 LDFLAGS = ${LIBS}
 
 # compiler and linker

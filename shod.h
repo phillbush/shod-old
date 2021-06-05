@@ -49,6 +49,22 @@ enum {
 	StyleLast
 };
 
+/* moveresize action */
+enum {
+	MOVERESIZE_SIZE_TOPLEFT     = 0,
+	MOVERESIZE_SIZE_TOP         = 1,
+	MOVERESIZE_SIZE_TOPRIGHT    = 2,
+	MOVERESIZE_SIZE_RIGHT       = 3,
+	MOVERESIZE_SIZE_BOTTOMRIGHT = 4,
+	MOVERESIZE_SIZE_BOTTOM      = 5,
+	MOVERESIZE_SIZE_BOTTOMLEFT  = 6,
+	MOVERESIZE_SIZE_LEFT        = 7,
+	MOVERESIZE_MOVE             = 8,   /* movement only */
+	MOVERESIZE_SIZE_KEYBOARD    = 9,   /* size via keyboard */
+	MOVERESIZE_MOVE_KEYBOARD    = 10,  /* move via keyboard */
+	MOVERESIZE_CANCEL           = 11,  /* cancel operation */
+};
+
 /* atoms */
 enum {
 	/* utf8 */

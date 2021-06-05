@@ -52,7 +52,6 @@ static struct Monitor *selmon;
 static struct Monitor *mons;
 static struct Monitor *lastmon;
 static int showingdesk;
-static int moncount;
 static XSetWindowAttributes clientswa = {
 	.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
 		    | SubstructureRedirectMask | ButtonPressMask | FocusChangeMask
@@ -327,28 +326,9 @@ getstate(Window w)
 static struct Desktop *
 getdesk(long int n)
 {
-	struct Monitor *mon;
-	long int i, j;
-
-	if (n < 0 || n >= config.ndesktops * moncount)
+	if (n < 0 || n >= config.ndesktops)
 		return NULL;
-	i = n / config.ndesktops;
-	j = n % config.ndesktops;
-	for (mon = mons; mon; mon = mon->next) {
-		if (i == 0) {
-			return &mon->desks[j];
-		} else {
-			i--;
-		}
-	}
-	return NULL;
-}
-
-/* get desktop index from desktop pointer */
-static long int
-getdesknum(struct Desktop *desk)
-{
-	return (long int)(desk->mon->n * config.ndesktops + desk->n);
+	return &selmon->desks[n];
 }
 
 /* error handler */
@@ -707,9 +687,7 @@ ewmhinit(void)
 static void
 ewmhsetallowedactions(Window win)
 {
-	XChangeProperty(dpy, win, atoms[NetWMAllowedActions],
-	                XA_ATOM, 32, PropModeReplace,
-	                (unsigned char *)&atoms[NetWMActionMove], 11);
+	XChangeProperty(dpy, win, atoms[NetWMAllowedActions], XA_ATOM, 32, PropModeReplace, (unsigned char *)&atoms[NetWMActionMove], 11);
 	/*
 	 * 11 is the number of actions supported, and NetWMActionMove is the
 	 * first of them.  See the EWMH atoms enumeration in shod.h for more
@@ -720,9 +698,7 @@ ewmhsetallowedactions(Window win)
 static void
 ewmhsetactivewindow(Window w)
 {
-	XChangeProperty(dpy, root, atoms[NetActiveWindow],
-	                XA_WINDOW, 32, PropModeReplace,
-	                (unsigned char *)&w, 1);
+	XChangeProperty(dpy, root, atoms[NetActiveWindow], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&w, 1);
 }
 
 static void
@@ -730,7 +706,7 @@ ewmhsetnumberofdesktops(void)
 {
 	unsigned long int n;
 
-	n = moncount * config.ndesktops;
+	n = config.ndesktops;
 	XChangeProperty(dpy, root, atoms[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&n, 1);
 }
 
@@ -748,16 +724,13 @@ ewmhsetframeextents(Window win, int b, int t)
 	data[0] = data[1] = data[3] = b;
 	data[2] = b + t;
 
-	XChangeProperty(dpy, win, atoms[NetFrameExtents], XA_CARDINAL, 32,
-		        PropModeReplace, (unsigned char *)&data, 4);
+	XChangeProperty(dpy, win, atoms[NetFrameExtents], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&data, 4);
 }
 
 static void
 ewmhsetshowingdesktop(int n)
 {
-	XChangeProperty(dpy, root, atoms[NetShowingDesktop],
-	                XA_CARDINAL, 32, PropModeReplace,
-	                (unsigned char *)&n, 1);
+	XChangeProperty(dpy, root, atoms[NetShowingDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&n, 1);
 }
 
 static void
@@ -805,8 +778,7 @@ ewmhsetstate(struct Client *c)
 static void
 ewmhsetdesktop(Window win, long d)
 {
-	XChangeProperty(dpy, win, atoms[NetWMDesktop],
-	                XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&d, 1);
+	XChangeProperty(dpy, win, atoms[NetWMDesktop], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&d, 1);
 }
 
 static void
@@ -821,13 +793,13 @@ ewmhsetwmdesktop(void)
 			if (c->state == Sticky || c->state == Minimized) {
 				ewmhsetdesktop(t->win, 0xFFFFFFFF);
 			} else {
-				ewmhsetdesktop(t->win, getdesknum(c->desk));
+				ewmhsetdesktop(t->win, c->desk->n);
 			}
 			for (trans = t->trans; trans; trans = trans->next) {
 				if (c->state == Sticky || c->state == Minimized) {
 					ewmhsetdesktop(trans->win, 0xFFFFFFFF);
 				} else {
-					ewmhsetdesktop(trans->win, getdesknum(c->desk));
+					ewmhsetdesktop(trans->win, c->desk->n);
 				}
 			}
 		}
@@ -844,9 +816,7 @@ ewmhsetworkarea(int screenw, int screenh)
 	data[2] = screenw;
 	data[3] = screenh;
 
-	XChangeProperty(dpy, root, atoms[NetWorkarea],
-	                XA_CARDINAL, 32, PropModeReplace,
-	                (unsigned char *)&data, 4);
+	XChangeProperty(dpy, root, atoms[NetWorkarea], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&data, 4);
 }
 
 static void
@@ -2271,18 +2241,17 @@ clientfullscreen(struct Client *c, int fullscreen)
 
 /* focus client */
 static int
-clientfocus(struct Client *c, int focus)
+clientfocus(struct Client *c)
 {
 	struct Client *prevfocused, *fullscreen;
 
-	if (c == NULL || (focus != ADD && c == focused)) {
+	if (c == NULL) {
 		clientdecorate(focused, Unfocused, 1, 0, FrameNone);
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
 		focused = NULL;
-	} else if (focus != REMOVE && c != focused &&
-	           ((fullscreen = getfullscreen(c->mon, c->desk)) == NULL ||
-	            fullscreen == c)) { /* we should not focus a client below a fullscreen client */
+	} else if ((fullscreen = getfullscreen(c->mon, c->desk)) == NULL ||
+	           fullscreen == c) { /* we should not focus a client below a fullscreen client */
 		clientdecorate(focused, Unfocused, 1, 0, FrameNone);
 		prevfocused = focused;
 		focused = c;
@@ -2377,6 +2346,7 @@ clientincrmove(struct Client *c, int x, int y)
 		return;
 	if (c->state == Tiled) {
 		row = c->row;
+		tmp = row->h;
 		if (x > 0) {
 			if (row->col->next)
 				col = row->col->next;
@@ -2386,6 +2356,7 @@ clientincrmove(struct Client *c, int x, int y)
 				rowdel(row);
 				row = rowadd(col);
 				row->c = c;
+				row->h = tmp;
 				c->row = row;
 			}
 		}
@@ -2407,7 +2378,6 @@ clientincrmove(struct Client *c, int x, int y)
 				row->c->row = row;
 				row->prev->c = c;
 				row->prev->c->row = row->prev;
-				tmp = row->h;
 				row->h = row->prev->h;
 				row->prev->h = tmp;
 			}
@@ -2418,7 +2388,6 @@ clientincrmove(struct Client *c, int x, int y)
 				row->c->row = row;
 				row->next->c = c;
 				row->next->c->row = row->next;
-				tmp = row->h;
 				row->h = row->next->h;
 				row->next->h = tmp;
 			}
@@ -2434,7 +2403,7 @@ clientincrmove(struct Client *c, int x, int y)
 			monto = getmon(c->fx + c->fw / 2, c->fy + c->fh / 2);
 			if (monto && monto != c->mon) {
 				clientsendtodesk(c, monto->seldesk, 0);
-				// clientfocus(c, ADD);
+				// clientfocus(c);
 				// ^ check if this function is necessary on multi-monitor
 			}
 		}
@@ -2645,9 +2614,9 @@ clientstate(struct Client *c, int state, long int flag)
 			break;
 		if (clientminimize(c, flag)) {
 			if (c->state == Minimized)
-				clientfocus(getnextfocused(c), ADD);
+				clientfocus(getnextfocused(c));
 			else 
-				clientfocus(c, ADD);
+				clientfocus(c);
 			tabfocus(c->seltab);
 			ewmhsetstate(c);
 		}
@@ -2655,8 +2624,8 @@ clientstate(struct Client *c, int state, long int flag)
 	case FOCUS:
 		if (c != NULL && c->state == Minimized)
 			break;
-		if (clientfocus(c, flag)) {
-			ewmhsetcurrentdesktop(getdesknum(selmon->seldesk));
+		if (clientfocus(c)) {
+			ewmhsetcurrentdesktop(selmon->seldesk->n);
 			ewmhsetstate(c);
 		}
 		if (c != NULL)
@@ -2764,7 +2733,7 @@ deskchange(struct Desktop *desk)
 	selmon->seldesk = desk;
 	if (showingdesk)
 		clientshowdesk(0);
-	ewmhsetcurrentdesktop(getdesknum(desk));
+	ewmhsetcurrentdesktop(desk->n);
 
 	/* focus client on the new current desktop */
 	clientstate(getnextfocused(NULL), FOCUS, ADD);
@@ -3287,7 +3256,6 @@ monadd(XineramaScreenInfo *info)
 		mons = mon;
 	}
 	lastmon = mon;
-	moncount++;
 }
 
 /* delete monitor and set monitor of clients on it to NULL */
@@ -3312,7 +3280,6 @@ mondel(struct Monitor *mon)
 	}
 	free(mon->desks);
 	free(mon);
-	moncount--;
 }
 
 /* update the list of monitors */
@@ -3777,25 +3744,25 @@ xeventclientmessage(XEvent *e)
 			clientstate(c, MAXIMIZE, ev->data.l[0]);
 		}
 		for (i = 1; i < 3; i++) {
-			if ((Atom)ev->data.l[i] == atoms[NetWMStateFullscreen])
+			if ((Atom)ev->data.l[i] == atoms[NetWMStateFullscreen]) {
 				clientstate(c, FULLSCREEN, ev->data.l[0]);
-			else if ((Atom)ev->data.l[i] == atoms[NetWMStateShaded])
+			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateShaded]) {
 				clientstate(c, SHADE, ev->data.l[0]);
-			else if ((Atom)ev->data.l[i] == atoms[NetWMStateSticky])
+			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateSticky]) {
 				clientstate(c, STICK, ev->data.l[0]);
-			else if ((Atom)ev->data.l[i] == atoms[NetWMStateHidden])
+			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateHidden]) {
 				clientstate(c, HIDE, ev->data.l[0]);
-			else if ((Atom)ev->data.l[i] == atoms[NetWMStateAbove])
+			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateAbove]) {
 				clientstate(c, ABOVE, ev->data.l[0]);
-			else if ((Atom)ev->data.l[i] == atoms[NetWMStateBelow])
+			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateBelow]) {
 				clientstate(c, BELOW, ev->data.l[0]);
+			}
 		}
 	} else if (ev->message_type == atoms[NetActiveWindow]) {
 		if (c == NULL)
 			return;
-		if (c->state == Minimized) {
+		if (c->state == Minimized)
 			clientstate(c, HIDE, REMOVE);
-		}
 		if (res.t != NULL)
 			c->seltab = res.t;
 		deskchange(c->desk);
@@ -3846,49 +3813,37 @@ xeventclientmessage(XEvent *e)
 		 * Client-side decorated Gtk3 windows emit this signal when being
 		 * dragged by their GtkHeaderBar
 		 */
-#define _NET_WM_MOVERESIZE_SIZE_TOPLEFT      0
-#define _NET_WM_MOVERESIZE_SIZE_TOP          1
-#define _NET_WM_MOVERESIZE_SIZE_TOPRIGHT     2
-#define _NET_WM_MOVERESIZE_SIZE_RIGHT        3
-#define _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT  4
-#define _NET_WM_MOVERESIZE_SIZE_BOTTOM       5
-#define _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT   6
-#define _NET_WM_MOVERESIZE_SIZE_LEFT         7
-#define _NET_WM_MOVERESIZE_MOVE              8   /* movement only */
-#define _NET_WM_MOVERESIZE_SIZE_KEYBOARD     9   /* size via keyboard */
-#define _NET_WM_MOVERESIZE_MOVE_KEYBOARD    10   /* move via keyboard */
-#define _NET_WM_MOVERESIZE_CANCEL           11   /* cancel operation */
 		if (c == NULL)
 			return;
 		switch (ev->data.l[2]) {
-		case _NET_WM_MOVERESIZE_CANCEL:
+		case MOVERESIZE_CANCEL:
 			XUngrabPointer(dpy, CurrentTime);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_TOPLEFT:
+		case MOVERESIZE_SIZE_TOPLEFT:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], NW);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_TOP:
+		case MOVERESIZE_SIZE_TOP:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], N);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_TOPRIGHT:
+		case MOVERESIZE_SIZE_TOPRIGHT:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], NE);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_RIGHT:
+		case MOVERESIZE_SIZE_RIGHT:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], E);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_BOTTOMRIGHT:
+		case MOVERESIZE_SIZE_BOTTOMRIGHT:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], SE);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_BOTTOM:
+		case MOVERESIZE_SIZE_BOTTOM:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], S);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_BOTTOMLEFT:
+		case MOVERESIZE_SIZE_BOTTOMLEFT:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], SW);
 			break;
-		case _NET_WM_MOVERESIZE_SIZE_LEFT:
+		case MOVERESIZE_SIZE_LEFT:
 			mouseresize(c, ev->data.l[0], ev->data.l[1], W);
 			break;
-		case _NET_WM_MOVERESIZE_MOVE:
+		case MOVERESIZE_MOVE:
 			mousemove(c, NULL, ev->data.l[0], ev->data.l[1], 0, FrameNone);
 			break;
 		default:
