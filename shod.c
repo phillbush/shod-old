@@ -668,20 +668,19 @@ icccmwmstate(Window win, int state)
 }
 
 static void
-shodgroup(void)
+shodgroup(struct Client *c)
 {
-	struct Client *c;
 	struct Tab *t;
 	struct Transient *trans;
+	Window win;
 
-	for (c = clients; c; c = c->next) {
-		if (c->seltab) {
-			for (t = c->tabs; t; t = t->next) {
-				XChangeProperty(dpy, t->win, atoms[ShodTabGroup], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&c->seltab->win, 1);
-				for (trans = t->trans; trans; trans = trans->next) {
-					XChangeProperty(dpy, trans->win, atoms[ShodTabGroup], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&c->seltab->win, 1);
-				}
-			}
+	if (c == NULL)
+		return;
+	win = (c->seltab ? c->seltab->win : None);
+	for (t = c->tabs; t; t = t->next) {
+		XChangeProperty(dpy, t->win, atoms[ShodTabGroup], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&win, 1);
+		for (trans = t->trans; trans; trans = trans->next) {
+			XChangeProperty(dpy, trans->win, atoms[ShodTabGroup], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&win, 1);
 		}
 	}
 }
@@ -961,7 +960,6 @@ ewmhsetclientsstacking(void)
 static void
 ewmhupdate(void)
 {
-	shodgroup();
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 	ewmhsetwmdesktop();
@@ -1053,6 +1051,26 @@ calctabs(struct Client *c)
 	}
 }
 
+/* focus a tab */
+static void
+tabfocus(struct Tab *t)
+{
+	if (t == NULL)
+		return;
+	t->c->seltab = t;
+	XRaiseWindow(dpy, t->frame);
+	if (t->c->isshaded) {
+		XSetInputFocus(dpy, t->c->frame, RevertToParent, CurrentTime);
+	} else if (t->trans) {
+		XRaiseWindow(dpy, t->trans->frame);
+		XSetInputFocus(dpy, t->trans->win, RevertToParent, CurrentTime);
+	} else {
+		XSetInputFocus(dpy, t->win, RevertToParent, CurrentTime);
+	}
+	shodgroup(t->c);
+	ewmhsetactivewindow(t->win);
+}
+
 /* delete transient window from tab */
 static void
 transdel(struct Transient *trans, int updateprops)
@@ -1068,6 +1086,7 @@ transdel(struct Transient *trans, int updateprops)
 		t->trans = trans->next;
 	XReparentWindow(dpy, trans->win, root, 0, 0);
 	XDestroyWindow(dpy, trans->frame);
+	tabfocus(t);
 	if (updateprops)
 		ewmhupdate();
 	free(trans);
@@ -1219,27 +1238,6 @@ tabadd(Window win, int ignoreunmap)
 	icccmwmstate(win, NormalState);
 	ewmhsetallowedactions(win);
 	return t;
-}
-
-/* focus a tab */
-static void
-tabfocus(struct Tab *t)
-{
-	if (t == NULL)
-		return;
-	t->c->seltab = t;
-	XRaiseWindow(dpy, t->frame);
-	if (t->c->isshaded) {
-		XSetInputFocus(dpy, t->c->frame, RevertToParent, CurrentTime);
-	} else if (t->trans) {
-		XRaiseWindow(dpy, t->trans->frame);
-		XSetInputFocus(dpy, t->trans->win, RevertToParent, CurrentTime);
-	} else {
-		XSetInputFocus(dpy, t->win, RevertToParent, CurrentTime);
-	}
-	shodgroup();
-	ewmhsetstate(t->c);
-	ewmhsetactivewindow(t->win);
 }
 
 /* decorate tab */
@@ -2297,7 +2295,6 @@ clientfocus(struct Client *c, int focus)
 		if (c->state == Minimized)
 			clientminimize(c, 0);
 		ewmhsetstate(prevfocused);
-		tabfocus(c->seltab);
 	} else {
 		return 0;
 	}
@@ -2520,114 +2517,6 @@ clientdel(struct Client *c, int updateprops)
 	free(c);
 }
 
-/* add tab into client w*/
-static void
-clienttab(struct Client *c, struct Tab *t, int pos)
-{
-	struct Client *oldc;
-	struct Tab *tmp, *prev;
-	int i;
-
-	oldc = t->c;
-	t->c = c;
-	c->seltab = t;
-	c->ntabs++;
-	if (pos == 0 || c->tabs == NULL) {
-		t->prev = NULL;
-		t->next = c->tabs;
-		if (c->tabs)
-			c->tabs->prev = t;
-		c->tabs = t;
-	} else {
-		for (i = 0, prev = tmp = c->tabs; tmp && (pos < 0 || i < pos); tmp = tmp->next, i++)
-			prev = tmp;
-		if (prev->next)
-			prev->next->prev = t;
-		t->next = prev->next;
-		t->prev = prev;
-		prev->next = t;
-	}
-	calctabs(c);
-	if (t->title == None) {
-		t->title = XCreateWindow(dpy, c->frame, c->b + button + t->tabx, c->b, t->tabw, button, 0,
-		                         CopyFromParent, CopyFromParent, CopyFromParent,
-		                         CWEventMask, &clientswa);
-	} else {
-		XReparentWindow(dpy, t->title, c->frame, c->b, c->b);
-	}
-	XReparentWindow(dpy, t->frame, c->frame, c->b, c->b + c->t);
-	XMapWindow(dpy, t->title);
-	XMapWindow(dpy, t->frame);
-	XMapSubwindows(dpy, t->frame);
-	tabfocus(t);
-	if (clientisvisible(c)) {
-		tabfocus(t);
-	}
-	if (oldc) {     /* deal with the frame this tab came from */
-		if (oldc->ntabs == 0) {
-			clientdel(oldc, 0);
-		} else if (oldc->state == Tiled) {
-			desktile(oldc->desk);
-		}
-	}
-	shodgroup();
-	ewmhsetframeextents(t->win, c->b, c->t);
-	ewmhsetclients();
-	ewmhsetclientsstacking();
-	ewmhsetwmdesktop();
-}
-
-/* change desktop */
-static void
-deskchange(struct Desktop *desk)
-{
-	struct Client *c;
-	int cursorx, cursory;
-	Window da, db;          /* dummy variables */
-	int dx, dy;             /* dummy variables */
-	unsigned int du;        /* dummy variable */
-
-	if (desk == NULL || desk == selmon->seldesk)
-		return;
-	desktile(desk);
-	if (!deskisvisible(desk)) {
-		/* hide clients of previous current desktop */
-		for (c = clients; c; c = c->next) {
-			if (c->desk == desk->mon->seldesk) {
-				clienthide(c, 1);
-			}
-		}
-
-		/* unhide clientsof new current desktop */
-		for (c = clients; c; c = c->next) {
-			if (c->desk == desk) {
-				if (!c->isfullscreen && c->state == Normal) {
-					clientapplysize(c);
-					clientmoveresize(c);
-				}
-				clienthide(c, 0);
-			}
-		}
-	}
-
-	/* if changing focus to a new monitor and the cursor isn't there, warp it */
-	XQueryPointer(dpy, root, &da, &db, &cursorx, &cursory, &dx, &dy, &du);
-	if (desk->mon != selmon && desk->mon != getmon(cursorx, cursory)) {
-		XWarpPointer(dpy, None, root, 0, 0, 0, 0, desk->mon->mx + desk->mon->mw / 2,
-		                                         desk->mon->my + desk->mon->mh / 2);
-	}
-
-	/* update current desktop */
-	selmon = desk->mon;
-	selmon->seldesk = desk;
-	if (showingdesk)
-		clientshowdesk(0);
-	ewmhsetcurrentdesktop(getdesknum(desk));
-
-	/* focus client on the new current desktop */
-	clientfocus(getnextfocused(NULL), ADD);
-}
-
 /* configure client size and position */
 static void
 clientconfigure(struct Client *c, unsigned int valuemask, XWindowChanges *wc)
@@ -2706,26 +2595,21 @@ clientvalidsize(struct Client *c, enum Octant o, int dx, int dy)
 static void
 clientstate(struct Client *c, int state, long int flag)
 {
-	int setstate;
-
-	if (c == NULL)
-		return;
-	setstate = 0;
 	switch (state) {
 	case ABOVE:
-		if (c->state == Minimized || c->state == Tiled || c->isfullscreen)
+		if (c == NULL || c->state == Minimized || c->state == Tiled || c->isfullscreen)
 			break;
 		if (clientabove(c, flag))
 			ewmhsetstate(c);
 		break;
 	case BELOW:
-		if (c->state == Minimized || c->state == Tiled || c->isfullscreen)
+		if (c == NULL || c->state == Minimized || c->state == Tiled || c->isfullscreen)
 			break;
 		if (clientbelow(c, flag))
 			ewmhsetstate(c);
 		break;
 	case STICK:
-		if (c->state == Minimized || c->state == Tiled || c->isfullscreen)
+		if (c == NULL || c->state == Minimized || c->state == Tiled || c->isfullscreen)
 			break;
 		if (clientstick(c, flag)) {
 			ewmhsetwmdesktop();
@@ -2733,7 +2617,7 @@ clientstate(struct Client *c, int state, long int flag)
 		}
 		break;
 	case MAXIMIZE:
-		if (c->state == Minimized || c->isfullscreen)
+		if (c == NULL || c->state == Minimized || c->isfullscreen)
 			break;
 		if (clienttile(c, flag)) {
 			ewmhsetwmdesktop();
@@ -2741,41 +2625,149 @@ clientstate(struct Client *c, int state, long int flag)
 		}
 		break;
 	case SHADE:
-		if (c->state == Minimized || c->isfullscreen)
+		if (c == NULL || c->state == Minimized || c->isfullscreen)
 			break;
 		if (clientshade(c, flag)) {
-			if (c == focused)
-				clientfocus(c, ADD);
+			tabfocus(c->seltab);
+			ewmhsetstate(c);
+		}
+		break;
+	case FULLSCREEN:
+		if (c == NULL || c->state == Minimized)
+			break;
+		if (clientfullscreen(c, flag)) {
+			tabfocus(c->seltab);
 			ewmhsetstate(c);
 		}
 		break;
 	case HIDE:
+		if (c == NULL)
+			break;
 		if (clientminimize(c, flag)) {
 			if (c->state == Minimized)
 				clientfocus(getnextfocused(c), ADD);
 			else 
 				clientfocus(c, ADD);
-			ewmhsetstate(c);
-		}
-		break;
-	case FULLSCREEN:
-		if (c->state == Minimized)
-			break;
-		if (clientfullscreen(c, flag)) {
-			if (c == focused)
-				clientfocus(c, ADD);
+			tabfocus(c->seltab);
 			ewmhsetstate(c);
 		}
 		break;
 	case FOCUS:
-		if (c->state == Minimized)
+		if (c != NULL && c->state == Minimized)
 			break;
 		if (clientfocus(c, flag)) {
 			ewmhsetcurrentdesktop(getdesknum(selmon->seldesk));
 			ewmhsetstate(c);
 		}
+		if (c != NULL)
+			tabfocus(c->seltab);
 		break;
 	}
+}
+
+/* add tab into client w*/
+static void
+clienttab(struct Client *c, struct Tab *t, int pos)
+{
+	struct Client *oldc;
+	struct Tab *tmp, *prev;
+	int i;
+
+	oldc = t->c;
+	t->c = c;
+	c->seltab = t;
+	c->ntabs++;
+	if (pos == 0 || c->tabs == NULL) {
+		t->prev = NULL;
+		t->next = c->tabs;
+		if (c->tabs)
+			c->tabs->prev = t;
+		c->tabs = t;
+	} else {
+		for (i = 0, prev = tmp = c->tabs; tmp && (pos < 0 || i < pos); tmp = tmp->next, i++)
+			prev = tmp;
+		if (prev->next)
+			prev->next->prev = t;
+		t->next = prev->next;
+		t->prev = prev;
+		prev->next = t;
+	}
+	calctabs(c);
+	if (t->title == None) {
+		t->title = XCreateWindow(dpy, c->frame, c->b + button + t->tabx, c->b, t->tabw, button, 0,
+		                         CopyFromParent, CopyFromParent, CopyFromParent,
+		                         CWEventMask, &clientswa);
+	} else {
+		XReparentWindow(dpy, t->title, c->frame, c->b, c->b);
+	}
+	XReparentWindow(dpy, t->frame, c->frame, c->b, c->b + c->t);
+	XMapWindow(dpy, t->title);
+	XMapWindow(dpy, t->frame);
+	XMapSubwindows(dpy, t->frame);
+	if (oldc) {     /* deal with the frame this tab came from */
+		if (oldc->ntabs == 0) {
+			clientdel(oldc, 0);
+		} else if (oldc->state == Tiled) {
+			desktile(oldc->desk);
+		}
+	}
+	if (clientisvisible(c))
+		clientstate(c, FOCUS, ADD);
+	ewmhsetframeextents(t->win, c->b, c->t);
+	ewmhsetclients();
+	ewmhsetclientsstacking();
+	ewmhsetwmdesktop();
+}
+
+/* change desktop */
+static void
+deskchange(struct Desktop *desk)
+{
+	struct Client *c;
+	int cursorx, cursory;
+	Window da, db;          /* dummy variables */
+	int dx, dy;             /* dummy variables */
+	unsigned int du;        /* dummy variable */
+
+	if (desk == NULL || desk == selmon->seldesk)
+		return;
+	desktile(desk);
+	if (!deskisvisible(desk)) {
+		/* hide clients of previous current desktop */
+		for (c = clients; c; c = c->next) {
+			if (c->desk == desk->mon->seldesk) {
+				clienthide(c, 1);
+			}
+		}
+
+		/* unhide clientsof new current desktop */
+		for (c = clients; c; c = c->next) {
+			if (c->desk == desk) {
+				if (!c->isfullscreen && c->state == Normal) {
+					clientapplysize(c);
+					clientmoveresize(c);
+				}
+				clienthide(c, 0);
+			}
+		}
+	}
+
+	/* if changing focus to a new monitor and the cursor isn't there, warp it */
+	XQueryPointer(dpy, root, &da, &db, &cursorx, &cursory, &dx, &dy, &du);
+	if (desk->mon != selmon && desk->mon != getmon(cursorx, cursory)) {
+		XWarpPointer(dpy, None, root, 0, 0, 0, 0, desk->mon->mx + desk->mon->mw / 2,
+		                                         desk->mon->my + desk->mon->mh / 2);
+	}
+
+	/* update current desktop */
+	selmon = desk->mon;
+	selmon->seldesk = desk;
+	if (showingdesk)
+		clientshowdesk(0);
+	ewmhsetcurrentdesktop(getdesknum(desk));
+
+	/* focus client on the new current desktop */
+	clientstate(getnextfocused(NULL), FOCUS, ADD);
 }
 
 /* configure transient window */
@@ -3399,7 +3391,7 @@ monupdate(void)
 		}
 	}
 	if (focus != NULL)              /* if a client changed desktop, focus it */
-		clientfocus(focus, ADD);
+		clientstate(focus, FOCUS, ADD);
 
 	// monupdatearea();
 	// panelupdate();
