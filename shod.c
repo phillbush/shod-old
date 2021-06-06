@@ -924,14 +924,6 @@ ewmhsetclientsstacking(void)
 	free(wins);
 }
 
-static void
-ewmhupdate(void)
-{
-	ewmhsetclients();
-	ewmhsetclientsstacking();
-	//ewmhsetwmdesktop();
-}
-
 /* get pointer to client, tab or transient structure given a window */
 static struct Winres
 getwin(Window win)
@@ -1040,7 +1032,7 @@ tabfocus(struct Tab *t)
 
 /* delete transient window from tab */
 static void
-transdel(struct Transient *trans, int updateprops)
+transdel(struct Transient *trans)
 {
 	struct Tab *t;
 
@@ -1054,8 +1046,6 @@ transdel(struct Transient *trans, int updateprops)
 	XReparentWindow(dpy, trans->win, root, 0, 0);
 	XDestroyWindow(dpy, trans->frame);
 	tabfocus(t);
-	if (updateprops)
-		ewmhupdate();
 	free(trans);
 }
 
@@ -1140,19 +1130,17 @@ tabmove(struct Tab *t, int x, int y)
 
 /* delete tab from client */
 static void
-tabdel(struct Tab *t, int updateprops)
+tabdel(struct Tab *t)
 {
 	struct Client *c;
 
 	c = t->c;
 	while (t->trans)
-		transdel(t->trans, 0);
+		transdel(t->trans);
 	tabdetach(t, 0, 0);
 	XReparentWindow(dpy, t->win, root, c->x, c->y);
 	XDestroyWindow(dpy, t->title);
 	XDestroyWindow(dpy, t->frame);
-	if (updateprops)
-		ewmhupdate();
 	free(t->name);
 	free(t->class);
 	free(t);
@@ -2451,7 +2439,7 @@ clientadd(int x, int y, int w, int h, int isuserplaced)
 
 /* delete client */
 static void
-clientdel(struct Client *c, int updateprops)
+clientdel(struct Client *c)
 {
 	//struct Client *focus;
 
@@ -2476,7 +2464,7 @@ clientdel(struct Client *c, int updateprops)
 	if (c->state == Tiled)
 		desktile(c->desk);
 	while (c->tabs)
-		tabdel(c->tabs, updateprops);
+		tabdel(c->tabs);
 	XDestroyWindow(dpy, c->frame);
 	XDestroyWindow(dpy, c->curswin);
 	free(c);
@@ -2671,7 +2659,7 @@ clienttab(struct Client *c, struct Tab *t, int pos)
 	XMapSubwindows(dpy, t->frame);
 	if (oldc) {     /* deal with the frame this tab came from */
 		if (oldc->ntabs == 0) {
-			clientdel(oldc, 0);
+			clientdel(oldc);
 		} else if (oldc->state == Tiled) {
 			desktile(oldc->desk);
 		}
@@ -3042,11 +3030,11 @@ unmanage(struct Tab *t)
 	struct Client *c, *f;
 
 	c = t->c;
-	tabdel(t, 1);
+	tabdel(t);
 	calctabs(c);
 	if (c->ntabs == 0) {
 		f = getnextfocused(c);
-		clientdel(c, 1);
+		clientdel(c);
 		clientstate(f, FOCUS, ADD);
 	} else {
 		clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
@@ -3897,10 +3885,12 @@ xeventdestroynotify(XEvent *e)
 
 	res = getwin(ev->window);
 	if (res.trans && ev->window == res.trans->win) {
-		transdel(res.trans, 1);
+		transdel(res.trans);
 	} else if (res.t && ev->window == res.t->win) {
 		unmanage(res.t);
 	}
+	ewmhsetclients();
+	ewmhsetclientsstacking();
 }
 
 /* focus window when cursor enter it (only if there is no focus button) */
@@ -4039,16 +4029,20 @@ xeventunmapnotify(XEvent *e)
 	if (res.trans && ev->window == res.trans->win) {
 		if (res.trans->ignoreunmap) {
 			res.trans->ignoreunmap--;
+			return;
 		} else {
-			transdel(res.trans, 1);
+			transdel(res.trans);
 		}
 	} else if (res.t && ev->window == res.t->win) {
 		if (res.t->ignoreunmap) {
 			res.t->ignoreunmap--;
+			return;
 		} else {
 			unmanage(res.t);
 		}
 	}
+	ewmhsetclients();
+	ewmhsetclientsstacking();
 }
 
 /* clean clients and other structures */
@@ -4060,7 +4054,7 @@ cleanclients(void)
 			clienthide(clients, 0);
 		if (clients->isshaded)
 			clientshade(clients, 0);
-		clientdel(clients, 1);
+		clientdel(clients);
 	}
 	while (mons) {
 		mondel(mons);
@@ -4223,6 +4217,11 @@ main(int argc, char *argv[])
 	cleanclients();
 	cleanpixmaps();
 	cleanfontset();
+
+	/* clear ewmh hints */
+	ewmhsetclients();
+	ewmhsetclientsstacking();
+	ewmhsetactivewindow(None);
 
 	/* close connection to server */
 	XUngrabPointer(dpy, CurrentTime);
