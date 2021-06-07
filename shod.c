@@ -2375,8 +2375,6 @@ clientincrmove(struct Client *c, int x, int y)
 			monto = getmon(c->fx + c->fw / 2, c->fy + c->fh / 2);
 			if (monto && monto != c->mon) {
 				clientsendtodesk(c, monto->seldesk, 0);
-				// clientfocus(c);
-				// ^ check if this function is necessary on multi-monitor
 			}
 		}
 	}
@@ -2429,9 +2427,6 @@ clientadd(int x, int y, int w, int h, int isuserplaced)
 static void
 clientdel(struct Client *c)
 {
-	//struct Client *focus;
-
-	//focus = getnextfocused(c);
 	clientdelfocus(c);
 	clientdelraise(c);
 	if (focused == c)
@@ -2447,8 +2442,6 @@ clientdel(struct Client *c)
 	if (c->state == Tiled) {
 		rowdel(c->row);
 	}
-	//if (c->state != Minimized && c->mon == selmon)
-	//	clientfocus(focus);
 	if (c->state == Tiled)
 		desktile(c->desk);
 	while (c->tabs)
@@ -3513,8 +3506,6 @@ monupdate(void)
 	if (focus != NULL)              /* if a client changed desktop, focus it */
 		clientstate(focus, FOCUS, ADD);
 
-	// monupdatearea();
-	// panelupdate();
 	free(unique);
 }
 
