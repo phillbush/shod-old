@@ -704,10 +704,7 @@ ewmhsetactivewindow(Window w)
 static void
 ewmhsetnumberofdesktops(void)
 {
-	unsigned long int n;
-
-	n = config.ndesktops;
-	XChangeProperty(dpy, root, atoms[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&n, 1);
+	XChangeProperty(dpy, root, atoms[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&config.ndesktops, 1);
 }
 
 static void
@@ -2821,7 +2818,7 @@ windowclose(Window win)
 	XSendEvent(dpy, win, False, NoEventMask, &ev);
 }
 
-/* prepare window to be managed */
+/* select window input events, grab mouse button presses, and clear it border */
 static void
 preparewin(Window win)
 {
@@ -2908,9 +2905,33 @@ promptcalcgeom(int *x, int *y, int *w, int *h, int *fw, int *fh)
 	*fh = *h + border;
 }
 
+/* check whether window was placed by the user */
+static int
+isuserplaced(Window win)
+{
+	XSizeHints size;
+	long dl;
+
+	return (XGetWMNormalHints(dpy, win, &size, &dl) && (size.flags & USPosition));
+}
+
+/* get tab given window is a transient for */
+static struct Tab *
+gettransfor(Window win)
+{
+	struct Winres res;
+	Window tmpwin;
+
+	if (XGetTransientForHint(dpy, win, &tmpwin)) {
+		res = getwin(tmpwin);
+		return res.t;
+	}
+	return NULL;
+}
+
 /* map prompt, give it focus, wait for it to close, then revert focus to previously focused window */
 static void
-prompt(Window win, int w, int h)
+manageprompt(Window win, int w, int h)
 {
 	struct Prompt prompt;
 	struct Winres res;
@@ -2964,7 +2985,7 @@ done:
 
 /* create client for tab */
 static void
-managenormal(struct Client *c, struct Tab *t)
+manageclient(struct Client *c, struct Tab *t)
 {
 	unsigned long *values;
 	int focus = 1;          /* whether to focus window */
@@ -3023,6 +3044,26 @@ managetrans(struct Tab *t, Window win, int maxw, int maxh, int ignoreunmap)
 	tabfocus(t);
 }
 
+/* map desktop window (windows displaying icons, for example) */
+static void
+managedesktop(Window win)
+{
+	Window wins[2] = {win, layerwin[LayerDesktop]};
+
+	XRestackWindows(dpy, wins, sizeof wins);
+	XMapWindow(dpy, win);
+}
+
+/* map dock window (docks, panels, bars, etc) */
+static void
+managedock(Window win)
+{
+	Window wins[2] = {win, layerwin[LayerBars]};
+
+	XRestackWindows(dpy, wins, sizeof wins);
+	XMapWindow(dpy, win);
+}
+
 /* delete tab (and its client if it is the only tab) */
 static void
 unmanage(struct Tab *t)
@@ -3052,56 +3093,39 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 	struct Winres res;
 	struct Client *c;
 	struct Tab *t;
-	struct Tab *transfor = NULL;
-	XSizeHints size;
-	Atom prop = None;
-	Window tmpwin, wins[2];
-	int isuserplaced = 0;
-	long dl;
+	struct Tab *transfor;
+	Atom prop;
+	int placed;
 
-	wins[1] = win;
+	res = getwin(win);
+	if (res.c != NULL)
+		return;
 	prop = getatomprop(win, atoms[NetWMWindowType]);
+	transfor = gettransfor(win);
 	if (prop == atoms[NetWMWindowTypeDesktop]) {
-		XMapWindow(dpy, win);
-		wins[0] = layerwin[LayerDesktop];
-		XRestackWindows(dpy, wins, sizeof wins);
+		managedesktop(win);
 	} else if (prop == atoms[NetWMWindowTypeDock]) {
-		XMapWindow(dpy, win);
-		wins[0] = layerwin[LayerBars];
-		XRestackWindows(dpy, wins, sizeof wins);
-	} else {
-		res = getwin(win);
-		if (res.c != NULL)
-			return;
+		managedock(win);
+	} else if (prop == atoms[NetWMWindowTypePrompt] && !ignoreunmap) {
+		manageprompt(win, wa->width, wa->height);
+	} else if (transfor != NULL) {
 		preparewin(win);
-		if (XGetTransientForHint(dpy, win, &tmpwin)) {
-			res = getwin(tmpwin);
-			transfor = res.t;
-		}
-		if (XGetWMNormalHints(dpy, win, &size, &dl) && (size.flags & USPosition)) {
-			isuserplaced = 1;
-		}
-		if (transfor != NULL) {
-			managetrans(transfor, win, wa->width, wa->height, ignoreunmap);
-			return;
-		}
-		if (prop == atoms[NetWMWindowTypePrompt] && !ignoreunmap) {
-			prompt(win, wa->width, wa->height);
-			return;
-		}
+		managetrans(transfor, win, wa->width, wa->height, ignoreunmap);
+	} else {
+		preparewin(win);
+		placed = isuserplaced(win);
 		t = tabadd(win, 0);
-		if (!isuserplaced && autotab(t)) {
+		if (!placed && autotab(t)) {
 			clienttab(focused, t, -1);
 			clientdecorate(focused, Focused, 1, 0, FrameNone);
 			clientmoveresize(focused);
-			if (focused->state == Tiled) {
+			if (focused->state == Tiled)
 				desktile(focused->desk);
-			}
 			ewmhsetwmdesktop(focused);
 		} else {
 			t = tabadd(win, ignoreunmap);
-			c = clientadd(wa->x, wa->y, wa->width, wa->height, isuserplaced);
-			managenormal(c, t);
+			c = clientadd(wa->x, wa->y, wa->width, wa->height, placed);
+			manageclient(c, t);
 		}
 	}
 }
@@ -3432,7 +3456,7 @@ done:
 		if (mon && mon != selmon)
 			deskchange(mon->seldesk);
 		c = clientadd(xroot, yroot, t->winw, t->winh, 0);
-		managenormal(c, t);
+		manageclient(c, t);
 	}
 	clientretab(c);
 	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
