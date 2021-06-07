@@ -3114,7 +3114,7 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 	} else {
 		preparewin(win);
 		placed = isuserplaced(win);
-		t = tabadd(win, 0);
+		t = tabadd(win, ignoreunmap);
 		if (!placed && autotab(t)) {
 			clienttab(focused, t, -1);
 			clientdecorate(focused, Focused, 1, 0, FrameNone);
@@ -3123,7 +3123,6 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 				desktile(focused->desk);
 			ewmhsetwmdesktop(focused);
 		} else {
-			t = tabadd(win, ignoreunmap);
 			c = clientadd(wa->x, wa->y, wa->width, wa->height, placed);
 			manageclient(c, t);
 		}
