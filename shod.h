@@ -1,7 +1,9 @@
-#define IGNOREUNMAP  6          /* number of unmap notifies to ignore while scanning existing clients */
-#define DIV          15         /* number to divide the screen into grids */
-#define DOUBLECLICK  250        /* time in miliseconds of a double click */
-#define NAMEMAXLEN   1024       /* maximum length of window's name */
+#define INDIRECT_SOURCE 1
+#define IGNOREUNMAP     6       /* number of unmap notifies to ignore while scanning existing clients */
+#define DIV             15      /* number to divide the screen into grids */
+#define DOUBLECLICK     250     /* time in miliseconds of a double click */
+#define NAMEMAXLEN      1024    /* maximum length of window's name */
+#define RULEMINSIZ      23      /* length of "shod.instance..desktop" + 1 for \0 */
 #define WIDTH(x)  ((x)->fw + 2 * c->b)
 #define HEIGHT(x) ((x)->fh + 2 * c->b + c->t)
 
@@ -10,7 +12,25 @@ enum {
 	Normal,         /* floating non-sticky window */
 	Sticky,         /* floating sticky window */
 	Tiled,          /* tiled window */
-	Minimized       /* hidden window */
+	Minimized,      /* hidden window */
+};
+
+/* role prefixes */
+enum {
+	TITLE       = 0,
+	INSTANCE    = 1,
+	CLASS       = 2,
+	ROLE        = 3,
+	LAST_PREFIX = 4
+};
+
+/* role sufixes */
+enum {
+	DESKTOP     = 0,
+	STATE       = 1,
+	AUTOTAB     = 2,
+	POSITION    = 3,
+	LAST_SUFFIX = 4
 };
 
 /* EWMH window state actions */
@@ -72,6 +92,7 @@ enum {
 
 	/* ICCCM atoms */
 	WMDeleteWindow,
+	WMWindowRole,
 	WMTakeFocus,
 	WMProtocols,
 	WMState,
@@ -177,7 +198,7 @@ enum {
 	TabFloating,
 	TabTilingAlways,
 	TabTilingMulti,
-	TabAlways
+	TabAlways,
 };
 
 /* window eight sections (aka octants) */
@@ -293,7 +314,8 @@ struct Config {
 	int ignoreborders;
 	int mergeborders;
 	int hidetitle;
-	int autotab;
+
+	int ignoreindirect;
 
 	int gapinner;
 	int gapouter;
@@ -343,4 +365,12 @@ struct Winres {
 struct Outline {
 	int x, y, w, h;
 	int diffx, diffy;
+};
+
+/* window rules read from X resources */
+struct Rules {
+	int desk;
+	int state;
+	int autotab;
+	int x, y, w, h;
 };

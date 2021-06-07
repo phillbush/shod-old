@@ -15,8 +15,8 @@ struct Config config = {
 	.ignoreborders = 0,     /* whether to ignore borders when a single window is tiled */
 	.mergeborders  = 0,     /* whether to merge borders of tiled windows */
 
-	/* whether a new window should be tabbed with the focused window if they have the same class */
-	.autotab       = NoAutoTab,
+	/* whether to ignore requests from indirect sources, accept only direct requests */
+	.ignoreindirect = 0,
 
 	/* mouse control (these configuration cannot be set via X resources) */
 	.modifier = Mod1Mask,   /* modifier pressed with mouse button */

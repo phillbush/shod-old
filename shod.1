@@ -4,15 +4,9 @@
 \- hybrid window manager
 .SH SYNOPSIS
 .B shod
-.RB [ \-f
-.IR buttons ]
-.RB [ \-m
-.IR modifier ]
-.RB [ \-r
-.IR buttons ]
 .SH DESCRIPTION
 .B shod
-is a hybrid (tiling and floating) reparenting X11 window manager which supports tabs, multiple monitors, and themes.
+is a hybrid (tiling and floating) reparenting X11 window manager which supports tabs, multiple monitors, themes, and window rules.
 .B shod
 sets no keybindings;
 reads no configuration other than X resources;
@@ -22,66 +16,23 @@ and by responding to client messages with EWMH hints
 .IR wmctrl (1)
 to control shod).
 .PP
-The options are as follows:
-.TP
-.BI -f " buttons"
-Which mouse buttons can be used to focus a window when clicking on it.
-.I buttons
-is a string of numbers 1 to 5 (corresponding to mouse buttons 1 to 5).
-For example,
-.B -f 13
-make windows be focused when clicking on them with the mouse buttons 1 and 3
-(the left and right mouse buttons, respectively).
-If this is set to a blank string, no mouse button is used to focus window,
-and
-.B shod
-uses the focus-follow-cursor focusing style.
-By default, focus follows mouse click on button 1.
-.TP
-.BI -m " modifier"
-Which modifier, from
-.B Mod1
-to
-.B Mod5
-is used to move and resize windows with the mouse pointer.
-.TP
-.BI -r " buttons"
-Which mouse buttons can be used to raise a window when clicking on it.
-.I buttons
-is a string of numbers 1 to 5 (corresponding to mouse buttons 1 to 5).
-For example,
-.B -r 13
-make windows be raised when clicking on them with the mouse buttons 1 and 3
-(the left and right mouse buttons, respectively).
-By default, raise occurs on mouse click on button 1.
-.PP
 .B shod
 maintains one monitor for each physical monitor found by
 .IR Xinerama (1).
 One of the monitors is the focused one, where new windows go to when they are created.
 Each monitor contains a set of desktops.
 One of the desktops of a monitor is the focused desktop for that monitor.
-.B shod
-manages desktop just like how GNOME:
-if a window is open on the last empty desktop,
-.B shod
-creates a new empty desktop on that monitor;
-when a desktop has no window, this desktop is deleted.
-.PP
+.SS Frames
 Windows are displayed in frames.
 A frame contains borders (four edges and four corners),
 tabs (one for each client in the window),
-two buttons (a minimize and a close button)
-and the content (which is the window of the selected tab).
+two buttons (a minimize and a close button),
+the content (which is the window of the selected tab),
+and an optional dialog window centered on the content.
 The buttons and the tabs of a frame together are called the title bar of that frame.
-Windows can be grouped into the same frame with tabs;
-there is one tab for each window.
+Windows can be grouped into the same frame with tabs.
 One of the tabs is the selected tab.
-Only the contents of the window of the selected tab of a frame is shown in that frame.
-.PP
-When a frame is moved from one monitor to another,
-that frame moves from the desktop it is in to the focused desktop
-of the monitor it is moved to.
+Only the contents of the selected tab of a frame is shown in that frame.
 .PP
 Each frame has one of the following four states:
 .TP
@@ -106,15 +57,14 @@ Normal frames belong to a desktop and its monitor.
 Normal frames, along with sticky frames, are called floating frames.
 Normal frames appear only when its desktop is the focused one for its monitor.
 .PP
-A non-minimized frame can also be made fullscreen.
-A non-minimized frame can also be shaded (i.e., collapsed into its title bar).
+A non\-minimized frame can also be made fullscreen or shaded, but not both.
 A floating (sticky or normal) frame can also be raised above other floating windows
 or lowered below other floating frames.
 .PP
 When a new frame spawns, it is set as
 .BR Normal ,
 and it is placed in an unoccupied region of the monitor.
-The first frame in a monitor is spawned in the center of the monitor.
+The first frame in a monitor is centered on the monitor.
 .PP
 The frame stacking order is the following (from bottom-to-top):
 .IP \(bu 2
@@ -137,6 +87,33 @@ All the windows in the focused frame have the
 atom set in the
 .B _NET_WM_STATE
 property.
+.PP
+The initial state of a window and whether it will be displayed in a new frame
+or in a new tab of an existing frame is specified by the values of the
+.BR *desktop ,
+.BR *state ,
+and
+.B *autotab
+X resources.
+.SS Special windows
+A window of type
+.B _NET_WM_WINDOW_TYPE_PROMPT
+is mapped on the top of the focused monitor.
+This window will stay focused and mapped until be closed or a mouse
+button is pressed outside that window.  This is an EWMH extension,
+only used by
+.IR xprompt (1).
+.PP
+Transient/dialog windows are not mapped into a new frame or a new tab of an existing frame;
+instead, they are centered on the content of the window it is a transient for.
+This behavior is the same as sheets in macOS window system.
+.PP
+Desktop windows, such as
+.IR conky (1)
+and windows that manage desktop icons,
+are mapped bellow all other windows.
+Those windows are used to draw something on the desktop,
+such as widgets and icons.
 .SH USAGE
 There are several ways
 .B shod
@@ -149,41 +126,44 @@ for controlling shod.
 .SS Managing windows with the mouse
 The main method for managing windows is the mouse.
 .PP
-The buttons set with the 
-.B -f
-command line option are used to focus a frame when clicking on it.
+The buttons set with the
+.B shod.focusButtons
+X resource are used to focus a frame when clicking on it.
 If no button is specified, the focus follows the mouse pointer.
 .PP
 The buttons set with the
-.B -r
-command line option are used to raise a frame when clicking on it.
+.B shod.raiseButtons
+X resource are used to raise a frame when clicking on it.
 .PP
 The modifier set with the
-.B -m
-command line option is the modifier key.
+.B shod.modifier
+X resource is the modifier key.
 Pressing the modifier key and dragging a frame with the Button 1
 (the left mouse button) will move that frame.
-Pressing the modifier key and dragging a corner or edge of a frame with the Button 3
-(the right mouse button) will resize that frame in the direction of that corner or side.
+Pressing the modifier key and dragging a frame with the button 3
+(the right mouse button) will resize that frame.
 .PP
-Resizing frames can also be performed by dragging a frame border with the Button 1,
+Resizing a frame can also be performed by dragging the frame border with the Button 1,
 without pressing any modifier.
-Moving frames can also be performed by dragging a frame border with the button 3,
+Moving a frame can also be performed by dragging the frame border with the button 3,
+without pressing any modifier.
+Moving a frame can also be performed by dragging a tab of the frame with the Button 1,
 without pressing any modifier.
 .PP
-Moving frames can also be performed by dragging a tab of the frame with the Button 1,
-without pressing any modifier.
 A tab can be detached from its frame by dragging it with the Button 3.
-A detached frame, while being dragged with the Button 3,
+A detached tab, while being dragged with the Button 3,
 can be attached into another frame by dropping it into another frame's title bar.
-.PP
 Double clicking on a tab shades or unshades the frame.
 .PP
 Each frame has two buttons on its title bar.
 Clicking with the mouse Button 1 on the left button (called the minimize button)
-minimzes the frame.
+minimizes the frame.
 Clicking with the mouse Button 1 on the right button (called the close button)
 closes the window on the focused tab, and, if it was the last tab on the frame, deletes the frame.
+.PP
+When a normal frame is moved from one monitor to another,
+that frame moves from the desktop it is in to the focused desktop
+of the monitor it is moved to.
 .SS Managing windows with state client messages
 The
 .IR wmctrl (1)
@@ -198,39 +178,38 @@ on the active frame.
 $ wmctrl -r :ACTIVE: -b toggle,sticky
 .EE
 .IP \(bu 2
-If the
+Setting the
 .B sticky
-state is set on a window, that window's frame becomes sticky
-(it is displayed on all desktops of the monitor the frame is in).
+state on a window, sticks the window's frame on the monitor.
 .IP \(bu 2
-If the
+Setting both the
 .BR maximize_vert " and " maximize_horz
-states are set on a window, that window's frame is tiled.
+states on a window, tiles the window's frame.
 For more information on manipulating tiled windows, see the section
 .B Managing tiled windows
 below.
 .IP \(bu 2
-If the
+Setting the
 .B hidden
-state is set on a window,
-that window's frame becomes minimized
+state on a window,
+minimizes the window's frame
 (it won't be displayed on any desktop or on any monitor).
 .IP \(bu 2
-If the
+Setting the
 .B fullscreen
-state is set on a window, the content of that window's frame is maximized to fit the entire screen.
+state on a window, makes the content of the window's frame be maximized to fit the entire screen.
 .IP \(bu 2
-If the
+Setting the
 .B above
-state is set on a floating window, that window's frame is raised above all other floating frames.
+state on a floating window, raises the window's frame above all other floating frames.
 .IP \(bu 2
-If the
+Setting the
 .B below
-state is set on a floating window, that window's frame is lowered below all other floating frames.
+state on a floating window, lowers the window's frame below all other floating frames.
 .IP \(bu 2
-If the
+Setting the
 .B shaded
-state is set on a window, that window's frame collapsed into its title bar.
+state on a window, collapses the window's frame into its title bar.
 .PP
 All other client messages are ignored.
 .SS Managing windows with other EWMH client messages
@@ -242,7 +221,7 @@ with a specific option.
 The options and the messages they send are specified below.
 .IP \(bu 2
 A message sent with the
-.BI -s " NUMBER"
+.BI \-s " NUMBER"
 option of
 .IR wmctrl (1)
 makes
@@ -255,9 +234,9 @@ If the desktop is on another monitor,
 instead moves the pointer to that monitor and focus a window on it.
 .IP \(bu 2
 A message sent with the
-.B -k on
+.B \-k on
 or
-.B -k off
+.B \-k off
 options of
 .IR wmctrl (1)
 makes
@@ -265,7 +244,7 @@ makes
 show or hide the desktop, respectively.
 .IP \(bu 2
 A message sent with the
-.BI -a " WINDOW"
+.BI \-a " WINDOW"
 option of
 .IR wmctrl (1)
 makes
@@ -274,7 +253,7 @@ change the active frame.
 That is, focus and raise the frame of the specified window.
 .IP \(bu 2
 A message sent with the
-.BI -c " WINDOW"
+.BI \-c " WINDOW"
 option of
 .IR wmctrl (1)
 makes
@@ -282,7 +261,7 @@ makes
 close gently the specified window.
 .IP \(bu 2
 A message sent with the
-.BI -e " POSITION"
+.BI \-e " POSITION"
 option of
 .IR wmctrl (1)
 makes
@@ -290,15 +269,7 @@ makes
 change the position and geometry of the frame of the specified window.
 .IP \(bu 2
 A message sent with the
-.BI -s " NUMBER"
-option of
-.IR wmctrl (1)
-makes
-.B shod
-send the frame of a specified window to a specified desktop.
-.IP \(bu 2
-A message sent with the
-.BI -t " NUMBER"
+.BI \-t " NUMBER"
 option of
 .IR wmctrl (1)
 makes
@@ -306,7 +277,7 @@ shod
 move the frame of the specified window to the specified desktop.
 .SS Managing windows with configure request events
 .B shod
-acts upon configure request events sent to windows via by resizing and moving their frames
+acts upon configure request events sent to windows by resizing and moving their frames
 just as if the user have resized or moved them with the mouse.
 .SS Managing tiled windows
 When a window is maximized, its frame is tiled by
@@ -332,11 +303,6 @@ Resizing a tiled frame with
 or with the mouse
 will change the size of the frame, the size of the column it is in,
 and the size of the neighboring frames.
-.SS Managing xprompt(1) windows
-.B shod
-manages
-.IR xprompt (1)
-windows.
 .SH ENVIRONMENT
 The following environment variables affect the execution of
 .B shod
@@ -348,21 +314,54 @@ on.
 .SH RESOURCES
 .B shod
 understands the following X resources.
+.SS WM Requests
+These options control how WM requests are handled.
+.TP
+.B shod.ignoreIndirect
+Window management requests (such as to send a window to a given desktop)
+can be originated from one of two different sources:
+by the application (indirect request) or by the user (direct request).
+Applications requesting themselves to maximize their windows
+or send their windows to a given desktop can be an annoyance.
+If this resource is set to
+.BR true ,
+indirect requests are ignored.
+.SS Mouse behavior
+These resources specify the mouse buttons that control windows
+and the keyboard modifier that can be used with mouse buttons.
 .TP
 .B shod.focusButtons
-Same as the
-.B -f
-command-line option.
+Which mouse buttons can be used to focus a window when clicking on it.
+.I buttons
+is a string of numbers 1 to 5 (corresponding to mouse buttons 1 to 5).
+For example, setting this resource to
+.B 13
+makes windows be focused when clicking on them with the mouse buttons 1 and 3
+(the left and right mouse buttons, respectively).
+If this is set to a blank string, no mouse button is used to focus window,
+and
+.B shod
+uses the focus-follow-cursor focusing style.
+By default, focus follows mouse click on button 1.
 .TP
 .B shod.modifier
-Same as the
-.B -m
-command-line option.
+Which modifier, from
+.B Mod1
+to
+.B Mod5
+is used to move and resize windows with the mouse pointer.
 .TP
 .B shod.raiseButtons
-Same as the
-.B -r
-command-line option.
+Which mouse buttons can be used to raise a window when clicking on it.
+.I buttons
+is a string of numbers 1 to 5 (corresponding to mouse buttons 1 to 5).
+For example, setting this resource to
+.B 13
+makes windows be raised when clicking on them with the mouse buttons 1 and 3
+(the left and right mouse buttons, respectively).
+By default, raise occurs on mouse click on button 1.
+.SS General appearance
+These resources control the appearance of frames and whether the titlebar is visible.
 .TP
 .B shod.font
 The font in the X Logical Font Description of the text in the title bar.
@@ -376,14 +375,16 @@ The height of the title bar (and its tabs) is equal to the width of the buttons.
 The .xpm file contains in it nine squares representing all the possible decoration states for a frame.
 A sample .xpm file is distributed with shod.
 .TP
+.B shod.hideTitle
+If set to \(lqtrue\(rq, the title bars of frames with a single tab are hidden.
+.SS Tiling appearance
+These resources control the appearance and spacement between tiled frames.
+.TP
 .B shod.gapOuter
 The gap in pixels between the sides of the monitor and the frames.
 .TP
 .B shod.gapInner
 The gap in pixels between the tiled frames.
-.TP
-.B shod.hideTitle
-If set to \(lqtrue\(rq, the title bars of frames with a single tab are hidden.
 .TP
 .B shod.ignoreGaps
 If set to \(lqtrue\(rq, a single tiled frame ingores the gaps.
@@ -396,15 +397,58 @@ If set to \(lqtrue\(rq, a single tiled frame does not have borders.
 .TP
 .B shod.mergeBorders
 If set to \(lqtrue\(rq, the borders of adjacent tiled frames are merged into a single border.
+.SS Window rules
+These resources control how a new window is managed.
+They are described according to a group
+.RB ( role ,
+.BR class ,
+.BR instance ,
+or
+.BR title )
+and to the description of the group.
+User-placed windows ignore rules.
+Groups and descriptions are case sensitive.
+See the examples for more information.
 .TP
-.B shod.autotab
+.B shod.GROUP.DESCRIPTION.autotab
 Controls whether a new window should be tabbed with the focused window if they have the same class.
-If set to \(lqfloating\(rq, auto tabbing occurs if the focused window is floating.
-If set to \(lqtilingAlways\(rq, auto tabbing occurs if the focused window is tiled.
-If set to \(lqtilingMulti\(rq, auto tabbing occurs if the focused window is tiled
+If set to
+.BR floating ,
+auto tabbing occurs if the focused window is floating.
+If set to
+.BR tilingAlways ,
+auto tabbing occurs if the focused window is tiled.
+If set to
+.BR tilingMulti ,
+auto tabbing occurs if the focused window is tiled
 and there is at least two tiled windows.
-If set to \(lqalways\(rq, auto tabbing occurs if the focused window has a visible title bar.
-If set to \(lqoff\(rq, auto tabbing does not occur.
+If set to
+.BR always ,
+auto tabbing occurs if the focused window has a visible title bar.
+If set to
+.BR off ,
+auto tabbing does not occur.
+.TP
+.B shod.GROUP.DESCRIPTION.desktop
+Controls in which desktop a new window should be mapped on.
+.TP
+.B shod.GROUP.DESCRIPTION.state
+Controls the initial state of a new window.
+If set to
+.BR normal ,
+the window begins in normal state (the default).
+If set to
+.BR sticky ,
+the window begins sticked on the screen.
+If set to
+.BR tiled ,
+the window begins tiled.
+If set to
+.BR minimized ,
+the window begins minimized.
+.TP
+.B shod.GROUP.DESCRIPTION.position
+TODO
 .SH EXAMPLES
 The following is a sample configuration for X resources.
 It must be placed in
@@ -414,13 +458,23 @@ or
 or other file called by
 .IR xrdb (1).
 This example makes shod uses a 7 pixels wide gap around and between tiled windows.
-It sets the color of the border of urgent windows to red;
-the border of the focused window to blue;
-and the border of regular windows to gray.
+It also sets three window rules:
+windows with the
+.B "browser"
+role should be mapped on the second desktop;
+windows of class
+.B "Zathura"
+should be mapped tiled;
+and windows of class
+.B "XTerm"
+should be tabbed with other windows of the same class.
 .IP
 .EX
-shod.gapOuter:      7
-shod.gapInner:      7
+shod.gapOuter:                  7
+shod.gapInner:                  7
+shod.role.browser.desktop:      2
+shod.class.Zathura.state:       tiled
+shod.class.XTerm.autotab:       always
 .EE
 .PP
 The following is a sample configuration for
@@ -606,4 +660,28 @@ wmctrl -r :ACTIVE: -e 0,$X,$Y,$WIDTH,$HEIGHT
 .IR wmctrl (1),
 .IR xprompt (1)
 .SH BUGS
-Yes.
+.RI XSizeHints (3)
+are ignored.
+Size hints make no sense in a tiled and tabbed window manager.
+They only make sense when the size of a single frame depends only on a single window,
+and a single window dictates the size of a single frame.
+When the size of a frame depends on the size of other frames (as in the tiled situation),
+or when a set of windows must have the same size (as in a tabbed situation),
+it makes no sense to constrain the size of a frame based on the size hints of a single window,
+because the relation from windows to frames is no more one-to-one.
+.PP
+Naming things is hard.
+In the context of X Window System, a "window" can mean
+the UI object the user sees on the screen,
+or the Xlib object the programmer manipulates on the code.
+Usually, there is one window (Xlib object) to one window (UI object),
+but since
+.B shod
+is a tabbed window manager,
+there can exist more than one window (Xlib object) in a single window (UI object).
+To help on that, this manual uses the term "frame" to call windows (UI object),
+and the term "window" to the other sense.
+But, for historical reasons, the code uses the term "client" to refer to the UI object (frames).
+.PP
+EWMH hints (and other properties) may not be updated when they should.
+This is a bug and should be reported.
