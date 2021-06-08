@@ -63,10 +63,27 @@ enum {
 
 /* decoration style */
 enum {
-	Focused,
-	Unfocused,
-	Urgent,
-	StyleLast
+	FOCUSED,
+	UNFOCUSED,
+	URGENT,
+	STYLE_LAST
+};
+
+/* decoration state */
+enum {
+	/* the first decoration state is used both for focused tab and for unpressed borders */
+	UNPRESSED     = 0,
+	TAB_FOCUSED   = 0,
+
+	PRESSED       = 1,
+	TAB_PRESSED   = 1,
+
+	/* the third decoration state is used for unfocused tab, transient borders, and merged borders */
+	TAB_UNFOCUSED = 2,
+	TRANSIENT     = 2,
+	MERGE_BORDERS = 2,
+
+	DECOR_LAST    = 3
 };
 
 /* moveresize action */
@@ -334,22 +351,22 @@ struct Decor {
 	Pixmap t;       /* title middle */
 	Pixmap tr;      /* title right end */
 	Pixmap br;      /* button right */
-	Pixmap nw;      /* north west corner */
+	Pixmap nw;      /* northwest corner */
 	Pixmap nf;      /* north first edge */
 	Pixmap n;       /* north border */
 	Pixmap nl;      /* north last edge */
-	Pixmap ne;
-	Pixmap wf;
-	Pixmap w;
-	Pixmap wl;
-	Pixmap ef;
-	Pixmap e;
-	Pixmap el;
-	Pixmap sw;
-	Pixmap sf;
-	Pixmap s;
-	Pixmap sl;
-	Pixmap se;
+	Pixmap ne;      /* northeast corner */
+	Pixmap wf;      /* west first edge */
+	Pixmap w;       /* west border */
+	Pixmap wl;      /* west last edge */
+	Pixmap ef;      /* east first edge */
+	Pixmap e;       /* east border */
+	Pixmap el;      /* east last edge */
+	Pixmap sw;      /* southwest corner */
+	Pixmap sf;      /* south first edge */
+	Pixmap s;       /* south border */
+	Pixmap sl;      /* south last edge */
+	Pixmap se;      /* southeast corner */
 	unsigned long fg;
 	unsigned long bg;
 };
