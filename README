@@ -1,11 +1,11 @@
                                 Shod
 
 Shod is a hybrid (tiling and floating) reparenting X11 window manager
-which supports tabs, multiple monitors, and themes.  Shod sets no
-keybindings; reads no configuration other than X resources; and works
-only via mouse with a given key modifier (Alt by default), and by
-responding to client messages with EWMH hints (so it is needed
-wmctrl(1) to control shod).
+which supports tabs, multiple monitors, themes, and window rules.  Shod
+sets no keybindings; reads no configuration other than X resources; and
+works only via mouse with a given key modifier (Alt by default), and by
+responding to client messages with EWMH hints (so it is needed wmctrl(1)
+to control shod).
 
 WARNING: Shod is attempt of mine to write a Wm and better understand how
          X11 works, Shod is only meant for me for educational purposes.
@@ -49,19 +49,15 @@ Features:
   change the monitor of a window just move this window to another
   monitor or move this window to a workspace bound to another monitor.
 
-• You can use the .focusbuttons compile-time option (set in config.h) to
-  use either a focus-follow-pointer style or a click-to-focus style.
-  You can even specify which mouse button triggers the click-to-focus
-  style.  The related .raisebuttons option specify which mouse buttons
-  raise a window.
+• You can use the shod.focusButtons X resource to use either a
+  focus-follow-pointer style or a click-to-focus style.  You can even
+  specify which mouse button triggers the click-to-focus style.  The
+  related shod.raiseButtons option specify which mouse buttons raise
+  a window.
 
 TODO.
-• Fix transient window placement and stacking order.
 • Handle window urgency and _NET_WM_STATE_DEMANDS_ATTENTION state.
 • Add support to panels/bars.
-• Add support for window rules.
-• Read config.modifier, config.focusbuttons and config.raisebuttons from
-  X resources.
 
 See also.
 For scripting, see also lsd[2] and lsc[3], which list useful information
