@@ -187,17 +187,18 @@ enum {
 
 /* cursor types */
 enum {
-	CursNormal,
-	CursMove,
-	CursNW,
-	CursNE,
-	CursSW,
-	CursSE,
-	CursN,
-	CursS,
-	CursW,
-	CursE,
-	CursLast
+	CURSOR_NORMAL,
+	CURSOR_MOVE,
+	CURSOR_NW,
+	CURSOR_NE,
+	CURSOR_SW,
+	CURSOR_SE,
+	CURSOR_N,
+	CURSOR_S,
+	CURSOR_W,
+	CURSOR_E,
+	CURSOR_PIRATE,
+	CURSOR_LAST
 };
 
 /* frame region */

@@ -29,7 +29,7 @@ static Atom atoms[AtomLast];
 /* visual */
 static struct Decor decor[STYLE_LAST][DECOR_LAST];
 static XFontSet fontset;
-static Cursor cursor[CursLast];
+static Cursor cursor[CURSOR_LAST];
 static int edge;        /* size of the decoration edge */
 static int corner;      /* size of the decoration corner */
 static int border;      /* size of the decoration border */
@@ -410,16 +410,17 @@ initfontset(void)
 static void
 initcursors(void)
 {
-	cursor[CursNormal] = XCreateFontCursor(dpy, XC_left_ptr);
-	cursor[CursMove] = XCreateFontCursor(dpy, XC_fleur);
-	cursor[CursNW] = XCreateFontCursor(dpy, XC_top_left_corner);
-	cursor[CursNE] = XCreateFontCursor(dpy, XC_top_right_corner);
-	cursor[CursSW] = XCreateFontCursor(dpy, XC_bottom_left_corner);
-	cursor[CursSE] = XCreateFontCursor(dpy, XC_bottom_right_corner);
-	cursor[CursN] = XCreateFontCursor(dpy, XC_top_side);
-	cursor[CursS] = XCreateFontCursor(dpy, XC_bottom_side);
-	cursor[CursW] = XCreateFontCursor(dpy, XC_left_side);
-	cursor[CursE] = XCreateFontCursor(dpy, XC_right_side);
+	cursor[CURSOR_NORMAL] = XCreateFontCursor(dpy, XC_left_ptr);
+	cursor[CURSOR_MOVE] = XCreateFontCursor(dpy, XC_fleur);
+	cursor[CURSOR_NW] = XCreateFontCursor(dpy, XC_top_left_corner);
+	cursor[CURSOR_NE] = XCreateFontCursor(dpy, XC_top_right_corner);
+	cursor[CURSOR_SW] = XCreateFontCursor(dpy, XC_bottom_left_corner);
+	cursor[CURSOR_SE] = XCreateFontCursor(dpy, XC_bottom_right_corner);
+	cursor[CURSOR_N] = XCreateFontCursor(dpy, XC_top_side);
+	cursor[CURSOR_S] = XCreateFontCursor(dpy, XC_bottom_side);
+	cursor[CURSOR_W] = XCreateFontCursor(dpy, XC_left_side);
+	cursor[CURSOR_E] = XCreateFontCursor(dpy, XC_right_side);
+	cursor[CURSOR_PIRATE] = XCreateFontCursor(dpy, XC_pirate);
 }
 
 /* initialize atom arrays */
@@ -3517,7 +3518,8 @@ mousebutton(struct Client *c, int region)
 	XEvent ev;
 	int released = region;
 
-	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
+	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None,
+	             (region == FrameButtonRight) ? cursor[CURSOR_PIRATE] : cursor[CURSOR_NORMAL], CurrentTime);
 	clientdecorate(c, clientgetstyle(c), 0, 0, region);     /* draw pressed button */
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | ExposureMask, &ev)) {
 		switch(ev.type) {
@@ -3562,7 +3564,7 @@ mouseretab(struct Tab *t, int xroot, int yroot, int x, int y)
 	tabdetach(t, xroot - x, yroot - y);
 	tabfocus(t->c->seltab);
 	clientretab(t->c);
-	XGrabPointer(dpy, t->title, False, ButtonReleaseMask | Button3MotionMask, GrabModeAsync, GrabModeAsync, None, cursor[CursNormal], CurrentTime);
+	XGrabPointer(dpy, t->title, False, ButtonReleaseMask | Button3MotionMask, GrabModeAsync, GrabModeAsync, None, cursor[CURSOR_NORMAL], CurrentTime);
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
 		switch(ev.type) {
 		case Expose:
@@ -3610,7 +3612,7 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 
 	XGrabPointer(dpy, c->frame, False,
 	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
-	             GrabModeAsync, GrabModeAsync, None, cursor[CursMove], CurrentTime);
+	             GrabModeAsync, GrabModeAsync, None, cursor[CURSOR_MOVE], CurrentTime);
 	decorate(&(struct Winres){.c = c, .t = t, .trans = NULL}, octant, region);        /* draw pressed region */
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
 		switch(ev.type) {
@@ -3675,31 +3677,31 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 	outline.diffy = 0;
 	switch (octant) {
 	case NW:
-		curs = c->isshaded ? cursor[CursW] : cursor[CursNW];
+		curs = c->isshaded ? cursor[CURSOR_W] : cursor[CURSOR_NW];
 		break;
 	case NE:
-		curs = c->isshaded ? cursor[CursE] : cursor[CursNE];
+		curs = c->isshaded ? cursor[CURSOR_E] : cursor[CURSOR_NE];
 		break;
 	case SW:
-		curs = c->isshaded ? cursor[CursW] : cursor[CursSW];
+		curs = c->isshaded ? cursor[CURSOR_W] : cursor[CURSOR_SW];
 		break;
 	case SE:
-		curs = c->isshaded ? cursor[CursE] : cursor[CursSE];
+		curs = c->isshaded ? cursor[CURSOR_E] : cursor[CURSOR_SE];
 		break;
 	case N:
-		curs = cursor[CursN];
+		curs = cursor[CURSOR_N];
 		break;
 	case S:
-		curs = cursor[CursS];
+		curs = cursor[CURSOR_S];
 		break;
 	case W:
-		curs = cursor[CursW];
+		curs = cursor[CURSOR_W];
 		break;
 	case E:
-		curs = cursor[CursE];
+		curs = cursor[CURSOR_E];
 		break;
 	case C:
-		curs = cursor[CursNormal];
+		curs = cursor[CURSOR_NORMAL];
 	}
 	if (octant & W)
 		x = xroot - c->x + c->b;
@@ -4128,42 +4130,46 @@ xeventmotionnotify(XEvent *e)
 {
 	XMotionEvent *ev = &e->xmotion;
 	struct Winres res;
+	int region;
 
 	res = getwin(ev->window);
 	if (res.c == NULL || ev->subwindow != res.c->curswin)
 		return;
-	if (frameregion(res.c, ev->window, ev->x, ev->y) == FrameBorder) {
+	region = frameregion(res.c, ev->window, ev->x, ev->y);
+	if (region == FrameButtonRight) {
+		XDefineCursor(dpy, res.c->curswin, cursor[CURSOR_PIRATE]);
+	} else if (region == FrameBorder) {
 		switch (frameoctant(res.c, ev->window, ev->x, ev->y)) {
 		case NW:
-			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursW] : cursor[CursNW]));
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CURSOR_W] : cursor[CURSOR_NW]));
 			break;
 		case NE:
-			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursE] : cursor[CursNE]));
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CURSOR_E] : cursor[CURSOR_NE]));
 			break;
 		case SW:
-			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursW] : cursor[CursSW]));
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CURSOR_W] : cursor[CURSOR_SW]));
 			break;
 		case SE:
-			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CursE] : cursor[CursSE]));
+			XDefineCursor(dpy, res.c->curswin, (res.c->isshaded ? cursor[CURSOR_E] : cursor[CURSOR_SE]));
 			break;
 		case N:
-			XDefineCursor(dpy, res.c->curswin, cursor[CursN]);
+			XDefineCursor(dpy, res.c->curswin, cursor[CURSOR_N]);
 			break;
 		case S:
-			XDefineCursor(dpy, res.c->curswin, cursor[CursS]);
+			XDefineCursor(dpy, res.c->curswin, cursor[CURSOR_S]);
 			break;
 		case W:
-			XDefineCursor(dpy, res.c->curswin, cursor[CursW]);
+			XDefineCursor(dpy, res.c->curswin, cursor[CURSOR_W]);
 			break;
 		case E:
-			XDefineCursor(dpy, res.c->curswin, cursor[CursE]);
+			XDefineCursor(dpy, res.c->curswin, cursor[CURSOR_E]);
 			break;
 		default:
-			XDefineCursor(dpy, res.c->curswin, cursor[CursNormal]);
+			XDefineCursor(dpy, res.c->curswin, cursor[CURSOR_NORMAL]);
 			break;
 		}
 	} else {
-		XDefineCursor(dpy, res.c->curswin, cursor[CursNormal]);
+		XDefineCursor(dpy, res.c->curswin, cursor[CURSOR_NORMAL]);
 	}
 }
 
@@ -4247,7 +4253,7 @@ cleancursors(void)
 {
 	size_t i;
 
-	for (i = 0; i < CursLast; i++) {
+	for (i = 0; i < CURSOR_LAST; i++) {
 		XFreeCursor(dpy, cursor[i]);
 	}
 }
@@ -4343,7 +4349,7 @@ main(int argc, char *argv[])
 	initatoms();
 
 	/* Select SubstructureRedirect events on root window */
-	swa.cursor = cursor[CursNormal];
+	swa.cursor = cursor[CURSOR_NORMAL];
 	swa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
 	               | SubstructureRedirectMask
 	               | SubstructureNotifyMask
