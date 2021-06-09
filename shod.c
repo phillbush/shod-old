@@ -53,6 +53,7 @@ static struct Client *raised;
 static struct Monitor *selmon;
 static struct Monitor *mons;
 static struct Monitor *lastmon;
+static struct Notification *notifications;
 static int showingdesk;
 static XSetWindowAttributes clientswa = {
 	.event_mask = EnterWindowMask | SubstructureNotifyMask | ExposureMask
@@ -258,6 +259,11 @@ getresources(void)
 		config.theme_path = xval.addr;
 	if (XrmGetResource(xdb, "shod.font", "*", &type, &xval) == True)
 		config.font = xval.addr;
+	if (XrmGetResource(xdb, "shod.notification.gravity", "*", &type, &xval) == True)
+		config.notifgravity = xval.addr;
+	if (XrmGetResource(xdb, "shod.notification.gap", "*", &type, &xval) == True)
+		if ((n = strtol(xval.addr, NULL, 10)) > 0)
+			config.notifgap = n;
 	if (XrmGetResource(xdb, "shod.modifier", "*", &type, &xval) == True)
 		config.modifier = parsemodifier(xval.addr);
 	if (XrmGetResource(xdb, "shod.focusButtons", "*", &type, &xval) == True)
@@ -460,6 +466,7 @@ initatoms(void)
 		[NetWMWindowTypePrompt]      = "_NET_WM_WINDOW_TYPE_PROMPT",
 		[NetWMWindowTypeDialog]      = "_NET_WM_WINDOW_TYPE_DIALOG",
 		[NetWMWindowTypeUtility]     = "_NET_WM_WINDOW_TYPE_UTILITY",
+		[NetWMWindowTypeNotification] = "_NET_WM_WINDOW_TYPE_NOTIFICATION",
 		[NetWMState]                 = "_NET_WM_STATE",
 		[NetWMStateSticky]           = "_NET_WM_STATE_STICKY",
 		[NetWMStateMaximizedVert]    = "_NET_WM_STATE_MAXIMIZED_VERT",
@@ -493,6 +500,42 @@ initatoms(void)
 	};
 
 	XInternAtoms(dpy, atomnames, AtomLast, False, atoms);
+}
+
+/* initialize gravity and direction values for notifications */
+static void
+initnotif(void)
+{
+	if (config.notifgravity == NULL || strcmp(config.notifgravity, "NE") == 0) {
+		config.gravity = NorthEastGravity;
+		config.direction = DownWards;
+	} else if (strcmp(config.notifgravity, "NW") == 0) {
+		config.gravity = NorthWestGravity;
+		config.direction = DownWards;
+	} else if (strcmp(config.notifgravity, "SW") == 0) {
+		config.gravity = SouthWestGravity;
+		config.direction = UpWards;
+	} else if (strcmp(config.notifgravity, "SE") == 0) {
+		config.gravity = SouthEastGravity;
+		config.direction = UpWards;
+	} else if (strcmp(config.notifgravity, "N") == 0) {
+		config.gravity = NorthGravity;
+		config.direction = DownWards;
+	} else if (strcmp(config.notifgravity, "W") == 0) {
+		config.gravity = WestGravity;
+		config.direction = DownWards;
+	} else if (strcmp(config.notifgravity, "C") == 0) {
+		config.gravity = CenterGravity;
+		config.direction = DownWards;
+	} else if (strcmp(config.notifgravity, "E") == 0) {
+		config.gravity = EastGravity;
+		config.direction = DownWards;
+	} else if (strcmp(config.notifgravity, "S") == 0) {
+		config.gravity = SouthGravity;
+		config.direction = UpWards;
+	} else {
+		errx(1, "unknown gravity %s", config.notifgravity);
+	}
 }
 
 /* create and copy pixmap */
@@ -920,10 +963,18 @@ getwin(Window win)
 	struct Client *c;
 	struct Tab *t;
 	struct Transient *trans;
+	struct Notification *n;
 
+	res.n = NULL;
 	res.c = NULL;
 	res.t = NULL;
 	res.trans = NULL;
+	for (n = notifications; n; n = n->next) {
+		if (win == n->frame || win == n->win) {
+			res.n = n;
+			goto done;
+		}
+	}
 	for (c = clients; c; c = c->next) {
 		if (win == c->frame || win == c->curswin) {
 			res.c = c;
@@ -1056,11 +1107,8 @@ transdecorate(struct Transient *trans, int style)
 			XFreePixmap(dpy, trans->pix);
 		trans->pix = XCreatePixmap(dpy, trans->frame, transw, transh, depth);
 	}
-
-	val.fill_style = FillSolid;
-	val.foreground = decor[style][TRANSIENT].bg;
-	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
-	XFillRectangle(dpy, trans->pix, gc, border, border, trans->w, trans->h);
+	trans->pw = transw;
+	trans->ph = transh;
 
 	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].w;
@@ -1069,21 +1117,18 @@ transdecorate(struct Transient *trans, int style)
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
 	XFillRectangle(dpy, trans->pix, gc, 0, border, border, trans->h + border);
 
-	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].e;
 	val.ts_x_origin = border + trans->w;
 	val.ts_y_origin = 0;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
 	XFillRectangle(dpy, trans->pix, gc, border + trans->w, border, border, trans->h + border);
 
-	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].n;
 	val.ts_x_origin = 0;
 	val.ts_y_origin = 0;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
 	XFillRectangle(dpy, trans->pix, gc, border, 0, transw, border);
 
-	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].s;
 	val.ts_x_origin = 0;
 	val.ts_y_origin = border + trans->h;
@@ -1094,6 +1139,11 @@ transdecorate(struct Transient *trans, int style)
 	XCopyArea(dpy, decor[style][TRANSIENT].ne, trans->pix, gc, 0, 0, corner, corner, transw - corner, 0);
 	XCopyArea(dpy, decor[style][TRANSIENT].sw, trans->pix, gc, 0, 0, corner, corner, 0, transh - corner);
 	XCopyArea(dpy, decor[style][TRANSIENT].se, trans->pix, gc, 0, 0, corner, corner, transw - corner, transh - corner);
+
+	val.fill_style = FillSolid;
+	val.foreground = decor[style][TRANSIENT].bg;
+	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
+	XFillRectangle(dpy, trans->pix, gc, border, border, trans->w, trans->h);
 
 	XCopyArea(dpy, trans->pix, trans->frame, gc, 0, 0, transw, transh, 0, 0);
 }
@@ -1249,6 +1299,26 @@ tabdecorate(struct Tab *t, int style, int pressed)
 	XCopyArea(dpy, t->pix, t->title, gc, 0, 0, t->w, button, 0, 0);
 }
 
+/* notify window of configuration changing */
+static void
+notify(Window win, int x, int y, int w, int h)
+{
+	XConfigureEvent ce;
+
+	ce.type = ConfigureNotify;
+	ce.display = dpy;
+	ce.x = x;
+	ce.y = y;
+	ce.width = w;
+	ce.height = h;
+	ce.border_width = 0;
+	ce.above = None;
+	ce.override_redirect = False;
+	ce.event = win;
+	ce.window = win;
+	XSendEvent(dpy, win, False, StructureNotifyMask, (XEvent *)&ce);
+}
+
 /* get decoration style (and state) of client */
 static int
 clientgetstyle(struct Client *c)
@@ -1273,31 +1343,14 @@ clientnotify(struct Client *c)
 {
 	struct Tab *t;
 	struct Transient *trans;
-	XConfigureEvent ce;
 
 	if (c == NULL)
 		return;
-	ce.type = ConfigureNotify;
-	ce.display = dpy;
-	ce.y = c->y;
-	ce.border_width = 0;
-	ce.above = None;
-	ce.override_redirect = False;
 	for (t = c->tabs; t; t = t->next) {
+		notify(t->win, c->x, c->y, c->w, c->isshaded ? c->saveh : c->h);
 		for (trans = t->trans; trans; trans = trans->next) {
-			ce.x = trans->x;
-			ce.width = trans->w;
-			ce.height = trans->h;
-			ce.event = trans->win;
-			ce.window = trans->win;
-			XSendEvent(dpy, trans->win, False, StructureNotifyMask, (XEvent *)&ce);
+			notify(trans->win, trans->x, trans->y, trans->w, trans->h);
 		}
-		ce.x = c->x;
-		ce.width = c->w;
-		ce.height = c->isshaded ? c->saveh : c->h;
-		ce.event = t->win;
-		ce.window = t->win;
-		XSendEvent(dpy, t->win, False, StructureNotifyMask, (XEvent *)&ce);
 	}
 }
 
@@ -2837,7 +2890,9 @@ decorate(struct Winres *res)
 {
 	int fullw, fullh;
 
-	if (res->trans) {
+	if (res->n) {
+		XCopyArea(dpy, res->n->pix, res->n->frame, gc, 0, 0, res->n->w, res->n->h, 0, 0);
+	} else if (res->trans) {
 		fullw = res->trans->w + 2 * border;
 		fullh = res->trans->h + 2 * border;
 		XCopyArea(dpy, res->trans->pix, res->trans->frame, gc, 0, 0, fullw, fullh, 0, 0);
@@ -3111,6 +3166,177 @@ getrules(Window win, char **name, char **class)
 	return rules;
 }
 
+/* add notification window */
+static struct Notification *
+notifadd(Window win, int w, int h)
+{
+	static XSetWindowAttributes swa = {
+		.event_mask = SubstructureNotifyMask | SubstructureRedirectMask
+	};
+	struct Notification *n;
+
+	n = emalloc(sizeof *n);
+	n->w = w + 2 * border;
+	n->h = h + 2 * border;
+	n->pw = n->ph = 0;
+	n->prev = NULL;
+	n->next = notifications;
+	n->pix = None;
+	n->win = win;
+	n->frame = XCreateWindow(dpy, root, 0, 0, 1, 1, 0,
+	                         CopyFromParent, CopyFromParent, CopyFromParent,
+	                         CWEventMask, &swa);
+	if (notifications)
+		notifications->prev = n;
+	notifications = n;
+	XReparentWindow(dpy, n->win, n->frame, 0, 0);
+	XMapWindow(dpy, n->win);
+	return n;
+}
+
+/* decorate notification */
+static void
+notifdecorate(struct Notification *n, int style)
+{
+	XGCValues val;
+	int w, h;
+
+	if (n->pw != n->w || n->ph != n->h || n->pix == None) {
+		if (n->pix != None)
+			XFreePixmap(dpy, n->pix);
+		n->pix = XCreatePixmap(dpy, n->frame, n->w, n->h, depth);
+	}
+	n->pw = n->w;
+	n->ph = n->h;
+
+	w = n->w - 2 * border;
+	h = n->h - 2 * border;
+
+	val.fill_style = FillTiled;
+	val.tile = decor[style][TRANSIENT].w;
+	val.ts_x_origin = 0;
+	val.ts_y_origin = 0;
+	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
+	XFillRectangle(dpy, n->pix, gc, 0, border, border, h);
+
+	val.tile = decor[style][TRANSIENT].e;
+	val.ts_x_origin = border + w;
+	val.ts_y_origin = 0;
+	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
+	XFillRectangle(dpy, n->pix, gc, border + w, border, border, h);
+
+	val.tile = decor[style][TRANSIENT].n;
+	val.ts_x_origin = 0;
+	val.ts_y_origin = 0;
+	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
+	XFillRectangle(dpy, n->pix, gc, border, 0, w, border);
+
+	val.tile = decor[style][TRANSIENT].s;
+	val.ts_x_origin = 0;
+	val.ts_y_origin = border + h;
+	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
+	XFillRectangle(dpy, n->pix, gc, border, border + h, w, border);
+
+	XCopyArea(dpy, decor[style][TRANSIENT].nw, n->pix, gc, 0, 0, corner, corner, 0, 0);
+	XCopyArea(dpy, decor[style][TRANSIENT].ne, n->pix, gc, 0, 0, corner, corner, n->w - corner, 0);
+	XCopyArea(dpy, decor[style][TRANSIENT].sw, n->pix, gc, 0, 0, corner, corner, 0, n->h - corner);
+	XCopyArea(dpy, decor[style][TRANSIENT].se, n->pix, gc, 0, 0, corner, corner, n->w - corner, n->h - corner);
+
+	val.fill_style = FillSolid;
+	val.foreground = decor[style][TRANSIENT].bg;
+	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
+	XFillRectangle(dpy, n->pix, gc, border, border, w, h);
+
+	XCopyArea(dpy, n->pix, n->frame, gc, 0, 0, n->w, n->h, 0, 0);
+}
+
+/* place notifications */
+static void
+notifplace(void)
+{
+	struct Notification *n;
+	int x, y, h;
+
+	h = 0;
+	for (n = notifications; n; n = n->next) {
+		x = mons->gx;
+		y = mons->gy;
+		switch (config.gravity) {
+		case NorthWestGravity:
+			break;
+		case NorthGravity:
+			x += (mons->gw - n->w) / 2;
+			break;
+		case NorthEastGravity:
+			x += mons->gw - n->w;
+			break;
+		case WestGravity:
+			y += (mons->gh - n->h) / 2;
+			break;
+		case CenterGravity:
+			x += (mons->gw - n->w) / 2;
+			y += (mons->gh - n->h) / 2;
+			break;
+		case EastGravity:
+			x += mons->gw - n->w;
+			y += (mons->gh - n->h) / 2;
+			break;
+		case SouthWestGravity:
+			y += mons->gh - n->h;
+			break;
+		case SouthGravity:
+			x += (mons->gw - n->w) / 2;
+			y += mons->gh - n->h;
+			break;
+		case SouthEastGravity:
+			x += mons->gw - n->w;
+			y += mons->gh - n->h;
+			break;
+		}
+
+		if (config.direction == DownWards)
+			y += h;
+		else
+			y -= h;
+		h += n->h + config.notifgap + border * 2;
+
+		XMoveResizeWindow(dpy, n->frame, x, y, n->w, n->h);
+		XMoveResizeWindow(dpy, n->win, border, border, n->w - 2 * border, n->h - 2 * border);
+		XMapWindow(dpy, n->frame);
+		notify(n->win, x + border, y + border, n->w - 2 * border, n->h - 2 * border);
+		if (n->pw != n->w || n->ph != n->h) {
+			notifdecorate(n, FOCUSED);
+		}
+	}
+}
+
+/* delete notification */
+static void
+notifdel(struct Notification *n)
+{
+	if (n->next)
+		n->next->prev = n->prev;
+	if (n->prev)
+		n->prev->next = n->next;
+	else
+		notifications = n->next;
+	if (n->pix != None)
+		XFreePixmap(dpy, n->pix);
+	XDestroyWindow(dpy, n->frame);
+	free(n);
+	notifplace();
+}
+
+/* add notification window into notification queue; and update notification placement */
+static void
+managenotif(Window win, int w, int h)
+{
+	struct Notification *n;
+
+	n = notifadd(win, w, h);
+	notifplace();
+}
+
 /* map prompt, give it focus, wait for it to close, then revert focus to previously focused window */
 static void
 manageprompt(Window win, int w, int h)
@@ -3312,7 +3538,11 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 		managedesktop(win);
 	} else if (prop == atoms[NetWMWindowTypeDock]) {
 		managedock(win);
+	} else if (prop == atoms[NetWMWindowTypeNotification]) {
+		preparewin(win);
+		managenotif(win, wa->width, wa->height);
 	} else if (prop == atoms[NetWMWindowTypePrompt] && !ignoreunmap) {
+		preparewin(win);
 		manageprompt(win, wa->width, wa->height);
 	} else if (transfor != NULL) {
 		preparewin(win);
@@ -3873,7 +4103,7 @@ xeventbuttonpress(XEvent *e)
 		mon = getmon(ev->x_root, ev->y_root);
 		if (mon)
 			deskchange(mon->seldesk);
-		return;
+		goto done;
 	}
 
 	/* focus client */
@@ -3921,6 +4151,7 @@ xeventbuttonpress(XEvent *e)
 		mousemove(c, t, ev->x_root, ev->y_root, 0, region);
 	}
 
+done:
 	XAllowEvents(dpy, ReplayPointer, CurrentTime);
 }
 
@@ -4084,6 +4315,7 @@ xeventconfigurenotify(XEvent *e)
 		screenw = ev->width;
 		screenh = ev->height;
 		monupdate();
+		notifplace();
 		ewmhsetworkarea(screenw, screenh);
 	}
 }
@@ -4121,11 +4353,16 @@ xeventdestroynotify(XEvent *e)
 	struct Winres res;
 
 	res = getwin(ev->window);
-	if (res.trans && ev->window == res.trans->win) {
+	if (res.n && ev->window == res.n->win) {
+		notifdel(res.n);
+	} else if (res.trans && ev->window == res.trans->win) {
 		transdel(res.trans);
+		goto update;
 	} else if (res.t && ev->window == res.t->win) {
 		unmanage(res.t);
+		goto update;
 	}
+update:
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 }
@@ -4267,13 +4504,16 @@ xeventunmapnotify(XEvent *e)
 	struct Winres res;
 
 	res = getwin(ev->window);
-	if (res.trans && ev->window == res.trans->win) {
+	if (res.n && ev->window == res.n->win) {
+		notifdel(res.n);
+	} else if (res.trans && ev->window == res.trans->win) {
 		if (res.trans->ignoreunmap) {
 			res.trans->ignoreunmap--;
 			return;
 		} else {
 			transdel(res.trans);
 		}
+		goto update;
 	} else if (res.t && ev->window == res.t->win) {
 		if (res.t->ignoreunmap) {
 			res.t->ignoreunmap--;
@@ -4281,7 +4521,10 @@ xeventunmapnotify(XEvent *e)
 		} else {
 			unmanage(res.t);
 		}
+		goto update;
 	}
+	return;
+update:
 	ewmhsetclients();
 	ewmhsetclientsstacking();
 }
@@ -4416,6 +4659,7 @@ main(int argc, char *argv[])
 	initfontset();
 	initcursors();
 	initatoms();
+	initnotif();
 
 	/* Select SubstructureRedirect events on root window */
 	swa.cursor = cursor[CURSOR_NORMAL];

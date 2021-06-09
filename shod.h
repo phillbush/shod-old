@@ -139,6 +139,7 @@ enum {
 	NetWMWindowTypeUtility,
 	NetWMWindowTypeSplash,
 	NetWMWindowTypePrompt,
+	NetWMWindowTypeNotification,
 	NetWMState,
 	NetWMStateSticky,
 	NetWMStateMaximizedVert,
@@ -217,6 +218,12 @@ enum {
 	TabTilingAlways,
 	TabTilingMulti,
 	TabAlways,
+};
+
+/* notification spawning direction */
+enum {
+	DownWards,
+	UpWards
 };
 
 /* window eight sections (aka octants) */
@@ -327,10 +334,11 @@ struct Monitor {
 	int n;                  /* monitor number */
 };
 
-/* configuration set in config.h */
+/* configuration, mostly set in config.h */
 struct Config {
 	const char *theme_path;
 	const char *font;
+	const char *notifgravity;
 
 	int edge_width;
 	int ignoregaps;
@@ -346,9 +354,15 @@ struct Config {
 
 	int ndesktops;
 
+	int notifgap;
+
 	unsigned int modifier;
 	unsigned int focusbuttons;
 	unsigned int raisebuttons;
+
+	/* those elements are computed from elements above */
+	int gravity;
+	int direction;
 };
 
 /* decoration sections pixmaps */
@@ -380,6 +394,7 @@ struct Decor {
 
 /* union returned by getclient */
 struct Winres {
+	struct Notification *n;
 	struct Client *c;
 	struct Tab *t;
 	struct Transient *trans;
@@ -397,4 +412,14 @@ struct Rules {
 	int state;
 	int autotab;
 	int x, y, w, h;
+};
+
+/* notification window */
+struct Notification {
+	struct Notification *prev, *next;
+	Window frame;
+	Window win;
+	Pixmap pix;
+	int w, h;               /* geometry of the entire thing (content + decoration) */
+	int pw, ph;             /* pixmap width and height */
 };

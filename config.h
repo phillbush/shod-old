@@ -24,5 +24,9 @@ struct Config config = {
 	.raisebuttons = 1,      /* bit mask of mouse buttons that raise windows */
 
 	/* number of desktops */
-	.ndesktops = 10
+	.ndesktops = 10,
+
+	/* notification placement */
+	.notifgravity = "NE",   /* where in the screen to place notification windows */
+	.notifgap = 3,          /* gap between notification windows */
 };
