@@ -238,8 +238,10 @@ struct Transient {
 	struct Tab *t;
 	Window frame;
 	Window win;
+	Pixmap pix;
 	int x, y, w, h;
 	int maxw, maxh;
+	int pw, ph;
 	int ignoreunmap;
 };
 
@@ -256,11 +258,13 @@ struct Tab {
 	Window title;
 	Window frame;
 	Window win;
+	Pixmap pix;
 	char *name;
 	char *class;
 	int ignoreunmap;
-	int winw, winh;
-	int tabx, tabw;
+	int winw, winh;         /* window geometry */
+	int x, w;               /* tab geometry */
+	int pw;                 /* pixmap width */
 };
 
 /* client structure */
@@ -279,12 +283,14 @@ struct Client {
 	int saveh;              /* original height, used for shading */
 	int rh;                 /* row height */
 	int x, y, w, h, b, t;   /* current geometry */
+	int pw, ph;             /* pixmap width and height */
 	int fx, fy, fw, fh;     /* floating geometry */
 	int tx, ty, tw, th;     /* tiled geometry */
 	int layer;              /* stacking order */
 	long shflags;
 	Window curswin;
 	Window frame;
+	Pixmap pix;
 };
 
 /* row in a column of tiled windows */

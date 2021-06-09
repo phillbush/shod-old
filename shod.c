@@ -22,6 +22,7 @@ static Window root;
 static XrmDatabase xdb;
 static GC gc;
 static char *xrm;
+static int depth;
 static int screen, screenw, screenh;
 static int (*xerrorxlib)(Display *, XErrorEvent *);
 static Atom atoms[AtomLast];
@@ -500,7 +501,7 @@ copypixmap(Pixmap src, int sx, int sy, int w, int h)
 {
 	Pixmap pix;
 
-	pix = XCreatePixmap(dpy, root, w, h, DefaultDepth(dpy, screen));
+	pix = XCreatePixmap(dpy, root, w, h, depth);
 	XCopyArea(dpy, src, pix, gc, sx, sy, w, h, 0, 0);
 	return pix;
 }
@@ -989,9 +990,9 @@ calctabs(struct Client *c)
 
 	x = 0;
 	for (i = 0, t = c->tabs; t; t = t->next, i++) {
-		t->tabw = max(1, ((i + 1) * (c->w - 2 * button) / c->ntabs) - (i * (c->w - 2 * button) / c->ntabs));
-		t->tabx = x;
-		x += t->tabw;
+		t->w = max(1, ((i + 1) * (c->w - 2 * button) / c->ntabs) - (i * (c->w - 2 * button) / c->ntabs));
+		t->x = x;
+		x += t->w;
 		for (trans = t->trans; trans; trans = trans->next) {
 			trans->w = max(minsize, min(trans->maxw, c->w - 2 * border));
 			trans->h = max(minsize, min(trans->maxh, (c->isshaded ? c->saveh : c->h) - 2 * border));
@@ -1035,6 +1036,8 @@ transdel(struct Transient *trans)
 	else
 		t->trans = trans->next;
 	shodgroup(t->c);
+	if (trans->pix != None)
+		XFreePixmap(dpy, trans->pix);
 	XReparentWindow(dpy, trans->win, root, 0, 0);
 	XDestroyWindow(dpy, trans->frame);
 	tabfocus(t);
@@ -1046,44 +1049,56 @@ static void
 transdecorate(struct Transient *trans, int style)
 {
 	XGCValues val;
+	int transw, transh;
+
+	transw = trans->w + 2 * border;
+	transh = trans->h + 2 * border;
+
+	if (trans->pw != transw || trans->ph != transh || trans->pix == None) {
+		if (trans->pix != None)
+			XFreePixmap(dpy, trans->pix);
+		trans->pix = XCreatePixmap(dpy, trans->frame, transw, transh, depth);
+	}
 
 	val.fill_style = FillSolid;
 	val.foreground = decor[style][TRANSIENT].bg;
 	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
-	XFillRectangle(dpy, trans->frame, gc, border, border, trans->w, trans->h);
+	XFillRectangle(dpy, trans->pix, gc, border, border, trans->w, trans->h);
 
 	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].w;
 	val.ts_x_origin = 0;
 	val.ts_y_origin = 0;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-	XFillRectangle(dpy, trans->frame, gc, 0, border, border, trans->h + border);
+	XFillRectangle(dpy, trans->pix, gc, 0, border, border, trans->h + border);
 
 	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].e;
 	val.ts_x_origin = border + trans->w;
 	val.ts_y_origin = 0;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-	XFillRectangle(dpy, trans->frame, gc, border + trans->w, border, border, trans->h + border);
+	XFillRectangle(dpy, trans->pix, gc, border + trans->w, border, border, trans->h + border);
 
 	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].n;
 	val.ts_x_origin = 0;
 	val.ts_y_origin = 0;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-	XFillRectangle(dpy, trans->frame, gc, border, 0, trans->w + 2 * border, border);
+	XFillRectangle(dpy, trans->pix, gc, border, 0, transw, border);
 
 	val.fill_style = FillTiled;
 	val.tile = decor[style][TRANSIENT].s;
 	val.ts_x_origin = 0;
 	val.ts_y_origin = border + trans->h;
 	XChangeGC(dpy, gc, GCFillStyle | GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-	XFillRectangle(dpy, trans->frame, gc, border, border + trans->h, trans->w + 2 * border, border);
+	XFillRectangle(dpy, trans->pix, gc, border, border + trans->h, transw, border);
 
-	XCopyArea(dpy, decor[style][TRANSIENT].nw, trans->frame, gc, 0, 0, corner, corner, 0, 0);
-	XCopyArea(dpy, decor[style][TRANSIENT].ne, trans->frame, gc, 0, 0, corner, corner, trans->w + 2 * border - corner, 0);
-	XCopyArea(dpy, decor[style][TRANSIENT].sw, trans->frame, gc, 0, 0, corner, corner, 0, trans->h + 2 * border - corner);
-	XCopyArea(dpy, decor[style][TRANSIENT].se, trans->frame, gc, 0, 0, corner, corner, trans->w + 2 * border - corner, trans->h + 2 * border - corner);
+	XCopyArea(dpy, decor[style][TRANSIENT].nw, trans->pix, gc, 0, 0, corner, corner, 0, 0);
+	XCopyArea(dpy, decor[style][TRANSIENT].ne, trans->pix, gc, 0, 0, corner, corner, transw - corner, 0);
+	XCopyArea(dpy, decor[style][TRANSIENT].sw, trans->pix, gc, 0, 0, corner, corner, 0, transh - corner);
+	XCopyArea(dpy, decor[style][TRANSIENT].se, trans->pix, gc, 0, 0, corner, corner, transw - corner, transh - corner);
+
+	XCopyArea(dpy, trans->pix, trans->frame, gc, 0, 0, transw, transh, 0, 0);
 }
 
 /* detach tab from client */
@@ -1131,6 +1146,8 @@ tabdel(struct Tab *t)
 		transdel(t->trans);
 	tabdetach(t, 0, 0);
 	shodgroup(c);
+	if (t->pix != None)
+		XFreePixmap(dpy, t->pix);
 	XReparentWindow(dpy, t->win, root, c->x, c->y);
 	XDestroyWindow(dpy, t->title);
 	XDestroyWindow(dpy, t->frame);
@@ -1176,6 +1193,8 @@ tabadd(Window win, char *name, char *class, int ignoreunmap)
 	t->name = name;
 	t->class = class;
 	t->ignoreunmap = ignoreunmap;
+	t->pix = None;
+	t->pw = 0;
 	t->frame = XCreateWindow(dpy, root, 0, 0, 1, 1, 0,
 	                         CopyFromParent, CopyFromParent, CopyFromParent,
 	                         CWEventMask, &clientswa);
@@ -1202,28 +1221,35 @@ tabdecorate(struct Tab *t, int style, int pressed)
 		d = &decor[style][TAB_PRESSED];
 	else
 		d = &decor[style][TAB_FOCUSED];
+	if (t->pw != t->w || t->pix == None) {
+		if (t->pix != None)
+			XFreePixmap(dpy, t->pix);
+		t->pix = XCreatePixmap(dpy, t->title, t->w, button, depth);
+	}
+	t->pw = t->w;
 	val.tile = d->t;
 	val.ts_x_origin = 0;
 	val.ts_y_origin = 0;
 	val.fill_style = FillTiled;
 	XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin | GCFillStyle, &val);
-	XCopyArea(dpy, d->tl, t->title, gc, 0, 0, edge, button, 0, 0);
-	XFillRectangle(dpy, t->title, gc, edge, 0, t->tabw - edge, button);
-	XCopyArea(dpy, d->tr, t->title, gc, 0, 0, edge, button, t->tabw - edge, 0);
+	XCopyArea(dpy, d->tl, t->pix, gc, 0, 0, edge, button, 0, 0);
+	XFillRectangle(dpy, t->pix, gc, edge, 0, t->w - edge, button);
+	XCopyArea(dpy, d->tr, t->pix, gc, 0, 0, edge, button, t->w - edge, 0);
 	if (t->name != NULL) {
 		len = strlen(t->name);
 		val.fill_style = FillSolid;
 		val.foreground = d->fg;
 		XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
 		XmbTextExtents(fontset, t->name, len, &dr, &box);
-		x = (t->tabw - box.width) / 2 - box.x;
+		x = (t->w - box.width) / 2 - box.x;
 		y = (button - box.height) / 2 - box.y;
-		XmbDrawString(dpy, t->title, fontset, gc, x, y, t->name, len);
+		XmbDrawString(dpy, t->pix, fontset, gc, x, y, t->name, len);
 	}
 	val.foreground = d->bg;
 	val.fill_style = FillSolid;
 	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
 	XFillRectangle(dpy, t->frame, gc, 0, 0, t->c->w, t->c->h);
+	XCopyArea(dpy, t->pix, t->title, gc, 0, 0, t->w, button, 0, 0);
 }
 
 /* get decoration style (and state) of client */
@@ -1306,19 +1332,27 @@ clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant,
 	val.fill_style = FillTiled;
 	XChangeGC(dpy, gc, GCFillStyle, &val);
 
+	if (c->pw != fullw || c->ph != fullh || c->pix == None) {
+		if (c->pix != None)
+			XFreePixmap(dpy, c->pix);
+		c->pix = XCreatePixmap(dpy, c->frame, fullw, fullh, depth);
+	}
+	c->pw = w;
+	c->ph = h;
+
 	/* draw borders */
 	if (w > 0) {
 		val.tile = (octant == N) ? dp->n : d->n;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin, &val);
-		XFillRectangle(dpy, c->frame, gc, origin + corner, 0, w, c->b);
+		XFillRectangle(dpy, c->pix, gc, origin + corner, 0, w, c->b);
 
 		val.tile = (octant == S) ? dp->s : d->s;
 		val.ts_x_origin = origin;
 		val.ts_y_origin = fullh - c->b;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
-		XFillRectangle(dpy, c->frame, gc, origin + corner, fullh - c->b, w, c->b);
+		XFillRectangle(dpy, c->pix, gc, origin + corner, fullh - c->b, w, c->b);
 	}
 
 	if (h > 0) {
@@ -1326,44 +1360,44 @@ clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant,
 		val.ts_x_origin = origin;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
-		XFillRectangle(dpy, c->frame, gc, 0, origin + corner, c->b, h);
+		XFillRectangle(dpy, c->pix, gc, 0, origin + corner, c->b, h);
 
 		val.tile = (octant == E) ? dp->e : d->e;
 		val.ts_x_origin = fullw - c->b;
 		val.ts_y_origin = origin;
 		XChangeGC(dpy, gc, GCTile | GCTileStipYOrigin | GCTileStipXOrigin , &val);
-		XFillRectangle(dpy, c->frame, gc, fullw - c->b, origin + corner, c->b, h);
+		XFillRectangle(dpy, c->pix, gc, fullw - c->b, origin + corner, c->b, h);
 	}
 
 	/* draw corners and border ends */
-	XCopyArea(dpy, (octant == N) ? dp->nf : d->nf, c->frame, gc, 0, 0, edge, border, origin + corner, origin);
-	XCopyArea(dpy, (octant == W) ? dp->wf : d->wf, c->frame, gc, 0, 0, border, edge, origin, origin + corner);
-	XCopyArea(dpy, (octant == N) ? dp->nl : d->nl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin);
-	XCopyArea(dpy, (octant == E) ? dp->ef : d->ef, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner);
-	XCopyArea(dpy, (octant == S) ? dp->sf : d->sf, c->frame, gc, 0, 0, edge, border, origin + corner, origin + border + c->t + c->h);
-	XCopyArea(dpy, (octant == W) ? dp->wl : d->wl, c->frame, gc, 0, 0, border, edge, origin, origin + corner + h - edge);
-	XCopyArea(dpy, (octant == S) ? dp->sl : d->sl, c->frame, gc, 0, 0, edge, border, origin + corner + w - edge, origin + border + c->t + c->h);
-	XCopyArea(dpy, (octant == E) ? dp->el : d->el, c->frame, gc, 0, 0, border, edge, origin + border + c->w, origin + corner + h - edge);
-	XCopyArea(dpy, (octant == NW || (octant == SW && c->isshaded)) ? dp->nw : d->nw, c->frame, gc, 0, corner/2, corner, corner/2+1, origin, origin + corner/2);
-	XCopyArea(dpy, (octant == NE || (octant == SE && c->isshaded)) ? dp->ne : d->ne, c->frame, gc, 0, corner/2, corner, corner/2+1, fullw - corner - origin, origin + corner/2);
-	XCopyArea(dpy, (octant == SW || (octant == NW && c->isshaded)) ? dp->sw : d->sw, c->frame, gc, 0, 0, corner, corner/2, origin, fullh - corner - origin);
-	XCopyArea(dpy, (octant == SE || (octant == NE && c->isshaded)) ? dp->se : d->se, c->frame, gc, 0, 0, corner, corner/2, fullw - corner - origin, fullh - corner - origin);
-	XCopyArea(dpy, (octant == NW || (octant == SW && c->isshaded)) ? dp->nw : d->nw, c->frame, gc, 0, 0, corner, corner/2, origin, origin);
-	XCopyArea(dpy, (octant == NE || (octant == SE && c->isshaded)) ? dp->ne : d->ne, c->frame, gc, 0, 0, corner, corner/2, fullw - corner - origin, origin);
-	XCopyArea(dpy, (octant == SW || (octant == NW && c->isshaded)) ? dp->sw : d->sw, c->frame, gc, 0, corner/2, corner, corner/2+1, origin, fullh - corner - origin + corner/2);
-	XCopyArea(dpy, (octant == SE || (octant == NE && c->isshaded)) ? dp->se : d->se, c->frame, gc, 0, corner/2, corner, corner/2+1, fullw - corner - origin, fullh - corner - origin + corner/2);
+	XCopyArea(dpy, (octant == N) ? dp->nf : d->nf, c->pix, gc, 0, 0, edge, border, origin + corner, origin);
+	XCopyArea(dpy, (octant == W) ? dp->wf : d->wf, c->pix, gc, 0, 0, border, edge, origin, origin + corner);
+	XCopyArea(dpy, (octant == N) ? dp->nl : d->nl, c->pix, gc, 0, 0, edge, border, origin + corner + w - edge, origin);
+	XCopyArea(dpy, (octant == E) ? dp->ef : d->ef, c->pix, gc, 0, 0, border, edge, origin + border + c->w, origin + corner);
+	XCopyArea(dpy, (octant == S) ? dp->sf : d->sf, c->pix, gc, 0, 0, edge, border, origin + corner, origin + border + c->t + c->h);
+	XCopyArea(dpy, (octant == W) ? dp->wl : d->wl, c->pix, gc, 0, 0, border, edge, origin, origin + corner + h - edge);
+	XCopyArea(dpy, (octant == S) ? dp->sl : d->sl, c->pix, gc, 0, 0, edge, border, origin + corner + w - edge, origin + border + c->t + c->h);
+	XCopyArea(dpy, (octant == E) ? dp->el : d->el, c->pix, gc, 0, 0, border, edge, origin + border + c->w, origin + corner + h - edge);
+	XCopyArea(dpy, (octant == NW || (octant == SW && c->isshaded)) ? dp->nw : d->nw, c->pix, gc, 0, corner/2, corner, corner/2+1, origin, origin + corner/2);
+	XCopyArea(dpy, (octant == NE || (octant == SE && c->isshaded)) ? dp->ne : d->ne, c->pix, gc, 0, corner/2, corner, corner/2+1, fullw - corner - origin, origin + corner/2);
+	XCopyArea(dpy, (octant == SW || (octant == NW && c->isshaded)) ? dp->sw : d->sw, c->pix, gc, 0, 0, corner, corner/2, origin, fullh - corner - origin);
+	XCopyArea(dpy, (octant == SE || (octant == NE && c->isshaded)) ? dp->se : d->se, c->pix, gc, 0, 0, corner, corner/2, fullw - corner - origin, fullh - corner - origin);
+	XCopyArea(dpy, (octant == NW || (octant == SW && c->isshaded)) ? dp->nw : d->nw, c->pix, gc, 0, 0, corner, corner/2, origin, origin);
+	XCopyArea(dpy, (octant == NE || (octant == SE && c->isshaded)) ? dp->ne : d->ne, c->pix, gc, 0, 0, corner, corner/2, fullw - corner - origin, origin);
+	XCopyArea(dpy, (octant == SW || (octant == NW && c->isshaded)) ? dp->sw : d->sw, c->pix, gc, 0, corner/2, corner, corner/2+1, origin, fullh - corner - origin + corner/2);
+	XCopyArea(dpy, (octant == SE || (octant == NE && c->isshaded)) ? dp->se : d->se, c->pix, gc, 0, corner/2, corner, corner/2+1, fullw - corner - origin, fullh - corner - origin + corner/2);
 
 	/* draw background */
 	val.foreground = d->bg;
 	val.fill_style = FillSolid;
 	XChangeGC(dpy, gc, GCFillStyle | GCForeground, &val);
-	XFillRectangle(dpy, c->frame, gc, c->b, c->b, c->w, c->h + c->t);
+	XFillRectangle(dpy, c->pix, gc, c->b, c->b, c->w, c->h + c->t);
 
 	/* draw title and buttons */
 	if (c->t > 0) {
 		dp = region ? &decor[style][PRESSED] : &decor[style][UNPRESSED];
-		XCopyArea(dpy, (region == FrameButtonLeft) ? dp->bl : d->bl, c->frame, gc, 0, 0, button, button, c->b, c->b);
-		XCopyArea(dpy, (region == FrameButtonRight) ? dp->br : d->br, c->frame, gc, 0, 0, button, button, fullw - button - c->b, c->b);
+		XCopyArea(dpy, (region == FrameButtonLeft) ? dp->bl : d->bl, c->pix, gc, 0, 0, button, button, c->b, c->b);
+		XCopyArea(dpy, (region == FrameButtonRight) ? dp->br : d->br, c->pix, gc, 0, 0, button, button, fullw - button - c->b, c->b);
 	}
 	if (decorateall) {
 		for (t = c->tabs; t; t = t->next) {
@@ -1375,6 +1409,7 @@ clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant,
 			}
 		}
 	}
+	XCopyArea(dpy, c->pix, c->frame, gc, 0, 0, fullw, fullh, 0, 0);
 }
 
 /* set client border width */
@@ -1401,8 +1436,11 @@ clientretab(struct Client *c)
 {
 	struct Transient *trans;
 	struct Tab *t;
+	int transx, transy, transw, transh;
+	int style;
 	int i;
 
+	style = clientgetstyle(c);
 	for (i = 0, t = c->tabs; t; t = t->next, i++) {
 		if (c->isshaded) {
 			XMoveResizeWindow(dpy, t->frame, c->b, 2 * c->b + c->t, c->w, c->saveh);
@@ -1410,30 +1448,49 @@ clientretab(struct Client *c)
 			XMoveResizeWindow(dpy, t->frame, c->b, c->b + c->t, c->w, c->h);
 		}
 		for (trans = t->trans; trans; trans = trans->next) {
-			XMoveResizeWindow(dpy, trans->frame, trans->x - border, trans->y - border, trans->w + 2 * border, trans->h + 2 * border);
+			transx = trans->x - border;
+			transy = trans->y - border;
+			transw = trans->w + 2 * border;
+			transh = trans->h + 2 * border;
+			XMoveResizeWindow(dpy, trans->frame, transx, transy, transw, transh);
 			XMoveResizeWindow(dpy, trans->win, border, border, trans->w, trans->h);
+			if (trans->pw != transw || trans->ph != transh) {
+				transdecorate(trans, style);
+			}
 		}
 		XResizeWindow(dpy, t->win, c->w, (c->isshaded ? c->saveh : c->h));
 		if (c->t > 0) {
 			XMapWindow(dpy, t->title);
-			XMoveResizeWindow(dpy, t->title, c->b + button + t->tabx, c->b, t->tabw, c->t);
+			XMoveResizeWindow(dpy, t->title, c->b + button + t->x, c->b, t->w, c->t);
 		} else {
 			XUnmapWindow(dpy, t->title);
 		}
+		if (t->pw != t->w) {
+			tabdecorate(t, style, 0);
+		}
 	}
+	clientnotify(c);
 }
 
 /* commit floating client size and position */
 static void
 clientmoveresize(struct Client *c)
 {
+	int x, y, w, h;         /* frame geometry */
+
 	if (c == NULL)
 		return;
+	x = c->x - c->b;
+	y = c->y - c->b - c->t;
+	w = c->w + 2 * c->b;
+	h = c->h + 2 * c->b + c->t;
 	calctabs(c);
-	XMoveResizeWindow(dpy, c->frame, c->x - c->b, c->y - c->b - c->t, c->w + c->b * 2, c->h + c->b * 2 + c->t);
-	XMoveResizeWindow(dpy, c->curswin, 0, 0, c->w + c->b * 2, c->h + c->b * 2 + c->t);
+	XMoveResizeWindow(dpy, c->frame, x, y, w, h);
+	XMoveResizeWindow(dpy, c->curswin, 0, 0, w, h);
 	clientretab(c);
-	clientnotify(c);
+	if (c->pw != w || c->ph != h) {
+		clientdecorate(c, clientgetstyle(c), 0, 0, FrameNone);
+	}
 }
 
 /* check if desktop is visible */
@@ -2399,6 +2456,7 @@ clientadd(int x, int y, int w, int h, int isuserplaced)
 	c->ishidden = 0;
 	c->state = Normal;
 	c->layer = 0;
+	c->pw = c->ph = 0;
 	c->x = c->fx = x;
 	c->y = c->fy = y;
 	c->w = c->fw = w;
@@ -2410,6 +2468,7 @@ clientadd(int x, int y, int w, int h, int isuserplaced)
 	c->tabs = NULL;
 	c->ntabs = 0;
 	c->prev = NULL;
+	c->pix = None;
 	c->frame = XCreateWindow(dpy, root, c->x - c->b, c->y - c->b,
 	                         c->w + c->b * 2, c->h + c->b * 2 + c->t, 0,
 	                         CopyFromParent, CopyFromParent, CopyFromParent,
@@ -2447,6 +2506,8 @@ clientdel(struct Client *c)
 		desktile(c->desk);
 	while (c->tabs)
 		tabdel(c->tabs);
+	if (c->pix != None)
+		XFreePixmap(dpy, c->pix);
 	XDestroyWindow(dpy, c->frame);
 	XDestroyWindow(dpy, c->curswin);
 	free(c);
@@ -2633,7 +2694,7 @@ clienttab(struct Client *c, struct Tab *t, int pos)
 	}
 	calctabs(c);
 	if (t->title == None) {
-		t->title = XCreateWindow(dpy, c->frame, c->b + button + t->tabx, c->b, t->tabw, button, 0,
+		t->title = XCreateWindow(dpy, c->frame, c->b + button + t->x, c->b, t->w, button, 0,
 		                         CopyFromParent, CopyFromParent, CopyFromParent,
 		                         CWEventMask, &clientswa);
 	} else {
@@ -2721,7 +2782,7 @@ transconfigure(struct Transient *trans, unsigned int valuemask, XWindowChanges *
 		trans->maxh = wc->height;
 	}
 	if (clientisvisible(trans->t->c)) {
-		clientmoveresize(trans->t->c);
+		clientretab(trans->t->c);
 	}
 }
 
@@ -2775,14 +2836,20 @@ tabwindow(const char *class, int autotab)
 
 /* call the proper decorate function */
 static void
-decorate(struct Winres *res, enum Octant octant, int pressed)
+decorate(struct Winres *res)
 {
+	int fullw, fullh;
+
 	if (res->trans) {
-		transdecorate(res->trans, clientgetstyle(res->c));
+		fullw = res->trans->w + 2 * border;
+		fullh = res->trans->h + 2 * border;
+		XCopyArea(dpy, res->trans->pix, res->trans->frame, gc, 0, 0, fullw, fullh, 0, 0);
 	} else if (res->t) {
-		tabdecorate(res->t, clientgetstyle(res->c), pressed);
+		XCopyArea(dpy, res->t->pix, res->t->title, gc, 0, 0, res->t->w, button, 0, 0);
 	} else if (res->c) {
-		clientdecorate(res->c, clientgetstyle(res->c), 0, octant, pressed);
+		fullw = res->c->w + 2 * res->c->b;
+		fullh = res->c->h + 2 * res->c->b + res->c->t;
+		XCopyArea(dpy, res->c->pix, res->c->frame, gc, 0, 0, fullw, fullh, 0, 0);
 	}
 }
 
@@ -3073,7 +3140,7 @@ manageprompt(Window win, int w, int h)
 					promptdecorate(prompt.frame, w, h);
 				} else {
 					res = getwin(ev.xexpose.window);
-					decorate(&res, 0, FrameNone);
+					decorate(&res);
 				}
 			}
 			break;
@@ -3159,6 +3226,8 @@ managetrans(struct Tab *t, Window win, int maxw, int maxh, int ignoreunmap)
 	trans->y = 0;
 	trans->w = 0;
 	trans->h = 0;
+	trans->pix = None;
+	trans->pw = trans->ph = 0;
 	trans->maxw = maxw;
 	trans->maxh = maxh;
 	trans->ignoreunmap = ignoreunmap;
@@ -3526,7 +3595,7 @@ mousebutton(struct Client *c, int region)
 		case Expose:
 			if (ev.xexpose.count == 0) {
 				res = getwin(ev.xexpose.window);
-				decorate(&res, 0, (res.c == c ? region : FrameNone));
+				decorate(&res);
 			}
 			break;
 		case ButtonRelease:
@@ -3573,7 +3642,7 @@ mouseretab(struct Tab *t, int xroot, int yroot, int x, int y)
 					tabdecorate(t, clientgetstyle(t->c), FrameNone);
 				} else {
 					res = getwin(ev.xexpose.window);
-					decorate(&res, 0, FrameNone);
+					decorate(&res);
 				}
 			}
 			break;
@@ -3613,13 +3682,16 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 	XGrabPointer(dpy, c->frame, False,
 	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 	             GrabModeAsync, GrabModeAsync, None, cursor[CURSOR_MOVE], CurrentTime);
-	decorate(&(struct Winres){.c = c, .t = t, .trans = NULL}, octant, region);        /* draw pressed region */
+	if (region == FrameTitle)
+		tabdecorate(t, clientgetstyle(c), region);
+	else
+		clientdecorate(c, clientgetstyle(c), 0, octant, region);
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
 		switch(ev.type) {
 		case Expose:
 			if (ev.xexpose.count == 0) {
 				res = getwin(ev.xexpose.window);
-				decorate(&res, (res.c == c ? octant : FrameNone), (res.c == c ? region : FrameNone));
+				decorate(&res);
 			}
 			break;
 		case ButtonRelease:
@@ -3722,7 +3794,7 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 		case Expose:
 			if (ev.xexpose.count == 0) {
 				res = getwin(ev.xexpose.window);
-				decorate(&res, octant, FrameNone);
+				decorate(&res);
 			}
 			break;
 		case ButtonRelease:
@@ -4087,7 +4159,7 @@ xeventexpose(XEvent *e)
 
 	if (ev->count == 0) {
 		res = getwin(ev->window);
-		decorate(&res, 0, FrameNone);
+		decorate(&res);
 	}
 }
 
@@ -4330,6 +4402,7 @@ main(int argc, char *argv[])
 	screen = DefaultScreen(dpy);
 	screenw = DisplayWidth(dpy, screen);
 	screenh = DisplayHeight(dpy, screen);
+	depth = DefaultDepth(dpy, screen);
 	root = RootWindow(dpy, screen);
 	gc = XCreateGC(dpy, root, 0, NULL);
 	xerrorxlib = XSetErrorHandler(xerror);
