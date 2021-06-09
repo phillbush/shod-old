@@ -664,14 +664,17 @@ ewmhinit(void)
 {
 	unsigned long data[2];
 
-	/* Set window and property that indicates that the wm is ewmh compliant */
+	/* set window and property that indicates that the wm is ewmh compliant */
 	XChangeProperty(dpy, wmcheckwin, atoms[NetSupportingWMCheck], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&wmcheckwin, 1);
 	XChangeProperty(dpy, wmcheckwin, atoms[NetWMName], atoms[Utf8String], 8, PropModeReplace, (unsigned char *) "shod", strlen("shod"));
 	XChangeProperty(dpy, root, atoms[NetSupportingWMCheck], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&wmcheckwin, 1);
 
-	/* Set properties that the window manager supports */
+	/* set properties that the window manager supports */
 	XChangeProperty(dpy, root, atoms[NetSupported], XA_ATOM, 32, PropModeReplace, (unsigned char *)atoms, AtomLast);
 	XDeleteProperty(dpy, root, atoms[NetClientList]);
+
+	/* set number of desktops */
+	XChangeProperty(dpy, root, atoms[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&config.ndesktops, 1);
 
 	/* This wm does not support viewports */
 	data[0] = data[1] = 0;
@@ -693,12 +696,6 @@ static void
 ewmhsetactivewindow(Window w)
 {
 	XChangeProperty(dpy, root, atoms[NetActiveWindow], XA_WINDOW, 32, PropModeReplace, (unsigned char *)&w, 1);
-}
-
-static void
-ewmhsetnumberofdesktops(void)
-{
-	XChangeProperty(dpy, root, atoms[NetNumberOfDesktops], XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&config.ndesktops, 1);
 }
 
 static void
@@ -4087,7 +4084,6 @@ xeventconfigurenotify(XEvent *e)
 		screenw = ev->width;
 		screenh = ev->height;
 		monupdate();
-		ewmhsetnumberofdesktops();
 		ewmhsetworkarea(screenw, screenh);
 	}
 }
@@ -4439,7 +4435,6 @@ main(int argc, char *argv[])
 
 	/* initialize ewmh hints */
 	ewmhinit();
-	ewmhsetnumberofdesktops();
 	ewmhsetcurrentdesktop(0);
 	ewmhsetworkarea(screenw, screenh);
 	ewmhsetshowingdesktop(0);
