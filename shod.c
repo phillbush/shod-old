@@ -685,6 +685,12 @@ icccmwmstate(Window win, int state)
 }
 
 static void
+icccmwmdeletestate(Window win)
+{
+	XDeleteProperty(dpy, win, atoms[WMState]);
+}
+
+static void
 shodgroup(struct Client *c)
 {
 	struct Tab *t;
@@ -1086,6 +1092,7 @@ transdel(struct Transient *trans)
 	shodgroup(t->c);
 	if (trans->pix != None)
 		XFreePixmap(dpy, trans->pix);
+	icccmwmdeletestate(trans->win);
 	XReparentWindow(dpy, trans->win, root, 0, 0);
 	XDestroyWindow(dpy, trans->frame);
 	tabfocus(t);
@@ -1195,6 +1202,7 @@ tabdel(struct Tab *t)
 	shodgroup(c);
 	if (t->pix != None)
 		XFreePixmap(dpy, t->pix);
+	icccmwmdeletestate(t->win);
 	XReparentWindow(dpy, t->win, root, c->x, c->y);
 	XDestroyWindow(dpy, t->title);
 	XDestroyWindow(dpy, t->frame);
