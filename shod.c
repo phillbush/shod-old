@@ -538,6 +538,40 @@ initnotif(void)
 	}
 }
 
+/* check whether window was placed by the user */
+static int
+isuserplaced(Window win)
+{
+	XSizeHints size;
+	long dl;
+
+	return (XGetWMNormalHints(dpy, win, &size, &dl) && (size.flags & USPosition));
+}
+
+/* check whether window is urgent */
+static int
+isurgent(Window win)
+{
+	XWMHints *wmh;
+	int ret;
+
+	ret = 0;
+	if ((wmh = XGetWMHints(dpy, win)) != NULL) {
+		ret = wmh->flags & XUrgencyHint;
+		XFree(wmh);
+	}
+	return ret;
+}
+
+/* clear window urgency */
+static void
+clearurgency(Window win)
+{
+	XWMHints wmh = {0};
+
+	XSetWMHints(dpy, win, &wmh);
+}
+
 /* create and copy pixmap */
 static Pixmap
 copypixmap(Pixmap src, int sx, int sy, int w, int h)
@@ -685,7 +719,7 @@ icccmwmstate(Window win, int state)
 }
 
 static void
-icccmwmdeletestate(Window win)
+icccmdeletestate(Window win)
 {
 	XDeleteProperty(dpy, win, atoms[WMState]);
 }
@@ -1063,6 +1097,8 @@ tabfocus(struct Tab *t)
 	if (t == NULL)
 		return;
 	t->c->seltab = t;
+	if (t->isurgent)
+		clearurgency(t->win);
 	XRaiseWindow(dpy, t->frame);
 	if (t->c->isshaded) {
 		XSetInputFocus(dpy, t->c->frame, RevertToParent, CurrentTime);
@@ -1074,6 +1110,17 @@ tabfocus(struct Tab *t)
 	}
 	shodgroup(t->c);
 	ewmhsetactivewindow(t->win);
+}
+
+/* get tab decoration style */
+static int
+tabgetstyle(struct Tab *t)
+{
+	if (t->isurgent)
+		return URGENT;
+	if (t->c == focused)
+		return FOCUSED;
+	return UNFOCUSED;
 }
 
 /* delete transient window from tab */
@@ -1092,7 +1139,7 @@ transdel(struct Transient *trans)
 	shodgroup(t->c);
 	if (trans->pix != None)
 		XFreePixmap(dpy, trans->pix);
-	icccmwmdeletestate(trans->win);
+	icccmdeletestate(trans->win);
 	XReparentWindow(dpy, trans->win, root, 0, 0);
 	XDestroyWindow(dpy, trans->frame);
 	tabfocus(t);
@@ -1101,11 +1148,13 @@ transdel(struct Transient *trans)
 
 /* decorate transient window */
 static void
-transdecorate(struct Transient *trans, int style)
+transdecorate(struct Transient *trans)
 {
 	XGCValues val;
 	int transw, transh;
+	int style;
 
+	style = tabgetstyle(trans->t);
 	transw = trans->w + 2 * border;
 	transh = trans->h + 2 * border;
 
@@ -1202,7 +1251,7 @@ tabdel(struct Tab *t)
 	shodgroup(c);
 	if (t->pix != None)
 		XFreePixmap(dpy, t->pix);
-	icccmwmdeletestate(t->win);
+	icccmdeletestate(t->win);
 	XReparentWindow(dpy, t->win, root, c->x, c->y);
 	XDestroyWindow(dpy, t->title);
 	XDestroyWindow(dpy, t->frame);
@@ -1248,6 +1297,7 @@ tabadd(Window win, char *name, char *class, int ignoreunmap)
 	t->name = name;
 	t->class = class;
 	t->ignoreunmap = ignoreunmap;
+	t->isurgent = isurgent(win);
 	t->pix = None;
 	t->pw = 0;
 	t->frame = XCreateWindow(dpy, root, 0, 0, 1, 1, 0,
@@ -1262,14 +1312,16 @@ tabadd(Window win, char *name, char *class, int ignoreunmap)
 
 /* decorate tab */
 static void
-tabdecorate(struct Tab *t, int style, int pressed)
+tabdecorate(struct Tab *t, int pressed)
 {
 	XGCValues val;
 	XRectangle box, dr;
 	struct Decor *d;
 	size_t len;
+	int style;
 	int x, y;
 
+	style = tabgetstyle(t);
 	if (t->c && t != t->c->seltab)
 		d = &decor[style][TAB_UNFOCUSED];
 	else if (t->c && pressed == FrameTitle)
@@ -1331,7 +1383,12 @@ notify(Window win, int x, int y, int w, int h)
 static int
 clientgetstyle(struct Client *c)
 {
-	return (c && c == focused) ? FOCUSED : UNFOCUSED;
+	struct Tab *t;
+
+	for (t = c->tabs; t; t = t->next)
+		if (t->isurgent)
+			return URGENT;
+	return ((c && c == focused) ? FOCUSED : UNFOCUSED);
 }
 
 /* check if client is visible */
@@ -1364,12 +1421,13 @@ clientnotify(struct Client *c)
 
 /* draw decoration on the frame window */
 static void
-clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant, int region)
+clientdecorate(struct Client *c, int decorateall, enum Octant octant, int region)
 {
 	XGCValues val;
 	struct Tab *t;
 	struct Decor *d;        /* unpressed decoration */
 	struct Decor *dp;       /* pressed decoration */
+	int style;
 	int origin;
 	int w, h;
 	int fullw, fullh;
@@ -1377,6 +1435,7 @@ clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant,
 
 	if (c == NULL)
 		return;
+	style = clientgetstyle(c);
 	j = UNPRESSED;
 	if ((c->state & Tiled) && config.mergeborders)
 		j = MERGE_BORDERS;
@@ -1395,8 +1454,8 @@ clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant,
 			XFreePixmap(dpy, c->pix);
 		c->pix = XCreatePixmap(dpy, c->frame, fullw, fullh, depth);
 	}
-	c->pw = w;
-	c->ph = h;
+	c->pw = fullw;
+	c->ph = fullh;
 
 	/* draw borders */
 	if (w > 0) {
@@ -1460,10 +1519,10 @@ clientdecorate(struct Client *c, int style, int decorateall, enum Octant octant,
 	if (decorateall) {
 		for (t = c->tabs; t; t = t->next) {
 			if (t->trans) {
-				transdecorate(t->trans, style);
+				transdecorate(t->trans);
 			}
 			if (c->t > 0) {
-				tabdecorate(t, style, FrameNone);
+				tabdecorate(t, FrameNone);
 			}
 		}
 	}
@@ -1495,10 +1554,8 @@ clientretab(struct Client *c)
 	struct Transient *trans;
 	struct Tab *t;
 	int transx, transy, transw, transh;
-	int style;
 	int i;
 
-	style = clientgetstyle(c);
 	for (i = 0, t = c->tabs; t; t = t->next, i++) {
 		if (c->isshaded) {
 			XMoveResizeWindow(dpy, t->frame, c->b, 2 * c->b + c->t, c->w, c->saveh);
@@ -1513,7 +1570,7 @@ clientretab(struct Client *c)
 			XMoveResizeWindow(dpy, trans->frame, transx, transy, transw, transh);
 			XMoveResizeWindow(dpy, trans->win, border, border, trans->w, trans->h);
 			if (trans->pw != transw || trans->ph != transh) {
-				transdecorate(trans, style);
+				transdecorate(trans);
 			}
 		}
 		XResizeWindow(dpy, t->win, c->w, (c->isshaded ? c->saveh : c->h));
@@ -1524,7 +1581,7 @@ clientretab(struct Client *c)
 			XUnmapWindow(dpy, t->title);
 		}
 		if (t->pw != t->w) {
-			tabdecorate(t, style, 0);
+			tabdecorate(t, 0);
 		}
 	}
 	clientnotify(c);
@@ -1547,7 +1604,8 @@ clientmoveresize(struct Client *c)
 	XMoveResizeWindow(dpy, c->curswin, 0, 0, w, h);
 	clientretab(c);
 	if (c->pw != w || c->ph != h) {
-		clientdecorate(c, clientgetstyle(c), 0, 0, FrameNone);
+		printf("%d == %d; %d == %d\n", c->pw, w, c->ph, h);
+		clientdecorate(c, 0, 0, FrameNone);
 	}
 }
 
@@ -2336,20 +2394,22 @@ clientfocus(struct Client *c)
 
 	prevfocused = focused;
 	if (c == NULL) {
-		clientdecorate(focused, UNFOCUSED, 1, 0, FrameNone);
+		focused = NULL;
+		if (prevfocused)
+			clientdecorate(prevfocused, 1, 0, FrameNone);
 		XSetInputFocus(dpy, focuswin, RevertToParent, CurrentTime);
 		ewmhsetactivewindow(None);
-		focused = NULL;
 	} else if ((fullscreen = getfullscreen(c->mon, c->desk)) == NULL ||
 	           fullscreen == c) { /* we should not focus a client below a fullscreen client */
-		clientdecorate(focused, UNFOCUSED, 1, 0, FrameNone);
 		focused = c;
+		if (prevfocused)
+			clientdecorate(prevfocused, 1, 0, FrameNone);
 		if (c->mon)
 			selmon = c->mon;
 		if (c->state != Sticky && c->state != Minimized)
 			selmon->seldesk = c->desk;
 		clientaddfocus(c);
-		clientdecorate(c, FOCUSED, 1, 0, FrameNone);
+		clientdecorate(c, 1, 0, FrameNone);
 		if (c->state == Minimized)
 			clientminimize(c, 0);
 	} else {
@@ -2892,6 +2952,21 @@ tabwindow(const char *class, int autotab)
 	return 0;
 }
 
+/* update tab urgency */
+static void
+tabupdateurgency(struct Tab *t)
+{
+	int prev;
+
+	prev = t->isurgent;
+	t->isurgent = isurgent(t->win);
+	if (t->isurgent && t->c == focused && t == t->c->seltab) {
+		clearurgency(t->win);
+	} else if (prev != t->isurgent) {
+		clientdecorate(t->c, 1, 0, FrameNone);
+	}
+}
+
 /* call the proper decorate function */
 static void
 decorate(struct Winres *res)
@@ -3019,16 +3094,6 @@ promptcalcgeom(int *x, int *y, int *w, int *h, int *fw, int *fh)
 	*y = 0;
 	*fw = *w + border * 2;
 	*fh = *h + border;
-}
-
-/* check whether window was placed by the user */
-static int
-isuserplaced(Window win)
-{
-	XSizeHints size;
-	long dl;
-
-	return (XGetWMNormalHints(dpy, win, &size, &dl) && (size.flags & USPosition));
 }
 
 /* get tab given window is a transient for */
@@ -3436,7 +3501,7 @@ manageclient(struct Client *c, struct Tab *t, struct Rules *rules, struct Deskto
 	if (focus) {
 		clientstate(c, FOCUS, ADD);
 	} else {
-		clientdecorate(c, UNFOCUSED, 1, 0, FrameNone);
+		clientdecorate(c, 1, 0, FrameNone);
 		clientaddfocus(c);
 		clientaddfocus(focused);
 	}
@@ -3474,7 +3539,7 @@ managetrans(struct Tab *t, Window win, int maxw, int maxh, int ignoreunmap)
 	t->trans = trans;
 	icccmwmstate(win, NormalState);
 	if (clientisvisible(t->c)) {
-		clientdecorate(t->c, clientgetstyle(t->c), 1, 0, FrameNone);
+		clientdecorate(t->c, 1, 0, FrameNone);
 		clientmoveresize(t->c);
 	}
 	XMapRaised(dpy, trans->frame);
@@ -3516,7 +3581,7 @@ unmanage(struct Tab *t)
 		clientdel(c);
 		clientstate(f, FOCUS, ADD);
 	} else {
-		clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
+		clientdecorate(c, 1, 0, FrameNone);
 		clientmoveresize(c);
 		if (c == focused) {
 			tabfocus(c->seltab);
@@ -3562,7 +3627,7 @@ manage(Window win, XWindowAttributes *wa, int ignoreunmap)
 		t = tabadd(win, name, class, ignoreunmap);
 		if (!placed && tabwindow(class, rules.autotab)) {
 			clienttab(focused, t, -1);
-			clientdecorate(focused, FOCUSED, 1, 0, FrameNone);
+			clientdecorate(focused, 1, 0, FrameNone);
 			clientmoveresize(focused);
 			if (focused->state == Tiled)
 				desktile(focused->desk);
@@ -3824,7 +3889,7 @@ mousebutton(struct Client *c, int region)
 
 	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None,
 	             (region == FrameButtonRight) ? cursor[CURSOR_PIRATE] : cursor[CURSOR_NORMAL], CurrentTime);
-	clientdecorate(c, clientgetstyle(c), 0, 0, region);     /* draw pressed button */
+	clientdecorate(c, 0, 0, region);     /* draw pressed button */
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | ExposureMask, &ev)) {
 		switch(ev.type) {
 		case Expose:
@@ -3839,7 +3904,7 @@ mousebutton(struct Client *c, int region)
 		}
 	}
 done:
-	clientdecorate(c, clientgetstyle(c), 0, 0, FrameNone);  /* draw pressed button */
+	clientdecorate(c, 0, 0, FrameNone);  /* draw pressed button */
 	if (released == region) {
 		switch (released) {
 		case FrameButtonLeft:
@@ -3874,7 +3939,7 @@ mouseretab(struct Tab *t, int xroot, int yroot, int x, int y)
 		case Expose:
 			if (ev.xexpose.count == 0) {
 				if (ev.xexpose.window == t->title || (t->trans && ev.xexpose.window == t->trans->frame)) {
-					tabdecorate(t, clientgetstyle(t->c), FrameNone);
+					tabdecorate(t, FrameNone);
 				} else {
 					res = getwin(ev.xexpose.window);
 					decorate(&res);
@@ -3900,7 +3965,7 @@ done:
 		manageclient(c, t, NULL, mon->seldesk);
 	}
 	clientretab(c);
-	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);
+	clientdecorate(c, 1, 0, FrameNone);
 	XUngrabPointer(dpy, CurrentTime);
 	ewmhsetwmdesktop(c);
 }
@@ -3918,9 +3983,9 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 	             GrabModeAsync, GrabModeAsync, None, cursor[CURSOR_MOVE], CurrentTime);
 	if (region == FrameTitle)
-		tabdecorate(t, clientgetstyle(c), region);
+		tabdecorate(t, region);
 	else
-		clientdecorate(c, clientgetstyle(c), 0, octant, region);
+		clientdecorate(c, 0, octant, region);
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
 		switch(ev.type) {
 		case Expose:
@@ -3957,7 +4022,7 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 		}
 	}
 done:
-	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);          /* draw pressed region */
+	clientdecorate(c, 1, 0, FrameNone);          /* draw pressed region */
 	XUngrabPointer(dpy, CurrentTime);
 }
 
@@ -4023,7 +4088,7 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 	else
 		y = 0;
 	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
-	clientdecorate(c, clientgetstyle(c), 0, octant, FrameNone);     /* draw pressed region */
+	clientdecorate(c, 0, octant, FrameNone);     /* draw pressed region */
 	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
 		switch(ev.type) {
 		case Expose:
@@ -4084,7 +4149,7 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 done:
 	clientincrresize(c, octant, outline.diffx, outline.diffy);
 	outlinedraw(&(struct Outline){0, 0, 0, 0, 0, 0});
-	clientdecorate(c, clientgetstyle(c), 1, 0, FrameNone);          /* draw pressed region */
+	clientdecorate(c, 1, 0, FrameNone);          /* draw pressed region */
 	XUngrabPointer(dpy, CurrentTime);
 }
 
@@ -4114,7 +4179,12 @@ xeventbuttonpress(XEvent *e)
 		goto done;
 	}
 
+	region = frameregion(c, ev->window, ev->x, ev->y);
+	octant = frameoctant(c, ev->window, ev->x, ev->y);
+
 	/* focus client */
+	if (region == FrameTitle && ev->button == Button1)
+		tabfocus(t);
 	if (c != focused &&
 	    ((ev->button == Button1 && config.focusbuttons & 1 << 0) ||
 	     (ev->button == Button2 && config.focusbuttons & 1 << 1) ||
@@ -4133,8 +4203,6 @@ xeventbuttonpress(XEvent *e)
 		clientraise(c);
 
 	/* get action performed by mouse */
-	region = frameregion(c, ev->window, ev->x, ev->y);
-	octant = frameoctant(c, ev->window, ev->x, ev->y);
 	if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
 		mousebutton(c, region);
 	} else if (ev->state == config.modifier && ev->button == Button1) {
@@ -4147,7 +4215,6 @@ xeventbuttonpress(XEvent *e)
 	} else if (region == FrameTitle && ev->button == Button3 && t != NULL && t->c != NULL && t->title == ev->window) {
 		mouseretab(t, ev->x_root, ev->y_root, ev->x, ev->y);
 	} else if (region == FrameTitle && ev->button == Button1) {
-		tabfocus(t);
 		if (lastc == c && ev->time - lasttime < DOUBLECLICK) {
 			clientstate(c, SHADE, TOGGLE);
 			lasttime = 0;
@@ -4493,14 +4560,18 @@ xeventpropertynotify(XEvent *e)
 	XPropertyEvent *ev = &e->xproperty;
 	struct Winres res;
 
+	if (ev->state == PropertyDelete)
+		return;
 	res = getwin(ev->window);
-	if (res.t == NULL)
+	if (res.t == NULL || ev->window != res.t->win)
 		return;
 	if (ev->atom == XA_WM_NAME || ev->atom == atoms[NetWMName]) {
 		tabupdatetitle(res.t);
-		clientdecorate(res.t->c, clientgetstyle(res.t->c), 1, 0, FrameNone);
+		clientdecorate(res.t->c, 1, 0, FrameNone);
 	} else if (ev->atom == XA_WM_CLASS) {
 		tabupdateclass(res.t);
+	} else if (ev->atom == XA_WM_HINTS) {
+		tabupdateurgency(res.t);
 	}
 }
 

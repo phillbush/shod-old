@@ -269,6 +269,7 @@ struct Tab {
 	char *name;
 	char *class;
 	int ignoreunmap;
+	int isurgent;
 	int winw, winh;         /* window geometry */
 	int x, w;               /* tab geometry */
 	int pw;                 /* pixmap width */
