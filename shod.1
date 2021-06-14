@@ -23,7 +23,7 @@ One of the monitors is the focused one, where new windows go to when they are cr
 Each monitor contains a set of desktops.
 One of the desktops of a monitor is the focused desktop for that monitor.
 .PP
-Most windows are displayed in frames (containers with borders, titlebars and buttons, and in which each window is a tab).
+Most windows are displayed in frames (containers with borders, titlebars and buttons; each window is a tab in a frame).
 But some windows are special and are displayed in different ways.
 .SS Frames
 Windows are displayed in frames.
@@ -52,7 +52,9 @@ no matter which desktop is focused on that monitor.
 .TP
 Tiled
 Tiled frames belong to a desktop and its monitor.
-The monitor is divided into columns, each frame occupies a row in a column.
+The monitor is split up horizontally into columns.
+Each column handles arbitrary frames and arranges them vertically in a nonoverlapping way.
+They can then be moved and resized between and within columns at will.
 (This tiling style is the same used by the old wmii(1) window manager and the acme(1) editor).
 .TP
 Normal

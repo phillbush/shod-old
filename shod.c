@@ -1385,10 +1385,12 @@ clientgetstyle(struct Client *c)
 {
 	struct Tab *t;
 
+	if (c == focused)
+		return FOCUSED;
 	for (t = c->tabs; t; t = t->next)
 		if (t->isurgent)
 			return URGENT;
-	return ((c && c == focused) ? FOCUSED : UNFOCUSED);
+	return UNFOCUSED;
 }
 
 /* check if client is visible */
@@ -2763,6 +2765,7 @@ clientstate(struct Client *c, int state, long int flag)
 			else 
 				clientfocus(c);
 			tabfocus(c->seltab);
+			ewmhsetwmdesktop(c);
 			ewmhsetstate(c);
 		}
 		break;
@@ -3982,7 +3985,7 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 	XGrabPointer(dpy, c->frame, False,
 	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
 	             GrabModeAsync, GrabModeAsync, None, cursor[CURSOR_MOVE], CurrentTime);
-	if (region == FrameTitle)
+	if (t != NULL && region == FrameTitle)
 		tabdecorate(t, region);
 	else
 		clientdecorate(c, 0, octant, region);
