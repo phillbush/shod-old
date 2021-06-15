@@ -48,26 +48,13 @@ as shown in the image below.
 
 ![tiled](https://user-images.githubusercontent.com/63266536/121972792-501ca900-cd52-11eb-8c6c-f9c052d9f416.png)
 
-Shod places floating frames in unoccupied regions of the monitor.
-The first floating frame is spawned in the center of the monitor.
-In the image below, the first frame was opened in the center, the
-second frame was opened on a corner, as well as the third and the
-fourth ones.
+Shod automatically places floating frames in unoccupied regions of the
+monitor.  The first floating frame is spawned in the center of the
+monitor.  In the image below, the first frame was automatically placed
+in the center, the second frame was placed on a corner, as well as the
+third and the fourth ones.
 
 ![place](https://user-images.githubusercontent.com/63266536/121972790-4eeb7c00-cd52-11eb-9374-65a9f13675a2.png)
-
-Each monitor has its own set of workspaces.  For example, if you have
-two monitors you will have two desktops being shown at the same time,
-one on each monitor.  In order to change the selected monitor just
-click on a window or on the root window of that monitor.  In order to
-change the monitor of a window just move this window to another
-monitor.
-
-You can use the shod.focusButtons X resource to use either a
-focus-follow-pointer style or a click-to-focus style.  You can even
-specify which mouse button triggers the click-to-focus style.  The
-related shod.raiseButtons option specify which mouse buttons raise
-a window.
 
 ## TODO
 
