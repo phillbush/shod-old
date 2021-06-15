@@ -150,6 +150,7 @@ enum {
 	NetWMStateAbove,
 	NetWMStateBelow,
 	NetWMStateFocused,
+	NetWMStateDemandsAttention,
 	NetWMAllowedActions,
 	NetWMActionMove,
 	NetWMActionResize,

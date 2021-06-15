@@ -477,6 +477,7 @@ initatoms(void)
 		[NetWMStateAbove]            = "_NET_WM_STATE_ABOVE",
 		[NetWMStateBelow]            = "_NET_WM_STATE_BELOW",
 		[NetWMStateFocused]          = "_NET_WM_STATE_FOCUSED",
+		[NetWMStateDemandsAttention] = "_NET_WM_STATE_DEMANDS_ATTENTION",
 		[NetWMAllowedActions]        = "_NET_WM_ALLOWED_ACTIONS",
 		[NetWMActionMove]            = "_NET_WM_ACTION_MOVE",
 		[NetWMActionResize]          = "_NET_WM_ACTION_RESIZE",
@@ -565,11 +566,12 @@ isurgent(Window win)
 
 /* clear window urgency */
 static void
-clearurgency(Window win)
+tabclearurgency(struct Tab *t)
 {
 	XWMHints wmh = {0};
 
-	XSetWMHints(dpy, win, &wmh);
+	XSetWMHints(dpy, t->win, &wmh);
+	t->isurgent = 0;
 }
 
 /* create and copy pixmap */
@@ -1098,7 +1100,7 @@ tabfocus(struct Tab *t)
 		return;
 	t->c->seltab = t;
 	if (t->isurgent)
-		clearurgency(t->win);
+		tabclearurgency(t);
 	XRaiseWindow(dpy, t->frame);
 	if (t->c->isshaded) {
 		XSetInputFocus(dpy, t->c->frame, RevertToParent, CurrentTime);
@@ -1606,7 +1608,6 @@ clientmoveresize(struct Client *c)
 	XMoveResizeWindow(dpy, c->curswin, 0, 0, w, h);
 	clientretab(c);
 	if (c->pw != w || c->ph != h) {
-		printf("%d == %d; %d == %d\n", c->pw, w, c->ph, h);
 		clientdecorate(c, 0, 0, FrameNone);
 	}
 }
@@ -2957,14 +2958,14 @@ tabwindow(const char *class, int autotab)
 
 /* update tab urgency */
 static void
-tabupdateurgency(struct Tab *t)
+tabupdateurgency(struct Tab *t, int isurgent)
 {
 	int prev;
 
 	prev = t->isurgent;
-	t->isurgent = isurgent(t->win);
+	t->isurgent = isurgent;
 	if (t->isurgent && t->c == focused && t == t->c->seltab) {
-		clearurgency(t->win);
+		tabclearurgency(t);
 	} else if (prev != t->isurgent) {
 		clientdecorate(t->c, 1, 0, FrameNone);
 	}
@@ -4281,6 +4282,10 @@ xeventclientmessage(XEvent *e)
 				clientstate(c, ABOVE, ev->data.l[0]);
 			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateBelow]) {
 				clientstate(c, BELOW, ev->data.l[0]);
+			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateDemandsAttention]) {
+				if (res.t && ev->data.l[0] != REMOVE && !res.t->isurgent) {
+					tabupdateurgency(res.t, 1);
+				}
 			}
 		}
 	} else if (ev->message_type == atoms[NetActiveWindow]) {
@@ -4574,7 +4579,7 @@ xeventpropertynotify(XEvent *e)
 	} else if (ev->atom == XA_WM_CLASS) {
 		tabupdateclass(res.t);
 	} else if (ev->atom == XA_WM_HINTS) {
-		tabupdateurgency(res.t);
+		tabupdateurgency(res.t, isurgent(res.t->win));
 	}
 }
 
