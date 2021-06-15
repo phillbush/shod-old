@@ -74,18 +74,18 @@ a window.
 * Handle `_NET_WM_STATE_DEMANDS_ATTENTION` state.
 * Add support to panels/bars.
 
-# See also.
+## See also
 
-For scripting, see also lsd[2] and lsc[3], which list useful information
+For scripting, see also [lsd] and [lsc], which list useful information
 about desktop and clients.  For a desktop menu and desktop prompt, check
-out xmenu[4] and xprompt[5].  For other handful utilities for X11, check
-out xutils[6].
+out [xmenu] and [xprompt].  For other handful utilities for X11, check
+out [xutils].
 
-[2]:https://github.com/phillbush/lsd
-[3]:https://github.com/phillbush/lsc
-[4]:https://github.com/phillbush/xmenu
-[5]:https://github.com/phillbush/xprompt
-[6]:https://github.com/phillbush/xutils
+[lsd]:https://github.com/phillbush/lsd
+[lsc]:https://github.com/phillbush/lsc
+[xmenu]:https://github.com/phillbush/xmenu
+[xprompt]:https://github.com/phillbush/xprompt
+[xutils]:https://github.com/phillbush/xutils
 
 ## Thanks
 
