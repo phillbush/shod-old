@@ -34,7 +34,7 @@ do not have a title bar and are moved along with its parent window.
 
 Shod can tab windows. Just move the tab from a window to another with
 the right mouse button.  Windows can be automatically tabbed by
-setting the `shod.autoTab` X resource (see the manual).  The image
+setting the `shod*autoTab` X resource (see the manual).  The image
 below shows a tabbed frame with three tabs.
 
 ![tabbed](https://user-images.githubusercontent.com/63266536/121970385-d504c400-cd4c-11eb-9795-250e8c236078.png)
@@ -69,7 +69,7 @@ specify which mouse button triggers the click-to-focus style.  The
 related shod.raiseButtons option specify which mouse buttons raise
 a window.
 
-## TODO.
+## TODO
 
 * Handle `_NET_WM_STATE_DEMANDS_ATTENTION` state.
 * Add support to panels/bars.
@@ -87,7 +87,7 @@ out xutils[6].
 [5]:https://github.com/phillbush/xprompt
 [6]:https://github.com/phillbush/xutils
 
-## Thanks.
+## Thanks
 
 Shod was written based on code and/or inspiration from the following
 window managers.  I'd like to thank their authors for their work that
