@@ -93,9 +93,9 @@ Shod was written based on code and/or inspiration from the following
 window managers.  I'd like to thank their authors for their work that
 helped me writing Shod.
 
-• [berry](https://berrywm.org)
-• [dwm](https://dwm.suckless.org)
-• [i3](https://i3wm.org)
-• [katriawm](https://www.uninformativ.de/git/katriawm/file/README.html)
-• [sowm](https://github.com/dylanaraps/sowm)
-• [wmii](https://github.com/0intro/wmii)
+* [berry](https://berrywm.org)
+* [dwm](https://dwm.suckless.org)
+* [i3](https://i3wm.org)
+* [katriawm](https://www.uninformativ.de/git/katriawm/file/README.html)
+* [sowm](https://github.com/dylanaraps/sowm)
+* [wmii](https://github.com/0intro/wmii)
