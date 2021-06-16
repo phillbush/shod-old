@@ -58,7 +58,6 @@ third and the fourth ones.
 
 ## TODO
 
-* Handle `_NET_WM_STATE_DEMANDS_ATTENTION` state.
 * Add support to panels/bars.
 
 ## See also
