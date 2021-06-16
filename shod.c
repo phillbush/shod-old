@@ -2966,7 +2966,8 @@ tabupdateurgency(struct Tab *t, int isurgent)
 	t->isurgent = isurgent;
 	if (t->isurgent && t->c == focused && t == t->c->seltab) {
 		tabclearurgency(t);
-	} else if (prev != t->isurgent) {
+	}
+	if (prev != t->isurgent) {
 		clientdecorate(t->c, 1, 0, FrameNone);
 	}
 }
@@ -4283,9 +4284,7 @@ xeventclientmessage(XEvent *e)
 			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateBelow]) {
 				clientstate(c, BELOW, ev->data.l[0]);
 			} else if ((Atom)ev->data.l[i] == atoms[NetWMStateDemandsAttention]) {
-				if (res.t && ev->data.l[0] != REMOVE && !res.t->isurgent) {
-					tabupdateurgency(res.t, 1);
-				}
+				tabupdateurgency(res.t, ev->data.l[0] == ADD || (ev->data.l[0] == TOGGLE && !res.t->isurgent));
 			}
 		}
 	} else if (ev->message_type == atoms[NetActiveWindow]) {
