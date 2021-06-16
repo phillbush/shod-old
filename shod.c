@@ -1278,7 +1278,9 @@ tabupdateclass(struct Tab *t)
 
 	if (XGetClassHint(dpy, t->win, &chint)) {
 		free(t->class);
-		t->class = strndup(chint.res_class, NAMEMAXLEN);
+		t->class = (chint.res_class != NULL && chint.res_class[0] != '\0')
+		         ? estrndup(chint.res_class, NAMEMAXLEN)
+		         : NULL;
 		XFree(chint.res_class);
 		XFree(chint.res_name);
 	}
@@ -3151,6 +3153,7 @@ getrules(Window win, char **name, char **class)
 	char *s, *t;
 	char *type;
 
+	*class = *name = NULL;
 	for (i = 0; i < LAST_PREFIX; i++) {
 		switch (i) {
 		case TITLE:
@@ -3161,14 +3164,14 @@ getrules(Window win, char **name, char **class)
 		case INSTANCE:
 			if (!XGetClassHint(dpy, win, &chint))
 				continue;
-			t = chint.res_name;
+			t = (t != NULL && *t != '\0') ? chint.res_name : NULL;
 			XFree(chint.res_class);
 			break;
 		case CLASS:
 			if (!XGetClassHint(dpy, win, &chint))
 				continue;
 			t = chint.res_class;
-			*class = estrndup(t, NAMEMAXLEN);
+			*class = (t != NULL && *t != '\0') ? estrndup(t, NAMEMAXLEN) : NULL;
 			XFree(chint.res_name);
 			break;
 		case ROLE:
