@@ -1107,11 +1107,12 @@ tabfocus(struct Tab *t)
 	} else if (t->trans) {
 		XRaiseWindow(dpy, t->trans->frame);
 		XSetInputFocus(dpy, t->trans->win, RevertToParent, CurrentTime);
+		ewmhsetactivewindow(t->trans->win);
 	} else {
 		XSetInputFocus(dpy, t->win, RevertToParent, CurrentTime);
+		ewmhsetactivewindow(t->win);
 	}
 	shodgroup(t->c);
-	ewmhsetactivewindow(t->win);
 }
 
 /* get tab decoration style */
@@ -3919,9 +3920,8 @@ done:
 			clientstate(c, HIDE, ADD);
 			break;
 		case FrameButtonRight:
-			if (c->seltab) {
-				windowclose(c->seltab->win);
-			}
+			if (c->seltab != NULL)
+				windowclose(c->seltab->trans != NULL ? c->seltab->trans->win : c->seltab->win);
 			break;
 		}
 	}
