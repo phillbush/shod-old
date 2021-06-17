@@ -8,12 +8,12 @@ responding to client messages with EWMH hints (so it is needed wmctrl(1)
 to control shod).
 
 **WARNING:**
-         Shod is attempt of mine to write a Wm and better understand how
-         X11 works, Shod is only meant for me for educational purposes.
-         Shod is an experimental project, and should be used with caution.
+Shod is attempt of mine to write a Wm and better understand how
+X11 works, Shod is only meant for me for educational purposes.
+Shod is an experimental project, and should be used with caution.
 
 **WARNING:**
-         You must have wmctrl(1) installed in order to control Shod.
+You must have wmctrl(1) installed in order to control Shod.
 
 ## Non-features
 
