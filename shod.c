@@ -1929,14 +1929,13 @@ frameoctant(struct Client *c, Window win, int x, int y)
 static void
 clientplace(struct Client *c, struct Desktop *desk)
 {
-	unsigned long grid[DIV][DIV] = {{0}, {0}};
-	unsigned long lowest;
 	struct Monitor *mon;
 	struct Client *tmp;
-	int center = 1;
+	int grid[DIV][DIV] = {{0}, {0}};
+	int lowest;
 	int i, j, k, w, h;
-	int posi, posj;         /* position of the larger region */
-	int lw, lh;             /* larger region width and height */
+	int subx, suby;         /* position of the larger subregion */
+	int subw, subh;         /* larger subregion width and height */
 	int origw, origh;
 
 	if (desk == NULL || c == NULL || c->state == Tiled || c->isfullscreen || c->state == Minimized)
@@ -1962,24 +1961,6 @@ clientplace(struct Client *c, struct Desktop *desk)
 	/* if the user placed the window, we should not re-place it */
 	if (c->isuserplaced)
 		return;
-
-	if (c->fx < mon->gx + c->b || c->fx > mon->gx + c->b + mon->gw)
-		c->fx = mon->gx + c->b;
-	if (c->fy < mon->gy + c->b || c->fy > mon->gy + c->b + mon->gh)
-		c->fy = mon->gy + c->b + c->t;
-
-	/* if this is the first window in the desktop, just center it */
-	for (tmp = clients; tmp; tmp = tmp->next) {
-		if (((tmp->state == Sticky && tmp->mon == mon) || (tmp->state == Normal && tmp->desk == desk)) && tmp != c) {
-			center = 0;
-			break;
-		}
-	}
-	if (center) {
-		c->fx = mon->gx + c->b + mon->gw / 2 - WIDTH(c) / 2;
-		c->fy = mon->gy + c->b + c->t + mon->gh / 2 - HEIGHT(c) / 2;
-		return;
-	}
 
 	/* increment cells of grid a window is in */
 	for (tmp = clients; tmp; tmp = tmp->next) {
@@ -2010,14 +1991,16 @@ clientplace(struct Client *c, struct Desktop *desk)
 
 	/* find biggest region in grid with less windows in it */
 	lowest = grid[0][0];
-	posi = posj = 0;
-	lw = lh = 0;
+	subx = suby = 0;
+	subw = subh = 0;
 	for (i = 0; i < DIV; i++) {
 		for (j = 0; j < DIV; j++) {
 			if (grid[i][j] > lowest)
 				continue;
-			else if (grid[i][j] < lowest)
+			else if (grid[i][j] < lowest) {
 				lowest = grid[i][j];
+				subw = subh = 0;
+			}
 			for (w = 0; j+w < DIV && grid[i][j + w] == lowest; w++)
 				;
 			for (h = 1; i+h < DIV && grid[i + h][j] == lowest; h++) {
@@ -2028,49 +2011,20 @@ clientplace(struct Client *c, struct Desktop *desk)
 			}
 			if (k < w)
 				h--;
-			if (h > lh && w * h > lw * lh) {
-				lw = w;
-				lh = h;
-				posi = i;
-				posj = j;
+			if (h > subh && w * h > subw * subh) {
+				subw = w;
+				subh = h;
+				suby = i;
+				subx = j;
 			}
 		}
 	}
-
-	posj += lw;
-	posi += lh;
-
-	/* calculate y */
-	if (posi == 0) {
-		c->fy = mon->gy + c->b + c->t;
-	} else if (posi >= DIV - 1) {
-		c->fy = mon->gy + c->b + c->t + mon->gh - HEIGHT(c);
-	} else {
-		int n, d, maxy;
-
-		n = posi;
-		d = DIV;
-		maxy = mon->gy + c->b + c->t + mon->gh - HEIGHT(c);
-		c->fy = (mon->gy + mon->gh * n)/d - HEIGHT(c);
-		c->fy = max(mon->gy + c->b + c->t, c->fy);
-		c->fy = min(c->fy, maxy);
-	}
-
-	/* calculate x */
-	if (posj == 0) {
-		c->fx = mon->gx + c->b;
-	} else if (posj >= DIV - 1) {
-		c->fx = mon->gx + c->b + mon->gw - WIDTH(c);
-	} else {
-		int n, d, maxx;
-
-		n = posj;
-		d = DIV;
-		maxx = mon->gx + c->b + mon->gw - WIDTH(c);
-		c->fx = (mon->gx + mon->gw * n)/d - WIDTH(c);
-		c->fx = max(mon->gx + c->b, c->fx);
-		c->fx = min(c->fx, maxx);
-	}
+	subx = subx * mon->gw / DIV;
+	suby = suby * mon->gh / DIV;
+	subw = subw * mon->gw / DIV;
+	subh = subh * mon->gh / DIV;
+	c->fx = min(mon->gx + mon->gw - c->w - c->b, max(mon->gx + c->b, mon->gx + subx + subw / 2 - c->fw / 2));
+	c->fy = min(mon->gy + mon->gh - c->h - c->b, max(mon->gy + c->t + c->b, mon->gy + suby + subh / 2 - c->fh / 2));
 }
 
 /* apply size constraints */
@@ -3165,7 +3119,7 @@ getrules(Window win, char **name, char **class)
 		case INSTANCE:
 			if (!XGetClassHint(dpy, win, &chint))
 				continue;
-			t = (t != NULL && *t != '\0') ? chint.res_name : NULL;
+			t = chint.res_name;
 			XFree(chint.res_class);
 			break;
 		case CLASS:
