@@ -1,4 +1,5 @@
 #include <err.h>
+#include <limits.h>
 #include <locale.h>
 #include <signal.h>
 #include <stdio.h>
@@ -1604,8 +1605,8 @@ clientmoveresize(struct Client *c)
 		return;
 	x = c->x - c->b;
 	y = c->y - c->b - c->t;
-	w = c->w + 2 * c->b;
-	h = c->h + 2 * c->b + c->t;
+	w = WIDTH(c);
+	h = HEIGHT(c);
 	calctabs(c);
 	XMoveResizeWindow(dpy, c->frame, x, y, w, h);
 	XMoveResizeWindow(dpy, c->curswin, 0, 0, w, h);
@@ -1944,8 +1945,8 @@ clientplace(struct Client *c, struct Desktop *desk)
 	mon = desk->mon;
 
 	/* if window is bigger than monitor, resize it while maintaining proportion */
-	origw = WIDTH(c);
-	origh = HEIGHT(c);
+	origw = c->fw + 2 * c->b;
+	origh = c->fh + 2 * c->b + c->t;
 	w = min(origw, mon->gw);
 	h = min(origh, mon->gh);
 	if (origw * h > origh * w) {
@@ -1974,15 +1975,15 @@ clientplace(struct Client *c, struct Desktop *desk)
 					wa = mon->gx + (mon->gw * j)/DIV;
 					wb = mon->gx + (mon->gw * (j + 1))/DIV;
 					ya = tmp->fy;
-					yb = tmp->fy + HEIGHT(tmp);
+					yb = tmp->fy + tmp->fh + 2 * tmp->b + tmp->t;
 					xa = tmp->fx;
-					xb = tmp->fx + WIDTH(tmp);
+					xb = tmp->fx + tmp->fw + 2 * tmp->b;
 					if (ya <= hb && ha <= yb && xa <= wb && wa <= xb) {
-						grid[i][j]++;
 						if (ya < ha && yb > hb)
 							grid[i][j]++;
 						if (xa < wa && xb > wb)
 							grid[i][j]++;
+						grid[i][j]++;
 					}
 				}
 			}
@@ -1990,7 +1991,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 	}
 
 	/* find biggest region in grid with less windows in it */
-	lowest = grid[0][0];
+	lowest = INT_MAX;
 	subx = suby = 0;
 	subw = subh = 0;
 	for (i = 0; i < DIV; i++) {
@@ -2944,8 +2945,8 @@ decorate(struct Winres *res)
 	} else if (res->t) {
 		XCopyArea(dpy, res->t->pix, res->t->title, gc, 0, 0, res->t->w, button, 0, 0);
 	} else if (res->c) {
-		fullw = res->c->w + 2 * res->c->b;
-		fullh = res->c->h + 2 * res->c->b + res->c->t;
+		fullw = WIDTH(res->c);
+		fullh = HEIGHT(res->c);
 		XCopyArea(dpy, res->c->pix, res->c->frame, gc, 0, 0, fullw, fullh, 0, 0);
 	}
 }
@@ -3939,7 +3940,6 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 	struct Winres res;
 	XEvent ev;
 	int x = 0, y = 0;
-	int b;
 
 	XGrabPointer(dpy, c->frame, False,
 	             ButtonReleaseMask | Button1MotionMask | Button3MotionMask,
@@ -3960,16 +3960,15 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 			goto done;
 		case MotionNotify:
 			if (c->state == Tiled) {
-				b = c->b + c->t + config.gapinner;
-				if (ev.xmotion.x_root > c->x + c->w + (c->row->col->next ? b : 0))
+				if (ev.xmotion.x_root > c->x + c->w + (c->row->col->next ? c->b + config.gapinner : 0))
 					x = +1;
-				else if (ev.xmotion.x_root < c->x - (c->row->col->prev ? b : 0))
+				else if (ev.xmotion.x_root < c->x - (c->row->col->prev ? c->b + config.gapinner : 0))
 					x = -1;
 				else
 					x = 0;
-				if (ev.xmotion.y_root > c->y + c->h + (c->row->next ? b : 0))
+				if (c->row->next && ev.xmotion.y_root > c->y + c->h + HEIGHT(c->row->next->c) + config.gapinner)
 					y = +1;
-				else if (ev.xmotion.y_root < c->y - (c->row->prev ? b : 0))
+				else if (c->row->prev && ev.xmotion.y_root < c->y - HEIGHT(c->row->prev->c) - config.gapinner)
 					y = -1;
 				else
 					y = 0;
@@ -4005,8 +4004,8 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 	}
 	outline.x = c->x - c->b;
 	outline.y = c->y - c->b - c->t;
-	outline.w = c->w + 2 * c->b;
-	outline.h = c->h + 2 * c->b + c->t;
+	outline.w = WIDTH(c);
+	outline.h = HEIGHT(c);
 	outline.diffx = 0;
 	outline.diffy = 0;
 	switch (octant) {

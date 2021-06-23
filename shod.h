@@ -4,8 +4,8 @@
 #define DOUBLECLICK     250     /* time in miliseconds of a double click */
 #define NAMEMAXLEN      1024    /* maximum length of window's name */
 #define RULEMINSIZ      23      /* length of "shod.instance..desktop" + 1 for \0 */
-#define WIDTH(x)  ((x)->fw + 2 * c->b)
-#define HEIGHT(x) ((x)->fh + 2 * c->b + c->t)
+#define WIDTH(x)  ((x)->w + 2 * (x)->b)
+#define HEIGHT(x) ((x)->h + 2 * (x)->b + (x)->t)
 
 /* internal window states */
 enum {
