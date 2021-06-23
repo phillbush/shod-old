@@ -3968,7 +3968,7 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 					x = 0;
 				if (c->row->next && ev.xmotion.y_root > c->y + c->h + HEIGHT(c->row->next->c) + config.gapinner)
 					y = +1;
-				else if (c->row->prev && ev.xmotion.y_root < c->y - HEIGHT(c->row->prev->c) - config.gapinner)
+				else if (c->row->prev && ev.xmotion.y_root < c->y - HEIGHT(c->row->prev->c))
 					y = -1;
 				else
 					y = 0;
@@ -3993,9 +3993,9 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 {
 	struct Outline outline;
 	struct Winres res;
-	Cursor curs = None;
 	XEvent ev;
-	int x, y;
+	Cursor curs = None;
+	int x, y, dx, dy;
 
 	if (c->isfullscreen || (c->state == Tiled &&
 	    ((c->row->col->next == NULL && octant & E) || (c->row->col->prev == NULL && octant & W) ||
@@ -4068,37 +4068,37 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 			if (octant & W &&
 			    ((ev.xmotion.x_root < xroot && x > ev.xmotion.x_root - outline.x) ||
 			     (ev.xmotion.x_root > xroot && x < ev.xmotion.x_root - outline.x))) {
-				x = xroot - ev.xmotion.x_root;
-				if (clientvalidsize(c, octant, outline.diffx + x, 0)) {
-					outline.x -= x;
-					outline.w += x;
-					outline.diffx += x;
+				dx = xroot - ev.xmotion.x_root;
+				if (clientvalidsize(c, octant, outline.diffx + dx, 0)) {
+					outline.x -= dx;
+					outline.w += dx;
+					outline.diffx += dx;
 				}
 			} else if (octant & E &&
 			    ((ev.xmotion.x_root > xroot && x > outline.x + outline.w - ev.xmotion.x_root) ||
 			     (ev.xmotion.x_root < xroot && x < outline.x + outline.w - ev.xmotion.x_root))) {
-				x = ev.xmotion.x_root - xroot;
-				if (clientvalidsize(c, octant, outline.diffx + x, 0)) {
-					outline.w += x;
-					outline.diffx += x;
+				dx = ev.xmotion.x_root - xroot;
+				if (clientvalidsize(c, octant, outline.diffx + dx, 0)) {
+					outline.w += dx;
+					outline.diffx += dx;
 				}
 			}
 			if (octant & N &&
 			    ((ev.xmotion.y_root < yroot && y > ev.xmotion.y_root - outline.y) ||
 			     (ev.xmotion.y_root > yroot && y < ev.xmotion.y_root - outline.y))) {
-				y = yroot - ev.xmotion.y_root;
-				if (clientvalidsize(c, octant, 0, outline.diffy + y)) {
-					outline.y -= y;
-					outline.h += y;
-					outline.diffy += y;
+				dy = yroot - ev.xmotion.y_root;
+				if (clientvalidsize(c, octant, 0, outline.diffy + dy)) {
+					outline.y -= dy;
+					outline.h += dy;
+					outline.diffy += dy;
 				}
 			} else if (octant & S &&
-			    ((ev.xmotion.y_root > yroot && y > outline.y + outline.h - ev.xmotion.y_root) ||
-			     (ev.xmotion.y_root < yroot && y < outline.y + outline.h - ev.xmotion.y_root))) {
-				y = ev.xmotion.y_root - yroot;
-				if (clientvalidsize(c, octant, 0, outline.diffy + y)) {
-					outline.h += y;
-					outline.diffy += y;
+			    ((ev.xmotion.y_root > yroot && outline.y + outline.h - ev.xmotion.y_root < y) ||
+			     (ev.xmotion.y_root < yroot && outline.y + outline.h - ev.xmotion.y_root > y))) {
+				dy = ev.xmotion.y_root - yroot;
+				if (clientvalidsize(c, octant, 0, outline.diffy + dy)) {
+					outline.h += dy;
+					outline.diffy += dy;
 				}
 			}
 			outlinedraw(&outline);
