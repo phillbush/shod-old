@@ -2011,7 +2011,7 @@ clientplace(struct Client *c, struct Desktop *desk)
 			}
 			if (k < w)
 				h--;
-			if (h > subh && w * h > subw * subh) {
+			if (w * h > subw * subh) {
 				subw = w;
 				subh = h;
 				suby = i;
@@ -2023,8 +2023,8 @@ clientplace(struct Client *c, struct Desktop *desk)
 	suby = suby * mon->gh / DIV;
 	subw = subw * mon->gw / DIV;
 	subh = subh * mon->gh / DIV;
-	c->fx = min(mon->gx + mon->gw - c->w - c->b, max(mon->gx + c->b, mon->gx + subx + subw / 2 - c->fw / 2));
-	c->fy = min(mon->gy + mon->gh - c->h - c->b, max(mon->gy + c->t + c->b, mon->gy + suby + subh / 2 - c->fh / 2));
+	c->fx = min(mon->gx + mon->gw - c->fw - c->b, max(mon->gx + c->b, mon->gx + subx + subw / 2 - c->fw / 2));
+	c->fy = min(mon->gy + mon->gh - c->fh - c->b, max(mon->gy + c->t + c->b, mon->gy + suby + subh / 2 - c->fh / 2));
 }
 
 /* apply size constraints */
