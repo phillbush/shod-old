@@ -2383,7 +2383,7 @@ clientfocus(struct Client *c)
 static void
 clientincrresize(struct Client *c, enum Octant o, int x, int y)
 {
-	int origx, origy, origw, origh;
+	int origw, origh;
 
 	if (c == NULL || c->state == Minimized || c->isfullscreen)
 		return;
@@ -2424,8 +2424,6 @@ clientincrresize(struct Client *c, enum Octant o, int x, int y)
 	} else {
 		if (c->fw + x < minsize || c->fh + y < minsize)
 			return;
-		origx = c->x;
-		origy = c->y;
 		origw = c->w;
 		origh = c->h;
 		c->fw += x;
@@ -3204,7 +3202,7 @@ getrules(Window win, char **name, char **class)
 }
 
 /* add notification window */
-static struct Notification *
+static void
 notifadd(Window win, int w, int h)
 {
 	static XSetWindowAttributes swa = {
@@ -3228,7 +3226,6 @@ notifadd(Window win, int w, int h)
 	notifications = n;
 	XReparentWindow(dpy, n->win, n->frame, 0, 0);
 	XMapWindow(dpy, n->win);
-	return n;
 }
 
 /* decorate notification */
@@ -3368,9 +3365,7 @@ notifdel(struct Notification *n)
 static void
 managenotif(Window win, int w, int h)
 {
-	struct Notification *n;
-
-	n = notifadd(win, w, h);
+	notifadd(win, w, h);
 	notifplace();
 }
 
@@ -4164,15 +4159,15 @@ xeventbuttonpress(XEvent *e)
 		clientraise(c);
 
 	/* get action performed by mouse */
-	if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
-		mousebutton(c, region);
-	} else if (ev->state == config.modifier && ev->button == Button1) {
+	if (ev->state == config.modifier && ev->button == Button1) {
 		mousemove(c, NULL, ev->x_root, ev->y_root, 0, FrameNone);
-	} else if (region == FrameBorder && ev->button == Button3) {
-		mousemove(c, NULL, ev->x_root, ev->y_root, octant, region);
 	} else if ((ev->state == config.modifier && ev->button == Button3) ||
 	           (region == FrameBorder && ev->button == Button1)) {
 		mouseresize(c, ev->x_root, ev->y_root, octant);
+	} else if (region == FrameBorder && ev->button == Button3) {
+		mousemove(c, NULL, ev->x_root, ev->y_root, octant, region);
+	} else if (ev->button == Button1 && (region == FrameButtonLeft || region == FrameButtonRight)) {
+		mousebutton(c, region);
 	} else if (region == FrameTitle && ev->button == Button3 && t != NULL && t->c != NULL && t->title == ev->window) {
 		mouseretab(t, ev->x_root, ev->y_root, ev->x, ev->y);
 	} else if (region == FrameTitle && ev->button == Button1) {
