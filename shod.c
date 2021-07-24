@@ -2668,6 +2668,8 @@ clientvalidsize(struct Client *c, enum Octant o, int dx, int dy)
 static void
 clientstate(struct Client *c, int state, long int flag)
 {
+	struct Client *f;
+
 	switch (state) {
 	case ABOVE:
 		if (c == NULL || c->state == Minimized || c->state == Tiled || c->isfullscreen)
@@ -2717,11 +2719,10 @@ clientstate(struct Client *c, int state, long int flag)
 		if (c == NULL)
 			break;
 		if (clientminimize(c, flag)) {
-			if (c->state == Minimized)
-				clientfocus(getnextfocused(c));
-			else 
-				clientfocus(c);
-			tabfocus(c->seltab);
+			f = (c->state == Minimized) ? getnextfocused(c) : c;
+			clientfocus(f);
+			if (f != NULL)
+				tabfocus(f->seltab);
 			ewmhsetwmdesktop(c);
 			ewmhsetstate(c);
 		}
@@ -4190,6 +4191,7 @@ done:
 static void
 xeventclientmessage(XEvent *e)
 {
+	struct Desktop *desk;
 	XClientMessageEvent *ev = &e->xclient;
 	XWindowChanges wc;
 	unsigned value_mask = 0;
@@ -4288,6 +4290,8 @@ xeventclientmessage(XEvent *e)
 		if (ev->data.l[0] == 0xFFFFFFFF) {
 			clientstate(c, STICK, ADD);
 		} else if (c->state != Sticky && c->state != Minimized) {
+			if ((desk = getdesk(ev->data.l[0])) == NULL || desk == c->desk)
+				return;
 			if (c->state == Tiled)
 				clienttile(c, 0);
 			f = getnextfocused(c);
