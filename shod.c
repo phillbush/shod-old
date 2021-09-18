@@ -540,6 +540,25 @@ initnotif(void)
 	}
 }
 
+/* set up root window */
+static void
+initroot(void)
+{
+	XSetWindowAttributes swa;
+
+	/* Select SubstructureRedirect events on root window */
+	swa.cursor = cursor[CURSOR_NORMAL];
+	swa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
+	               | SubstructureRedirectMask
+	               | SubstructureNotifyMask
+	               | StructureNotifyMask
+	               | ButtonPressMask;
+	XChangeWindowAttributes(dpy, root, CWEventMask | CWCursor, &swa);
+
+	/* Set focus to root window */
+	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
+}
+
 /* check whether window was placed by the user */
 static int
 isuserplaced(Window win)
@@ -1060,7 +1079,6 @@ getmon(int x, int y)
 static struct Client *
 getfullscreen(struct Monitor *mon, struct Desktop *desk)
 {
-	;
 	struct Client *c;
 
 	for (c = focuslist; c; c = c->fnext)
@@ -2809,7 +2827,6 @@ deskchange(struct Desktop *desk)
 
 	if (desk == NULL || desk == selmon->seldesk)
 		return;
-	desktile(desk);
 	if (!deskisvisible(desk)) {
 		/* hide clients of previous current desktop */
 		for (c = clients; c; c = c->next) {
@@ -2843,6 +2860,7 @@ deskchange(struct Desktop *desk)
 	if (showingdesk)
 		clientshowdesk(0);
 	ewmhsetcurrentdesktop(desk->n);
+	desktile(desk);
 
 	/* focus client on the new current desktop */
 	clientstate(getnextfocused(NULL), FOCUS, ADD);
@@ -2971,7 +2989,7 @@ windowclose(Window win)
 	XSendEvent(dpy, win, False, NoEventMask, &ev);
 }
 
-/* select window input events, grab mouse button presses, and clear it border */
+/* select window input events, grab mouse button presses, and clear its border */
 static void
 preparewin(Window win)
 {
@@ -3434,27 +3452,28 @@ manageclient(struct Client *c, struct Tab *t, struct Rules *rules, struct Deskto
 	clienttab(c, t, 0);
 	if (rules != NULL && rules->state == Minimized) {
 		clientminimize(c, 1);
-		focus = 0;
+		map = focus = 0;
 	} else if (rules != NULL && rules->state == Sticky) {
 		c->desk = desk;
 		clientplace(c, desk);
 		clientstick(c, 1);
 		clientapplysize(c);
-		map = focus = (getfullscreen(selmon, NULL) == NULL);
+		focus = (getfullscreen(selmon, NULL) == NULL);
 	} else if (rules != NULL && rules->state == Tiled) {
 		clientsendtodesk(c, desk, 0);
 		clienttile(c, 1);
 		desktile(desk);
-		map = (getfullscreen(desk->mon, desk) == NULL && c->desk == c->desk->mon->seldesk);
-		focus = (map && c->desk == selmon->seldesk);
+		focus = (getfullscreen(desk->mon, desk) == NULL && c->desk == c->desk->mon->seldesk);
+		focus = (focus && c->desk == selmon->seldesk);
 	} else {
 		clientsendtodesk(c, desk, 0);
 		clientplace(c, c->desk);
 		clientapplysize(c);
-		map = (getfullscreen(desk->mon, desk) == NULL && c->desk == c->desk->mon->seldesk);
-		focus = (map && c->desk == selmon->seldesk);
+		focus = (getfullscreen(desk->mon, desk) == NULL && c->desk == c->desk->mon->seldesk);
+		focus = (focus && c->desk == selmon->seldesk);
 	}
 	if (map) {
+		clientraise(c);
 		clientmoveresize(c);
 		clienthide(c, 0);
 	}
@@ -3538,8 +3557,10 @@ unmanage(struct Tab *t)
 	calctabs(c);
 	if (c->ntabs == 0) {
 		f = getnextfocused(c);
+		c->isfullscreen = 0;    /* clientfocus would refuse to focus f if c is fullscreen */
+		if (clientisvisible(c))
+			clientstate(f, FOCUS, ADD);
 		clientdel(c);
-		clientstate(f, FOCUS, ADD);
 	} else {
 		clientdecorate(c, 1, 0, FrameNone);
 		clientmoveresize(c);
@@ -3850,7 +3871,7 @@ mousebutton(struct Client *c, int region)
 	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None,
 	             (region == FrameButtonRight) ? cursor[CURSOR_PIRATE] : cursor[CURSOR_NORMAL], CurrentTime);
 	clientdecorate(c, 0, 0, region);     /* draw pressed button */
-	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | ExposureMask, &ev)) {
+	while (!XMaskEvent(dpy, ButtonReleaseMask | ExposureMask, &ev)) {
 		switch(ev.type) {
 		case Expose:
 			if (ev.xexpose.count == 0) {
@@ -3962,9 +3983,9 @@ mousemove(struct Client *c, struct Tab *t, int xroot, int yroot, enum Octant oct
 					x = -1;
 				else
 					x = 0;
-				if (c->row->next && ev.xmotion.y_root > c->y + c->h + HEIGHT(c->row->next->c) + config.gapinner)
+				if (c->row->next && ev.xmotion.y_root > c->y + c->h + HEIGHT(c->row->next->c) / 2 + config.gapinner)
 					y = +1;
-				else if (c->row->prev && ev.xmotion.y_root < c->y - HEIGHT(c->row->prev->c))
+				else if (c->row->prev && ev.xmotion.y_root < c->y - HEIGHT(c->row->prev->c) / 2)
 					y = -1;
 				else
 					y = 0;
@@ -4044,9 +4065,11 @@ mouseresize(struct Client *c, int xroot, int yroot, enum Octant octant)
 		y = c->y + c->h + c->b - yroot;
 	else
 		y = 0;
-	XGrabPointer(dpy, c->frame, False, ButtonReleaseMask | PointerMotionMask, GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
+	XGrabPointer(dpy, c->frame, False,
+	             ButtonReleaseMask | PointerMotionMask,
+	             GrabModeAsync, GrabModeAsync, None, curs, CurrentTime);
 	clientdecorate(c, 0, octant, FrameNone);     /* draw pressed region */
-	while (!XMaskEvent(dpy, ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
+	while (!XMaskEvent(dpy, ButtonReleaseMask | PointerMotionMask | ExposureMask, &ev)) {
 		switch(ev.type) {
 		case Expose:
 			if (ev.xexpose.count == 0) {
@@ -4208,10 +4231,6 @@ xeventclientmessage(XEvent *e)
 		if (showingdesk) {
 			clientstate(focused, FOCUS, ADD);
 		}
-	} else if (ev->message_type == atoms[NetRequestFrameExtents]) {
-		if (c == NULL)
-			return;
-		ewmhsetframeextents(ev->window, c->b, c->t);
 	} else if (ev->message_type == atoms[NetWMState]) {
 		if (c == NULL)
 			return;
@@ -4261,22 +4280,11 @@ xeventclientmessage(XEvent *e)
 	} else if (ev->message_type == atoms[NetMoveresizeWindow]) {
 		if (c == NULL)
 			return;
-		if (ev->data.l[0] & 1 << 8) {
-			wc.x = ev->data.l[1];
-			value_mask |= CWX;
-		}
-		if (ev->data.l[0] & 1 << 9) {
-			wc.y = ev->data.l[2];
-			value_mask |= CWY;
-		}
-		if (ev->data.l[0] & 1 << 10) {
-			wc.width = ev->data.l[3];
-			value_mask |= CWWidth;
-		}
-		if (ev->data.l[0] & 1 << 11) {
-			wc.height = ev->data.l[4];
-			value_mask |= CWHeight;
-		}
+		value_mask = CWX | CWY | CWWidth | CWHeight;
+		wc.x = ev->data.l[1];
+		wc.y = ev->data.l[2];
+		wc.width = ev->data.l[3];
+		wc.height = ev->data.l[4];
 		if (res.trans != NULL) {
 			transconfigure(res.trans, value_mask, &wc);
 		} else {
@@ -4298,6 +4306,16 @@ xeventclientmessage(XEvent *e)
 			clientsendtodesk(c, getdesk(ev->data.l[0]), 1);
 			clientstate(f, FOCUS, ADD);
 		}
+	} else if (ev->message_type == atoms[NetRequestFrameExtents]) {
+		/*
+		* A client can request an estimate for the frame size
+		* which the window manager will put around it before
+		* actually mapping its window. Java does this (as of
+		* openjdk-7).
+		*/
+		if (c == NULL)
+			return;
+		ewmhsetframeextents(ev->window, c->b, c->t);
 	} else if (ev->message_type == atoms[NetWMMoveresize]) {
 		/*
 		 * Client-side decorated Gtk3 windows emit this signal when being
@@ -4437,8 +4455,13 @@ xeventexpose(XEvent *e)
 static void
 xeventfocusin(XEvent *e)
 {
-	(void)e;
-	clientstate(focused, FOCUS, ADD);
+	XFocusChangeEvent *ev = &e->xfocus;
+	struct Winres res;
+
+	res = getwin(ev->window);
+	if (focused == NULL || focused != res.c) {
+		clientstate(focused, FOCUS, ADD);
+	}
 }
 
 /* key press event on focuswin */
@@ -4466,7 +4489,7 @@ xeventmaprequest(XEvent *e)
 	manage(ev->window, &wa, 0);
 }
 
-/* run mouse action */
+/* change cursor */
 static void
 xeventmotionnotify(XEvent *e)
 {
@@ -4657,7 +4680,6 @@ int
 main(int argc, char *argv[])
 {
 	XEvent ev;
-	XSetWindowAttributes swa;
 	void (*xevents[LASTEvent])(XEvent *) = {
 		[ButtonPress]      = xeventbuttonpress,
 		[ClientMessage]    = xeventclientmessage,
@@ -4701,18 +4723,7 @@ main(int argc, char *argv[])
 	initcursors();
 	initatoms();
 	initnotif();
-
-	/* Select SubstructureRedirect events on root window */
-	swa.cursor = cursor[CURSOR_NORMAL];
-	swa.event_mask = SubstructureRedirectMask|SubstructureNotifyMask
-	               | SubstructureRedirectMask
-	               | SubstructureNotifyMask
-	               | StructureNotifyMask
-	               | ButtonPressMask;
-	XChangeWindowAttributes(dpy, root, CWEventMask | CWCursor, &swa);
-
-	/* Set focus to root window */
-	XSetInputFocus(dpy, root, RevertToParent, CurrentTime);
+	initroot();
 
 	/* set up list of monitors */
 	monupdate();
